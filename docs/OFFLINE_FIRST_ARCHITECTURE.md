@@ -57,6 +57,20 @@ The Network Settings screen should eventually expose clear synchronization state
 
 A failed synchronization must never prevent sales or other local POS operations.
 
+## Application version visibility requirement
+
+The POS must always expose its current application version in the Settings screen so it is easy to verify which build is running on the iPad during testing and support.
+
+The version is displayed in the `Настройки` screen inside the `Быстрые настройки` module, aligned on the right side of the module header.
+
+Required UI behavior:
+
+1. The left side of the header remains `Быстрые настройки`.
+2. The right side displays the current version in a compact form, for example `Версия 130.14`.
+3. The version label must be visually secondary and must not compete with the quick-action buttons.
+4. The version must be updated whenever the POS application version is advanced.
+5. This version indicator is a permanent diagnostics/support element and should not be removed during future UI refactors.
+
 ## Migration sequence
 
 1. Add inactive module boundaries.
@@ -74,3 +88,7 @@ This version added the future module structure. None of the new files were conne
 ## v130.13 requirement change
 
 The synchronization design is now explicitly manual-only. The existing button in `Настройки → Сетевые настройки` is the sole approved trigger for standard POS-to-backend synchronization. Automatic/background synchronization is prohibited unless this requirement is intentionally changed later.
+
+## v130.14 requirement change
+
+The `Быстрые настройки` module must display the current POS application version on the right side of its header. This version indicator is retained as a permanent support and test-verification element.
