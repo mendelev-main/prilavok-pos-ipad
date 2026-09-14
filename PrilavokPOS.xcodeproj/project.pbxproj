@@ -1,0 +1,191 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		8A3609BED8B84C1582A06B6C /* PrilavokPOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B1EEC527F85450888BA48C5 /* PrilavokPOSApp.swift */; };
+		027D13269429464C93FEC487 /* BluetoothPrinterManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC1540EF9CFF4C8BAFE4020A /* BluetoothPrinterManager.swift */; };
+		3C36AC675644423788C097B1 /* pos.html in Resources */ = {isa = PBXBuildFile; fileRef = ACB1313C6C90492FAAEB667E /* pos.html */; };
+		9F4A7C2D8B3E41F0A6D9C125 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6D2B8E4F1A9C43D7B5E6F012 /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		2D98DA3BD7084D81ABE2FE4F /* PrilavokPOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PrilavokPOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		2B1EEC527F85450888BA48C5 /* PrilavokPOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrilavokPOSApp.swift; sourceTree = "<group>"; };
+		AC1540EF9CFF4C8BAFE4020A /* BluetoothPrinterManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothPrinterManager.swift; sourceTree = "<group>"; };
+		ACB1313C6C90492FAAEB667E /* pos.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = pos.html; sourceTree = "<group>"; };
+		C8F9D29B23D44139A2644B9B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		6D2B8E4F1A9C43D7B5E6F012 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		D98346F6F0E641F9B5CDAD9D = {
+			isa = PBXGroup;
+			children = (
+				97C4E6E4589E4C09BC44E314 /* PrilavokPOS */,
+				039AFE25044C423DA293D60D /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		039AFE25044C423DA293D60D /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				2D98DA3BD7084D81ABE2FE4F /* PrilavokPOS.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		97C4E6E4589E4C09BC44E314 /* PrilavokPOS */ = {
+			isa = PBXGroup;
+			children = (
+				2B1EEC527F85450888BA48C5 /* PrilavokPOSApp.swift */,
+				AC1540EF9CFF4C8BAFE4020A /* BluetoothPrinterManager.swift */,
+				ACB1313C6C90492FAAEB667E /* pos.html */,
+				C8F9D29B23D44139A2644B9B /* Info.plist */,
+				6D2B8E4F1A9C43D7B5E6F012 /* Assets.xcassets */,
+			);
+			path = PrilavokPOS;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		225CDE2657F349E8A139AE0E /* PrilavokPOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7FE1904DD5E04098A5E507AE /* Build configuration list for PBXNativeTarget "PrilavokPOS" */;
+			buildPhases = (
+				50780969CFE347FDA2DAEBA7 /* Sources */,
+				E4F54C2BDCB64CED8D8F9F1A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = PrilavokPOS;
+			productName = PrilavokPOS;
+			productReference = 2D98DA3BD7084D81ABE2FE4F /* PrilavokPOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		6E54A3E18C394E558B381FC4 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 2600;
+				TargetAttributes = {
+					225CDE2657F349E8A139AE0E = {
+						CreatedOnToolsVersion = 26.0;
+					};
+				};
+			};
+			buildConfigurationList = 4CAF380EEED44FB08D9F49E7 /* Build configuration list for PBXProject "PrilavokPOS" */;
+			compatibilityVersion = "Xcode 16.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = D98346F6F0E641F9B5CDAD9D;
+			productRefGroup = 039AFE25044C423DA293D60D /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				225CDE2657F349E8A139AE0E /* PrilavokPOS */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		E4F54C2BDCB64CED8D8F9F1A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3C36AC675644423788C097B1 /* pos.html in Resources */,
+				9F4A7C2D8B3E41F0A6D9C125 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		50780969CFE347FDA2DAEBA7 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8A3609BED8B84C1582A06B6C /* PrilavokPOSApp.swift in Sources */,
+				027D13269429464C93FEC487 /* BluetoothPrinterManager.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		A05CC2546BA84B07A37972A2 /* Debug project */ = {isa = XCBuildConfiguration; buildSettings = {}; name = Debug; };
+		E34CC4E85A314C7FA2D64F1B /* Release project */ = {isa = XCBuildConfiguration; buildSettings = {}; name = Release; };
+		786797C548FC4DFEB1FD9E49 /* Debug target */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PrilavokPOS/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.prilavok.pos;
+				PRODUCT_MODULE_NAME = PrilavokPOS;
+				PRODUCT_NAME = PrilavokPOS;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 2;
+			};
+			name = Debug;
+		};
+		DDC8B76DA009436BB9693318 /* Release target */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PrilavokPOS/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.prilavok.pos;
+				PRODUCT_MODULE_NAME = PrilavokPOS;
+				PRODUCT_NAME = PrilavokPOS;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 2;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		4CAF380EEED44FB08D9F49E7 /* Build configuration list for PBXProject "PrilavokPOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A05CC2546BA84B07A37972A2 /* Debug */,
+				E34CC4E85A314C7FA2D64F1B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		7FE1904DD5E04098A5E507AE /* Build configuration list for PBXNativeTarget "PrilavokPOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				786797C548FC4DFEB1FD9E49 /* Debug */,
+				DDC8B76DA009436BB9693318 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 6E54A3E18C394E558B381FC4 /* Project object */;
+}
