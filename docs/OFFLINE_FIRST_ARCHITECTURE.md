@@ -66,10 +66,26 @@ The version is displayed in the `Настройки` screen inside the `Быст
 Required UI behavior:
 
 1. The left side of the header remains `Быстрые настройки`.
-2. The right side displays the current version in a compact form, for example `Версия 130.14`.
+2. The right side displays the current version in a compact form, for example `Версия 130.16`.
 3. The version label must be visually secondary and must not compete with the quick-action buttons.
 4. The version must be updated whenever the POS application version is advanced.
 5. This version indicator is a permanent diagnostics/support element and should not be removed during future UI refactors.
+
+## Local storage adapter requirement
+
+All operational POS persistence must pass through a local storage adapter before any synchronization layer is allowed to use the same data.
+
+The adapter must preserve compatibility with the current `pos.html` persistence model:
+
+- existing logical keys remain unchanged;
+- the localStorage prefix remains `prilavok_`;
+- existing JSON payload shapes remain unchanged;
+- `window.storage` remains supported where available;
+- `localStorage` remains the offline fallback on the iPad;
+- reads and writes must not require internet access;
+- the adapter must never start synchronization as a side effect of a write.
+
+Storage and synchronization are separate concerns. A successful local write means the POS operation is complete even if the backend is unreachable.
 
 ## Migration sequence
 
@@ -92,3 +108,7 @@ The synchronization design is now explicitly manual-only. The existing button in
 ## v130.14 requirement change
 
 The `Быстрые настройки` module must display the current POS application version on the right side of its header. This version indicator is retained as a permanent support and test-verification element.
+
+## v130.16 scope
+
+A real offline-first storage adapter now exists at `PrilavokPOS/Web/js/core/storage.js`. It mirrors the current storage contract without changing keys or payload formats and never triggers synchronization. Runtime wiring into the monolithic `pos.html` remains a separate incremental migration step and must be regression-tested on a physical iPad before broader replacement of direct storage calls.
