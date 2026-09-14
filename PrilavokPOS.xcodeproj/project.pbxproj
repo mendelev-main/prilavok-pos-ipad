@@ -60,6 +60,7 @@
 			buildPhases = (
 				50780969CFE347FDA2DAEBA7 /* Sources */,
 				E4F54C2BDCB64CED8D8F9F1A /* Resources */,
+				B71F294EB0D74D908C3C69A1 /* Stamp POS Version */,
 			);
 			buildRules = (
 			);
@@ -113,6 +114,23 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		B71F294EB0D74D908C3C69A1 /* Stamp POS Version */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Stamp POS Version";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "HTML_FILE=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/pos.html\"\nif [ -f \"$HTML_FILE\" ]; then\n  /usr/bin/perl -0pi -e 's#<div style=\"font-size:15px;font-weight:800;margin-bottom:10px;\">Быстрые настройки</div>#<div style=\"display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;\"><div style=\"font-size:15px;font-weight:800;\">Быстрые настройки</div><div style=\"font-size:12px;font-weight:700;color:var(--muted);white-space:nowrap;\">Версия $ENV{MARKETING_VERSION}</div></div>#' \"$HTML_FILE\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		50780969CFE347FDA2DAEBA7 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -137,6 +155,7 @@
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = PrilavokPOS/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MARKETING_VERSION = 130.15;
 				PRODUCT_BUNDLE_IDENTIFIER = com.prilavok.pos;
 				PRODUCT_MODULE_NAME = PrilavokPOS;
 				PRODUCT_NAME = PrilavokPOS;
@@ -155,6 +174,7 @@
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = PrilavokPOS/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MARKETING_VERSION = 130.15;
 				PRODUCT_BUNDLE_IDENTIFIER = com.prilavok.pos;
 				PRODUCT_MODULE_NAME = PrilavokPOS;
 				PRODUCT_NAME = PrilavokPOS;
