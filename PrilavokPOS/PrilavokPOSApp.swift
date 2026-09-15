@@ -4,6 +4,100 @@ import UniformTypeIdentifiers
 import PhotosUI
 import Foundation
 
+// Local, dependency-free OOXML export. ZIP uses stored entries (no compression).
+enum WarehouseWorkbook {
+    static func xml(_ value: String) -> String {
+        let clean = String(String.UnicodeScalarView(value.unicodeScalars.filter { $0.value == 9 || $0.value == 10 || $0.value == 13 || ($0.value >= 32 && $0.value != 0xFFFE && $0.value != 0xFFFF) }))
+        return clean.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;").replacingOccurrences(of: "\"", with: "&quot;")
+    }
+    static func archive(_ files: [(String, String)]) -> Data {
+        var output = Data(), directory = Data()
+        func word(_ value: UInt32, _ bytes: Int, _ data: inout Data) {
+            for shift in 0..<bytes { data.append(UInt8(truncatingIfNeeded: value >> (shift * 8))) }
+        }
+        for (name, text) in files {
+            let filename = Data(name.utf8), content = Data(text.utf8), offset = UInt32(output.count)
+            var crc: UInt32 = 0xFFFFFFFF
+            for byte in content { crc ^= UInt32(byte); for _ in 0..<8 { crc = (crc >> 1) ^ ((crc & 1) != 0 ? 0xEDB88320 : 0) } }
+            crc ^= 0xFFFFFFFF
+            word(0x04034B50,4,&output)
+            for value: UInt32 in [20,0,0,0,33] { word(value,2,&output) }
+            for value in [crc,UInt32(content.count),UInt32(content.count)] { word(value,4,&output) }
+            word(UInt32(filename.count),2,&output);word(0,2,&output);output.append(filename);output.append(content)
+            word(0x02014B50,4,&directory)
+            for value: UInt32 in [20,20,0,0,0,33] { word(value,2,&directory) }
+            for value in [crc,UInt32(content.count),UInt32(content.count)] { word(value,4,&directory) }
+            for value in [UInt32(filename.count),0,0,0,0] { word(value,2,&directory) }
+            word(0,4,&directory);word(offset,4,&directory);directory.append(filename)
+        }
+        let offset = UInt32(output.count);output.append(directory)
+        word(0x06054B50,4,&output);word(0,2,&output);word(0,2,&output)
+        word(UInt32(files.count),2,&output);word(UInt32(files.count),2,&output)
+        word(UInt32(directory.count),4,&output);word(offset,4,&output);word(0,2,&output)
+        return output
+    }
+    static func data(_ report: [String: Any]) -> Data {
+        let ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+        let rel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+        let package = "http://schemas.openxmlformats.org/package/2006/relationships"
+        let company = (report["company"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let heading = company.isEmpty ? "Название заведения не указано" : company
+        var sections = report["sections"] as? [[String: Any]] ?? []
+        sections.append(["title":"Пояснения", "headers":["Как читать отчёт"], "excelRows":(report["notes"] as? [String] ?? []).map { [$0] }])
+        var files: [(String,String)] = [], sheets = "", links = "", overrides = ""
+        func col(_ index: Int) -> String { var n=index+1,result="";while n>0 {n-=1;result=String(UnicodeScalar(65+n%26)!)+result;n/=26};return result }
+        for (index, section) in sections.enumerated() {
+            let id=index+1, name=String((section["title"] as? String ?? "Раздел \(id)").prefix(31))
+            sheets += "<sheet name=\"\(xml(name))\" sheetId=\"\(id)\" r:id=\"rId\(id)\"/>"
+            links += "<Relationship Id=\"rId\(id)\" Type=\"\(rel)/worksheet\" Target=\"worksheets/sheet\(id).xml\"/>"
+            overrides += "<Override PartName=\"/xl/worksheets/sheet\(id).xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>"
+            let headers=section["excelHeaders"] as? [String] ?? section["headers"] as? [String] ?? []
+            let rows=section["excelRows"] as? [[Any]] ?? section["rows"] as? [[Any]] ?? []
+            var body=""
+            func row(_ values: [Any], number: Int, style: Int) -> String {
+                let cells=values.enumerated().map { (i,value) -> String in
+                    let reference="\(col(i))\(number)"
+                    if let number=value as? NSNumber, number.doubleValue.isFinite {
+                        return "<c r=\"\(reference)\" s=\"\(style == 3 ? 4 : 2)\"><v>\(number.stringValue)</v></c>"
+                    }
+                    let text=value is NSNull ? "—" : String(describing:value)
+                    return "<c r=\"\(reference)\" s=\"\(style)\" t=\"inlineStr\"><is><t xml:space=\"preserve\">\(xml(text))</t></is></c>"
+                }.joined()
+                let longest=values.map { String(describing:$0).count }.max() ?? 0
+                let height=min(300,max(style == 1 ? 38 : 34,((longest / 35)+1)*16))
+                return "<row r=\"\(number)\" ht=\"\(height)\" customHeight=\"1\">\(cells)</row>"
+            }
+            body += row([heading],number:1,style:0)
+            body += row([name + " · " + (report["period"] as? String ?? "")],number:2,style:0)
+            body += row(["Сформировано: \(report["generatedAt"] as? String ?? "")"],number:3,style:0)
+            body += row(headers,number:5,style:1)
+            for (i,values) in rows.enumerated() {body += row(values,number:i+6,style:i % 2 == 0 ? 3 : 0)}
+            let end=col(max(0,headers.count-1))
+            let columns=headers.indices.map { "<col min=\"\($0+1)\" max=\"\($0+1)\" width=\"\(headers.count == 1 ? 115 : ($0 == 0 ? 42 : 23))\" customWidth=\"1\"/>" }.joined()
+            let merges=headers.count>1 ? "<mergeCells count=\"3\"><mergeCell ref=\"A1:\(end)1\"/><mergeCell ref=\"A2:\(end)2\"/><mergeCell ref=\"A3:\(end)3\"/></mergeCells>" : ""
+            let filter=rows.isEmpty ? "" : "<autoFilter ref=\"A5:\(end)\(rows.count+5)\"/>"
+            overrides += "<Override PartName=\"/xl/drawings/drawing\(id).xml\" ContentType=\"application/vnd.openxmlformats-officedocument.drawing+xml\"/>"
+            let bannerLines = [heading, name + " · " + (report["period"] as? String ?? ""), "Сформировано: " + (report["generatedAt"] as? String ?? "")]
+            let bannerText = bannerLines.enumerated().map { i, text in
+                "<a:p><a:r><a:rPr lang=\"ru-RU\" sz=\"\(i == 0 ? 1800 : 1100)\" b=\"\(i == 0 ? 1 : 0)\"><a:solidFill><a:srgbClr val=\"FFFFFF\"/></a:solidFill></a:rPr><a:t>\(xml(text))</a:t></a:r></a:p>"
+            }.joined()
+            files.append(("xl/drawings/drawing\(id).xml", """
+            <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><xdr:twoCellAnchor editAs="twoCell"><xdr:from><xdr:col>0</xdr:col><xdr:colOff>19050</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>19050</xdr:rowOff></xdr:from><xdr:to><xdr:col>\(headers.count)</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>3</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to><xdr:sp><xdr:nvSpPr><xdr:cNvPr id="1" name="Название заведения"/><xdr:cNvSpPr/></xdr:nvSpPr><xdr:spPr><a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 12000"/></a:avLst></a:prstGeom><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:ln><a:noFill/></a:ln></xdr:spPr><xdr:txBody><a:bodyPr wrap="square" lIns="190500" tIns="95000" rIns="190500" bIns="95000" anchor="ctr"><a:normAutofit/></a:bodyPr><a:lstStyle/>\(bannerText)</xdr:txBody></xdr:sp><xdr:clientData/></xdr:twoCellAnchor><xdr:twoCellAnchor editAs="twoCell"><xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>4</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:to><xdr:col>\(headers.count)</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>\(rows.count + 5)</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to><xdr:sp><xdr:nvSpPr><xdr:cNvPr id="2" name="Контур раздела"/><xdr:cNvSpPr/></xdr:nvSpPr><xdr:spPr><a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 1500"/></a:avLst></a:prstGeom><a:noFill/><a:ln w="12700"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln></xdr:spPr></xdr:sp><xdr:clientData/></xdr:twoCellAnchor></xdr:wsDr>
+            """))
+            files.append(("xl/worksheets/_rels/sheet\(id).xml.rels", "<Relationships xmlns=\"\(package)\"><Relationship Id=\"banner\" Type=\"\(rel)/drawing\" Target=\"../drawings/drawing\(id).xml\"/></Relationships>"))
+            files.append(("xl/worksheets/sheet\(id).xml", "<?xml version=\"1.0\" encoding=\"UTF-8\"?><worksheet xmlns=\"\(ns)\" xmlns:r=\"\(rel)\"><sheetViews><sheetView showGridLines=\"0\" workbookViewId=\"0\"><pane ySplit=\"5\" topLeftCell=\"A6\" activePane=\"bottomLeft\" state=\"frozen\"/></sheetView></sheetViews><cols>\(columns)</cols><sheetData>\(body)</sheetData>\(filter)\(merges)<drawing r:id=\"banner\"/></worksheet>"))
+        }
+        files.append(("xl/workbook.xml","<workbook xmlns=\"\(ns)\" xmlns:r=\"\(rel)\"><sheets>\(sheets)</sheets></workbook>"))
+        files.append(("xl/_rels/workbook.xml.rels","<Relationships xmlns=\"\(package)\">\(links)<Relationship Id=\"styles\" Type=\"\(rel)/styles\" Target=\"styles.xml\"/></Relationships>"))
+        files.append(("_rels/.rels","<Relationships xmlns=\"\(package)\"><Relationship Id=\"office\" Type=\"\(rel)/officeDocument\" Target=\"xl/workbook.xml\"/></Relationships>"))
+        files.append(("[Content_Types].xml","<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/><Default Extension=\"xml\" ContentType=\"application/xml\"/><Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/><Override PartName=\"/xl/styles.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml\"/>\(overrides)</Types>"))
+        files.append(("xl/styles.xml","""
+        <styleSheet xmlns="\(ns)"><numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0.######"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><color rgb="FFFFFFFF"/><sz val="12"/><name val="Calibri"/></font></fonts><fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF000000"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF5F5F5"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="5"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyAlignment="1"><alignment vertical="center"/></xf><xf numFmtId="0" fontId="0" fillId="3" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="center" wrapText="1" indent="1"/></xf><xf numFmtId="164" fontId="0" fillId="3" borderId="0" xfId="0" applyNumberFormat="1" applyAlignment="1"><alignment vertical="center" indent="1"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>
+        """))
+        return archive(files)
+    }
+}
+
 @main
 final class PrilavokPOSApp: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
@@ -58,6 +152,8 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        NotificationCenter.default.addObserver(self, selector: #selector(pauseAvailability), name: UIApplication.willResignActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(resumeAvailability), name: UIApplication.didBecomeActiveNotification, object: nil)
         bluetooth.onEvent = { [weak self] event in
             self?.sendPrinterEvent(event)
         }
@@ -68,6 +164,14 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
             return
         }
         webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
+    }
+
+    @objc private func pauseAvailability() {
+        webView.evaluateJavaScript("window._availabilityAppActive=false;window.onAvailabilityAppState&&window.onAvailabilityAppState(false);", completionHandler: nil)
+    }
+
+    @objc private func resumeAvailability() {
+        webView.evaluateJavaScript("window._availabilityAppActive=true;window.onAvailabilityAppState&&window.onAvailabilityAppState(true);", completionHandler: nil)
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -97,6 +201,12 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
             if let order = body["order"] as? [String: Any] { bluetooth.print(order: order) }
         case "status":
             sendPrinterEvent(bluetooth.statusEvent())
+        case "shareWarehouseExcel":
+            if let report = body["report"] as? [String: Any] { shareWarehouseExcel(report: report) }
+        case "shareWarehouseReport":
+            if let report = body["report"] as? [String: Any] {
+                shareWarehouseReport(report: report)
+            }
         case "sharePurchaseOrder":
             if let order = body["order"] as? [String: Any] {
                 sharePurchaseOrder(order: order)
@@ -128,8 +238,8 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
         guard provider.hasItemConformingToTypeIdentifier(typeIdentifier) else { return }
         provider.loadDataRepresentation(forTypeIdentifier: typeIdentifier) { [weak self] data, _ in
             guard let self = self, let data = data, let image = UIImage(data: data) else { return }
-            let prepared = self.prepareProductImage(image)
-            guard let base64 = prepared.jpegData(compressionQuality: 0.82)?.base64EncodedString() else { return }
+            guard let prepared = self.prepareProductImage(image) else { return }
+            let base64 = prepared.base64EncodedString()
             let js = "window.handleNativeProductImage && window.handleNativeProductImage('data:image/jpeg;base64,\(base64)');"
             DispatchQueue.main.async {
                 self.webView.evaluateJavaScript(js, completionHandler: nil)
@@ -137,16 +247,30 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
         }
     }
 
-    private func prepareProductImage(_ image: UIImage) -> UIImage {
-        let maxDimension: CGFloat = 1200
+    private func prepareProductImage(_ image: UIImage) -> Data? {
+        // Limit actual pixels and encoded bytes, including headroom for Base64/JSON.
+        var maxDimension: CGFloat = 1200
         let longest = max(image.size.width, image.size.height)
-        guard longest > maxDimension else { return image }
-        let scale = maxDimension / longest
-        let size = CGSize(width: max(1, image.size.width * scale), height: max(1, image.size.height * scale))
-        let renderer = UIGraphicsImageRenderer(size: size)
-        return renderer.image { _ in
-            image.draw(in: CGRect(origin: .zero, size: size))
+        guard longest > 0 else { return nil }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        for _ in 0..<8 {
+            let scale = min(1, maxDimension / longest)
+            let size = CGSize(width: max(1, floor(image.size.width * scale)), height: max(1, floor(image.size.height * scale)))
+            let prepared = UIGraphicsImageRenderer(size: size, format: format).image { context in
+                UIColor.white.setFill()
+                context.fill(CGRect(origin: .zero, size: size))
+                image.draw(in: CGRect(origin: .zero, size: size))
+            }
+            for quality in [0.82, 0.7, 0.55] {
+                if let data = prepared.jpegData(compressionQuality: CGFloat(quality)), data.count <= 600_000 {
+                    return data
+                }
+            }
+            maxDimension *= 0.75
         }
+        return nil
     }
 
     private func telegramTest(body: [String: Any]) {
@@ -469,6 +593,186 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
         }
     }
 
+    // Local inventory report; shared only after the user chooses a destination.
+    private func shareWarehouseReport(report: [String: Any]) {
+        let title = report["title"] as? String ?? "Складской учёт"
+        let period = report["period"] as? String ?? ""
+        let generated = report["generatedAt"] as? String ?? ""
+        let company = report["company"] as? String ?? ""
+        let notes = report["notes"] as? [String] ?? []
+        let sections = report["sections"] as? [[String: Any]] ?? []
+        let page = CGRect(x: 0, y: 0, width: 842, height: 595)
+        let margin: CGFloat = 36
+        let width: CGFloat = page.width - margin * 2
+        let muted = UIColor(white: 0.42, alpha: 1)
+        let accent = UIColor.black
+        let paper = UIColor(white: 0.96, alpha: 1)
+        let lineHeight: CGFloat = 15
+        let renderer = UIGraphicsPDFRenderer(bounds: page)
+        let data = renderer.pdfData { context in
+            var y: CGFloat = 0
+            var pageNumber = 0
+            var firstSection = true
+            func draw(_ text: String, _ rect: CGRect, font: UIFont = .systemFont(ofSize: 10), color: UIColor = UIColor(white: 0.12, alpha: 1)) {
+                (text as NSString).draw(in: rect, withAttributes: [.font: font, .foregroundColor: color])
+            }
+            func lines(_ text: String, width: CGFloat, font: UIFont = .systemFont(ofSize: 10)) -> [String] {
+                var result: [String] = []
+                for paragraph in text.components(separatedBy: "\n") {
+                    var line = ""
+                    for word in paragraph.split(separator: " ") {
+                        let next = line.isEmpty ? String(word) : line + " " + word
+                        if (next as NSString).size(withAttributes: [.font: font]).width <= width {
+                            line = next
+                        } else {
+                            if !line.isEmpty { result.append(line); line = "" }
+                            for character in word {
+                                let nextPart = line + String(character)
+                                if !line.isEmpty && (nextPart as NSString).size(withAttributes: [.font: font]).width > width {
+                                    result.append(line); line = String(character)
+                                } else { line = nextPart }
+                            }
+                        }
+                    }
+                    result.append(line)
+                }
+                return result
+            }
+            func newPage() {
+                context.beginPage(); pageNumber += 1
+                if pageNumber == 1 {
+                let brand = company.trimmingCharacters(in: .whitespacesAndNewlines)
+                let heading = brand.isEmpty ? "Название заведения не указано" : brand
+                accent.setFill(); UIBezierPath(roundedRect: CGRect(x: margin - 8, y: 22, width: width + 16, height: 82), cornerRadius: 14).fill()
+                UIBezierPath(rect: CGRect(x: margin - 8, y: 86, width: width + 16, height: 18)).fill()
+                let companyFont = UIFont.boldSystemFont(ofSize: 18)
+                let companyLines = lines(heading, width: width - 32, font: companyFont)
+                let companyText = companyLines.count > 1 ? companyLines[0] + "…" : heading
+                draw(companyText, CGRect(x: margin + 16, y: 34, width: width - 32, height: 24), font: companyFont, color: .white)
+                draw(title + "  ·  " + period, CGRect(x: margin + 16, y: 69, width: width - 32, height: 20), font: .systemFont(ofSize: 11), color: .white)
+                }
+                let footer = "Сформировано: \(generated)" + (pageNumber > 1 ? "  ·  Период: \(period)" : "")
+                draw(footer, CGRect(x: margin, y: page.height - 27, width: width - 65, height: 18), color: muted)
+                draw("\(pageNumber)", CGRect(x: page.width - margin - 30, y: page.height - 27, width: 30, height: 18), color: muted)
+                y = pageNumber == 1 ? 116 : 36
+            }
+            newPage()
+            for section in sections {
+                let sectionTitle = section["title"] as? String ?? ""
+                let headers = section["headers"] as? [String] ?? []
+                let rows = section["rows"] as? [[String]] ?? []
+                guard !headers.isEmpty else { continue }
+                let firstWidth: CGFloat = headers.count > 6 ? 170 : width / CGFloat(headers.count)
+                let otherWidth: CGFloat = headers.count > 1 ? (width - firstWidth) / CGFloat(headers.count - 1) : width
+                let widths = headers.indices.map { $0 == 0 ? firstWidth : otherWidth }
+                let headerLines = headers.enumerated().map { lines($0.element, width: widths[$0.offset] - 12, font: .boldSystemFont(ofSize: 9)) }
+                let headerHeight = CGFloat(headerLines.map { $0.count }.max() ?? 1) * lineHeight + 12
+                var blockTop: CGFloat = 0
+                func finishBlock() {
+                    UIColor.black.setStroke()
+                    let outline = UIBezierPath(roundedRect: CGRect(x: margin - 8, y: blockTop - 8, width: width + 16, height: y - blockTop + 16), cornerRadius: 14)
+                    outline.lineWidth = 0.8; outline.stroke()
+                }
+                func tableHeader() {
+                    blockTop = pageNumber == 1 && firstSection ? 30 : y
+                    firstSection = false
+                    draw(sectionTitle, CGRect(x: margin, y: y, width: width, height: 23), font: .boldSystemFont(ofSize: 13)); y += 26
+                    accent.setFill(); UIBezierPath(roundedRect: CGRect(x: margin, y: y, width: width, height: headerHeight), cornerRadius: 10).fill()
+                    var x = margin
+                    for (index, cell) in headerLines.enumerated() {
+                        for (lineIndex, line) in cell.enumerated() {
+                            draw(line, CGRect(x: x + 6, y: y + 6 + CGFloat(lineIndex) * lineHeight, width: widths[index] - 12, height: lineHeight), font: .boldSystemFont(ofSize: 9), color: .white)
+                        }
+                        x += widths[index]
+                    }
+                    y += headerHeight + 6
+                }
+                if y + headerHeight + 65 > page.height - 45 { newPage() }
+                y += 12; tableHeader()
+                let displayRows = rows.isEmpty ? [Array(repeating: "—", count: headers.count)] : rows
+                for (rowIndex, row) in displayRows.enumerated() {
+                    let cells = headers.indices.map { lines($0 < row.count ? row[$0] : "", width: widths[$0] - 12) }
+                    let count = cells.map { $0.count }.max() ?? 1
+                    let fullRowHeight = CGFloat(count) * lineHeight + 12
+                    let freshPageSpace = page.height - 45 - 36 - 26 - headerHeight - 6
+                    if fullRowHeight <= freshPageSpace && y + fullRowHeight > page.height - 45 {
+                        finishBlock(); newPage(); tableHeader()
+                    }
+                    var offset = 0
+                    while offset < count {
+                        var available = Int((page.height - 45 - y - 12) / lineHeight)
+                        if available < 1 { finishBlock(); newPage(); tableHeader(); available = Int((page.height - 45 - y - 12) / lineHeight) }
+                        let chunk = min(count - offset, available)
+                        let height = CGFloat(chunk) * lineHeight + 12
+                        (rowIndex % 2 == 0 ? paper : UIColor.white).setFill()
+                        UIBezierPath(roundedRect: CGRect(x: margin, y: y, width: width, height: height), cornerRadius: 8).fill()
+                        var x = margin
+                        for (index, cell) in cells.enumerated() {
+                            for lineIndex in 0..<chunk where offset + lineIndex < cell.count {
+                                draw(cell[offset + lineIndex], CGRect(x: x + 6, y: y + 6 + CGFloat(lineIndex) * lineHeight, width: widths[index] - 12, height: lineHeight))
+                            }
+                            x += widths[index]
+                        }
+                        y += height + 4; offset += chunk
+                    }
+                }
+                finishBlock()
+                y += 30
+            }
+            if !notes.isEmpty {
+                newPage()
+                draw("Как читать отчёт", CGRect(x: margin, y: y, width: width, height: 26), font: .boldSystemFont(ofSize: 16)); y += 38
+                for note in notes {
+                    let content = lines(note, width: width - 28)
+                    for start in stride(from: 0, to: content.count, by: 18) {
+                        let chunk = Array(content[start..<min(start + 18, content.count)])
+                        let height = CGFloat(chunk.count) * lineHeight + 24
+                        if y + height > page.height - 45 { newPage() }
+                        paper.setFill()
+                        let noteBox = UIBezierPath(roundedRect: CGRect(x: margin, y: y, width: width, height: height), cornerRadius: 12)
+                        noteBox.fill(); UIColor.black.setStroke(); noteBox.lineWidth = 0.8; noteBox.stroke()
+                        for (index, text) in chunk.enumerated() {
+                            draw(text, CGRect(x: margin + 14, y: y + 12 + CGFloat(index) * lineHeight, width: width - 28, height: lineHeight), color: muted)
+                        }
+                        y += height + 12
+                    }
+                }
+            }
+        }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("Склад-\(UUID().uuidString).pdf")
+        do {
+            try data.write(to: url, options: .atomic)
+            let activity = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+            if let popover = activity.popoverPresentationController {
+                popover.sourceView = webView
+                popover.sourceRect = CGRect(x: webView.bounds.midX, y: webView.bounds.midY, width: 1, height: 1)
+                popover.permittedArrowDirections = []
+            }
+            present(activity, animated: true)
+        } catch {
+            let alert = UIAlertController(title: "Не удалось создать PDF", message: error.localizedDescription, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "OK", style: .default)); present(alert, animated: true)
+        }
+    }
+
+    private func shareWarehouseExcel(report: [String: Any]) {
+        let data = WarehouseWorkbook.data(report)
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("Склад-\(UUID().uuidString).xlsx")
+        do {
+            try data.write(to: url, options: .atomic)
+            let activity = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+            if let popover = activity.popoverPresentationController {
+                popover.sourceView = webView
+                popover.sourceRect = CGRect(x: webView.bounds.midX, y: webView.bounds.midY, width: 1, height: 1)
+                popover.permittedArrowDirections = []
+            }
+            present(activity, animated: true)
+        } catch {
+            let alert = UIAlertController(title: "Не удалось создать Excel", message: error.localizedDescription, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "OK", style: .default)); present(alert, animated: true)
+        }
+    }
+
     private func sharePurchaseOrder(order: [String: Any]) {
         let supplier = order["supplierName"] as? String ?? "Поставщик"
         let timestamp = (order["timestamp"] as? NSNumber)?.doubleValue ?? Date().timeIntervalSince1970 * 1000
@@ -482,11 +786,11 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
         let address = company["address"] as? String ?? ""
         let deliveryAddress = company["deliveryAddress"] as? String ?? ""
 
-        var items: [(String, Int)] = []
+        var items: [(String, String)] = []
         if let rawItems = order["items"] as? [[String: Any]] {
             for item in rawItems {
                 let name = item["productName"] as? String ?? "Товар"
-                let qty = (item["qty"] as? NSNumber)?.intValue ?? 0
+                let qty = item["quantityText"] as? String ?? "\((item["qty"] as? NSNumber)?.stringValue ?? "0") шт."
                 items.append((name, qty))
             }
         }
@@ -652,7 +956,7 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
         legalName: String,
         address: String,
         deliveryAddress: String,
-        items: [(String, Int)],
+        items: [(String, String)],
         to url: URL
     ) throws {
         // Fixed document colors — do NOT use UIColor.label/secondaryLabel here.
@@ -805,7 +1109,7 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
 
             // MARK: Items
             drawText("СОСТАВ ЗАКАЗА", x: margin, y: y, width: 220, font: sectionFont, color: ink)
-            drawText("\(items.count) поз.  ·  \(items.reduce(0) { $0 + $1.1 }) шт.", x: pageRect.width - margin - 180, y: y, width: 180, font: smallBold, color: muted, alignment: .right)
+            drawText("\(items.count) позиций", x: pageRect.width - margin - 180, y: y, width: 180, font: smallBold, color: muted, alignment: .right)
             y += 16
 
             let tableHeaderH: CGFloat = 34
@@ -823,12 +1127,13 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
                 let name = item.0
                 let qty = item.1
                 let textHeight = NSString(string: name).boundingRect(
-                    with: CGSize(width: contentWidth - 125, height: 1000),
+                    with: CGSize(width: contentWidth - 170, height: 1000),
                     options: [.usesLineFragmentOrigin, .usesFontLeading],
                     attributes: [.font: bodyFont],
                     context: nil
                 ).height
-                let rowHeight = max(CGFloat(39), ceil(textHeight) + 18)
+                let quantityHeight = NSString(string: qty).boundingRect(with: CGSize(width: 120, height: 1000), options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: [.font: boldFont], context: nil).height
+                let rowHeight = max(CGFloat(39), ceil(max(textHeight, quantityHeight)) + 18)
 
                 if y + rowHeight > pageRect.height - 65 {
                     drawPageFooter()
@@ -845,8 +1150,8 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
                     fillRounded(CGRect(x: margin + 1, y: y, width: contentWidth - 2, height: rowHeight), radius: 0, color: rowAlt)
                 }
                 drawText("\(index + 1)", x: margin + 12, y: y + 11, width: 25, font: smallFont, color: muted)
-                drawText(name, x: margin + 42, y: y + 10, width: contentWidth - 125, font: bodyFont, color: ink)
-                drawText("\(qty) шт.", x: pageRect.width - margin - 88, y: y + 10, width: 76, font: boldFont, color: ink, alignment: .right)
+                drawText(name, x: margin + 42, y: y + 10, width: contentWidth - 170, font: bodyFont, color: ink)
+                drawText(qty, x: pageRect.width - margin - 132, y: y + 10, width: 120, font: boldFont, color: ink, alignment: .right)
                 drawRule(at: y + rowHeight - 0.5, x: margin + 42, width: contentWidth - 42)
                 y += rowHeight
                 tableBottomY = y
@@ -870,7 +1175,7 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
             drawText("ИТОГО ПО ЗАКАЗУ", x: margin + 18, y: y + 14, width: 180, font: smallBold, color: muted)
             drawText("\(items.count)", x: margin + 18, y: y + 32, width: 100, font: UIFont.boldSystemFont(ofSize: 20), color: ink)
             drawText("позиций", x: margin + 18, y: y + 55, width: 100, font: smallFont, color: muted)
-            drawText("\(items.reduce(0) { $0 + $1.1 }) шт.", x: pageRect.width - margin - 180, y: y + 25, width: 160, font: UIFont.boldSystemFont(ofSize: 20), color: dark, alignment: .right)
+            drawText("По позициям", x: pageRect.width - margin - 180, y: y + 25, width: 160, font: UIFont.boldSystemFont(ofSize: 20), color: dark, alignment: .right)
             y += 92
 
             fillRounded(CGRect(x: margin, y: y, width: contentWidth, height: 58), radius: 16, color: dark)

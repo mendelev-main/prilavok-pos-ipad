@@ -2,7 +2,7 @@
   'use strict';
   const root = global.PrilavokCore = global.PrilavokCore || {};
   root.Constants = Object.freeze({
-    appVersion: '130.16',
+    appVersion: '130.51',
     sourceOfTruth: 'local-pos',
     syncMode: 'manual-only'
   });

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B13017000000000000000001 /* Web in Resources */ = {isa = PBXBuildFile; fileRef = B13017000000000000000002 /* Web */; };
 		027D13269429464C93FEC487 /* BluetoothPrinterManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC1540EF9CFF4C8BAFE4020A /* BluetoothPrinterManager.swift */; };
 		3C36AC675644423788C097B1 /* pos.html in Resources */ = {isa = PBXBuildFile; fileRef = ACB1313C6C90492FAAEB667E /* pos.html */; };
 		8A3609BED8B84C1582A06B6C /* PrilavokPOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B1EEC527F85450888BA48C5 /* PrilavokPOSApp.swift */; };
@@ -14,6 +15,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		B13017000000000000000002 /* Web */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Web; sourceTree = "<group>"; };
 		2B1EEC527F85450888BA48C5 /* PrilavokPOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrilavokPOSApp.swift; sourceTree = "<group>"; };
 		2D98DA3BD7084D81ABE2FE4F /* PrilavokPOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PrilavokPOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6D2B8E4F1A9C43D7B5E6F012 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -37,6 +39,7 @@
 				2B1EEC527F85450888BA48C5 /* PrilavokPOSApp.swift */,
 				AC1540EF9CFF4C8BAFE4020A /* BluetoothPrinterManager.swift */,
 				ACB1313C6C90492FAAEB667E /* pos.html */,
+				B13017000000000000000002 /* Web */,
 				C8F9D29B23D44139A2644B9B /* Info.plist */,
 				6D2B8E4F1A9C43D7B5E6F012 /* Assets.xcassets */,
 			);
@@ -108,6 +111,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				3C36AC675644423788C097B1 /* pos.html in Resources */,
+				B13017000000000000000001 /* Web in Resources */,
 				9F4A7C2D8B3E41F0A6D9C125 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -155,7 +159,7 @@
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = PrilavokPOS/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 130.16;
+				MARKETING_VERSION = 130.51;
 				PRODUCT_BUNDLE_IDENTIFIER = com.prilavok.pos;
 				PRODUCT_MODULE_NAME = PrilavokPOS;
 				PRODUCT_NAME = PrilavokPOS;
@@ -182,7 +186,7 @@
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = PrilavokPOS/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 130.16;
+				MARKETING_VERSION = 130.51;
 				PRODUCT_BUNDLE_IDENTIFIER = com.prilavok.pos;
 				PRODUCT_MODULE_NAME = PrilavokPOS;
 				PRODUCT_NAME = PrilavokPOS;

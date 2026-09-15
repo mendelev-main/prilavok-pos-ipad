@@ -1,4 +1,4 @@
-// Prilavok POS v130.16
+// Prilavok POS v130.17
 // Offline-first storage adapter.
 //
 // Contract:
@@ -14,11 +14,14 @@
   const root = global.PrilavokCore = global.PrilavokCore || {};
   const LS_PREFIX = 'prilavok_';
 
+  // Match pos.html: select the provider once, including its legacy null behavior.
+  const usesCloudStorage = typeof global.storage !== 'undefined';
+
   function hasCloudStorage() {
-    return typeof global.storage !== 'undefined' && global.storage !== null;
+    return usesCloudStorage;
   }
 
-  async function get(key, fallback) {
+  async function get(key, fallback, onError) {
     try {
       if (hasCloudStorage()) {
         const result = await global.storage.get(key, false);
@@ -28,7 +31,9 @@
       const raw = global.localStorage.getItem(LS_PREFIX + key);
       return raw !== null ? JSON.parse(raw) : fallback;
     } catch (error) {
-      console.error('[PrilavokStorage] read failed', key, error);
+      // Let the POS facade preserve its existing storage warning.
+      if (onError) onError(error);
+      else console.error('[PrilavokStorage] read failed', key, error);
       return fallback;
     }
   }
