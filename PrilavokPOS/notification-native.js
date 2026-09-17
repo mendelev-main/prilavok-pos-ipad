@@ -44,8 +44,6 @@
     nativeSound(settings.sound);
   };
 
-  // network-printer.js owns the settings modal. Extend its selector without
-  // duplicating that UI or changing the large POS HTML file.
   const originalOpenNotificationSettings = window.openNotificationSettings;
   if (typeof originalOpenNotificationSettings === 'function') {
     window.openNotificationSettings = (...args) => {
@@ -62,9 +60,77 @@
     };
   }
 
-  // Detect the counter on the top-bar "События" control. The first value seen
-  // after app launch is only a baseline, so old events never make noise again.
-  // A sound is emitted once when the visible event count increases.
+  // Web orders accepted by the POS are stored in the normal local parked list.
+  // Add a server-backed Ready action only for those rows. Local parked checks are untouched.
+  let readyBusy = false;
+  const originalOpenParkedModal = typeof openParkedModal === 'function' ? openParkedModal : null;
+
+  function readyButtonMarkup(order) {
+    if (!order?.webOrderId || order.webReadyAt) return order?.webReadyAt
+      ? '<span class="badge" style="background:var(--accent-soft);color:var(--accent);">✓ Готов</span>'
+      : '';
+    return `<button class="btn btn-primary web-ready-btn" style="flex:none;padding:9px 14px;" onclick="event.stopPropagation();markWebOrderReady('${escapeAttr(order.id)}')">Готов</button>`;
+  }
+
+  if (originalOpenParkedModal) {
+    window.openParkedModal = function () {
+      const list = state.parked.slice().sort((a,b)=>b.createdAt-a.createdAt);
+      showModal(`
+        <div class="modal-title">Отложенные чеки</div>
+        ${list.length ? list.map(o=>`
+          <div class="list-row">
+            ${readyButtonMarkup(o)}
+            <div style="flex:1;min-width:0;">
+              <div class="list-row-name">${escapeHtml(o.orderLabel||'Без подписи')}</div>
+              <div class="list-row-sub">${o.items.reduce((s,i)=>s+i.qty,0)} поз. · ${fullMoney(o.total)} · ${escapeHtml(o.orderType||'На месте')} · ${fmtDate(o.createdAt)}</div>
+            </div>
+            <button class="btn btn-outline" style="flex:none;padding:9px 14px;" onclick="resumeParked('${escapeAttr(o.id)}')">Открыть</button>
+            <button class="icon-btn danger" onclick="deleteParked('${escapeAttr(o.id)}')">✕</button>
+          </div>
+        `).join('') : `<div class="center-note">Нет отложенных чеков</div>`}
+        <div class="modal-actions"><button class="btn btn-secondary" style="width:100%;" onclick="closeModal()">Закрыть</button></div>
+      `);
+    };
+  }
+
+  window.markWebOrderReady = async function (parkedId) {
+    if (readyBusy) return;
+    const parked = state.parked.find(x=>x.id===parkedId);
+    if (!parked?.webOrderId || parked.webReadyAt) return;
+    const n = networkConfigFromState();
+    if (!n.backendUrl || !n.deviceKey) { flash('Проверьте сетевые настройки'); return; }
+    readyBusy = true;
+    const button = document.querySelector('.web-ready-btn');
+    if (button) { button.disabled = true; button.textContent = 'Отправляем…'; }
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(()=>controller.abort(), 30000);
+      let response;
+      try {
+        response = await fetch(n.backendUrl.replace(/\/+$/,'')+'/api/orders/'+encodeURIComponent(parked.webOrderId)+'/ready', {
+          method:'POST',
+          headers:{'Content-Type':'application/json','X-Device-Key':n.deviceKey},
+          body:'{}',
+          cache:'no-store',
+          signal:controller.signal
+        });
+      } finally { clearTimeout(timeout); }
+      const data = await response.json().catch(()=>null);
+      if (!response.ok) throw new Error(data?.error || ('HTTP '+response.status));
+
+      const next = state.parked.map(x=>x.id===parkedId ? {...x,webReadyAt:Date.now()} : x);
+      await window.PrilavokCore.Storage.set('parked', next);
+      state.parked = next;
+      window.openParkedModal();
+      flash('Заказ отмечен как готов');
+    } catch (e) {
+      flash('Не удалось изменить статус: '+(e?.message||'ошибка сети'));
+      window.openParkedModal();
+    } finally {
+      readyBusy = false;
+    }
+  };
+
   let baselineReady = false;
   let lastEventCount = 0;
   let checkTimer = 0;
