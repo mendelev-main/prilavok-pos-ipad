@@ -55,6 +55,12 @@ final class BluetoothPrinterManager: NSObject, CBCentralManagerDelegate, CBPerip
     }
 
     func print(order: [String: Any]) {
+        if let notificationSound = order["__notificationSound"] as? String {
+            NativeNotificationSound.play(named: notificationSound)
+            onEvent?(["type":"notificationSoundPlayed", "sound":notificationSound])
+            return
+        }
+
         if let rawIp = order["__networkPrinterIp"] as? String {
             let ip = rawIp.trimmingCharacters(in: .whitespacesAndNewlines)
             let requestedPort = (order["__networkPrinterPort"] as? NSNumber)?.intValue ?? 9100
