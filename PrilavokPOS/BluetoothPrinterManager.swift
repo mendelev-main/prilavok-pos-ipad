@@ -1,11 +1,13 @@
 import Foundation
 import CoreBluetooth
+import Network
 
 final class BluetoothPrinterManager: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     private var central: CBCentralManager!
     private var peripherals: [UUID: CBPeripheral] = [:]
     private var selected: CBPeripheral?
     private var writeCharacteristic: CBCharacteristic?
+    private var networkConnections: [UUID: NWConnection] = [:]
     var onEvent: (([String: Any]) -> Void)?
 
     override init() {
@@ -53,6 +55,15 @@ final class BluetoothPrinterManager: NSObject, CBCentralManagerDelegate, CBPerip
     }
 
     func print(order: [String: Any]) {
+        if let rawIp = order["__networkPrinterIp"] as? String {
+            let ip = rawIp.trimmingCharacters(in: .whitespacesAndNewlines)
+            let requestedPort = (order["__networkPrinterPort"] as? NSNumber)?.intValue ?? 9100
+            let port = UInt16(clamping: requestedPort)
+            let isTest = (order["__networkTest"] as? Bool) == true
+            printNetwork(order: order, ip: ip, port: port == 0 ? 9100 : port, testOnly: isTest)
+            return
+        }
+
         guard let p = selected, let ch = writeCharacteristic else {
             onEvent?(["type":"printError", "message":"Сначала подключите Bluetooth-принтер"])
             return
@@ -61,6 +72,69 @@ final class BluetoothPrinterManager: NSObject, CBCentralManagerDelegate, CBPerip
         let type: CBCharacteristicWriteType = ch.properties.contains(.writeWithoutResponse) ? .withoutResponse : .withResponse
         p.writeValue(data, for: ch, type: type)
         onEvent?(["type":"printed", "message":"Чек отправлен на принтер"])
+    }
+
+    private func printNetwork(order: [String: Any], ip: String, port: UInt16, testOnly: Bool) {
+        guard isValidIPv4(ip), let nwPort = NWEndpoint.Port(rawValue: port) else {
+            onEvent?(["type":"printError", "status":"network_error", "message":"Неверный IP-адрес принтера"])
+            return
+        }
+
+        let id = UUID()
+        let connection = NWConnection(host: NWEndpoint.Host(ip), port: nwPort, using: .tcp)
+        networkConnections[id] = connection
+        var completed = false
+
+        func finish() {
+            guard !completed else { return }
+            completed = true
+            connection.cancel()
+            self.networkConnections.removeValue(forKey: id)
+        }
+
+        connection.stateUpdateHandler = { [weak self] state in
+            guard let self = self, !completed else { return }
+            switch state {
+            case .ready:
+                if testOnly {
+                    self.onEvent?(["type":"status", "status":"network_connected", "ip":ip, "port":Int(port), "message":"Принтер доступен"])
+                    finish()
+                    return
+                }
+                let data = ReceiptEncoder.encode(order: order)
+                connection.send(content: data, completion: .contentProcessed { error in
+                    if let error = error {
+                        self.onEvent?(["type":"printError", "status":"network_error", "message":"Не удалось отправить чек: \(error.localizedDescription)"])
+                    } else {
+                        self.onEvent?(["type":"printed", "status":"network_connected", "ip":ip, "message":"Чек отправлен на принтер"])
+                    }
+                    finish()
+                })
+            case .failed:
+                self.onEvent?(["type":"printError", "status":"network_error", "message":"Принтер недоступен. Проверьте IP-адрес и подключение к одной сети"])
+                finish()
+            case .cancelled:
+                self.networkConnections.removeValue(forKey: id)
+            default:
+                break
+            }
+        }
+
+        connection.start(queue: .main)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
+            guard let self = self, self.networkConnections[id] != nil, !completed else { return }
+            self.onEvent?(["type":"printError", "status":"network_error", "message":"Принтер не отвечает. Проверьте IP-адрес и Wi‑Fi"])
+            finish()
+        }
+    }
+
+    private func isValidIPv4(_ value: String) -> Bool {
+        let parts = value.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 4 else { return false }
+        return parts.allSatisfy { part in
+            guard !part.isEmpty, part.count <= 3, let number = Int(part) else { return false }
+            return number >= 0 && number <= 255
+        }
     }
 
     func statusEvent() -> [String: Any] {
