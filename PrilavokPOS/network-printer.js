@@ -51,7 +51,9 @@
     if (status && window.state?.printer) {
       const p = window.state.printer;
       const configured = !!(p.ip && p.enabled);
-      status.innerHTML = `<span class="dot ${configured ? 'on' : 'off'}"></span>${configured ? window.escapeHtml?.(p.ip) || p.ip : 'Принтер не настроен'}`;
+      const safeIp = window.escapeHtml?.(p.ip) || p.ip;
+      const desired = `<span class="dot ${configured ? 'on' : 'off'}"></span>${configured ? safeIp : 'Принтер не настроен'}`;
+      if (status.innerHTML !== desired) status.innerHTML = desired;
     }
   }
 
@@ -121,12 +123,12 @@
 
   window.__nativePrinterEvent = function(event) {
     if (!event) return;
-    if (event.status === 'network_connected') {
-      window.flash?.(`Принтер ${event.ip || ''} доступен`);
-      return;
-    }
     if (event.type === 'printed') {
       window.flash?.(event.message || 'Чек отправлен на принтер');
+      return;
+    }
+    if (event.status === 'network_connected') {
+      window.flash?.(`Принтер ${event.ip || ''} доступен`);
       return;
     }
     if (event.type === 'printError' || event.status === 'network_error') {
