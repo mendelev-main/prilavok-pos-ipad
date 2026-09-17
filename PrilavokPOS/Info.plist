@@ -24,6 +24,8 @@
     </array>
     <key>NSBluetoothAlwaysUsageDescription</key>
     <string>Приложению нужен Bluetooth для подключения к чековому принтеру.</string>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>Приложению нужен доступ к локальной сети для подключения к чековому принтеру по IP-адресу.</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>Приложению нужен доступ к галерее для выбора изображения товара.</string>
 </dict>
