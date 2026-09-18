@@ -1,3 +1,12 @@
+## 2026-09-18 — Native LAN receipt printing cleanup
+
+- Receipt printing is standardized on the native iPad TCP/9100 + ESC/POS path.
+- Fixed manual reprint from the Receipts screen so network printer IP/port are passed to the native bridge.
+- Fixed the legacy automatic-print and printer-test paths to use the same native network bridge.
+- Removed legacy `bridgeUrl` / HTTP Print Bridge behavior from `pos.html`.
+- Ensured `network-printer.js` is loaded by `pos.html`, making the multi-printer network flow active in the bundled app.
+- Added `docs/NETWORK_RECEIPT_PRINTING.md` as the source of truth for receipt printing.
+
 # Changelog
 
 ## v130.50 — размер фото товара для WEB
