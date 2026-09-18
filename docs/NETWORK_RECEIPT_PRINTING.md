@@ -4,6 +4,11 @@
 
 Active implementation for Prilavok POS on iPad.
 
+
+## LAN-only requirement
+
+Prilavok POS supports **only local-network receipt printers**. Bluetooth printing is not supported and must not be added to the UI, runtime, or future printer architecture. Every production print job must contain a printer IPv4 address and is sent directly from the iPad with TCP/9100 using Network.framework. The existing Swift filename containing “Bluetooth” is historical technical debt only and does not define a supported transport.
+
 ## Architecture
 
 Receipt printing is direct from the native iPad application to a LAN receipt printer.
@@ -15,7 +20,7 @@ pos.html / network-printer.js
         ↓ WKWebView message handler "printer"
 PrilavokPOSApp.swift
         ↓
-BluetoothPrinterManager.swift
+LAN printer transport (currently stored in the historical file `BluetoothPrinterManager.swift`)
         ↓ NWConnection TCP
 printer IP : 9100
         ↓
@@ -27,7 +32,7 @@ No desktop print service is part of the receipt-printing path. A Mac, Windows VM
 
 ## Supported printer configuration
 
-Primary tested printer: Xprinter XP-N160II (Wi-Fi + USB).
+Primary tested printer: Xprinter XP-N160II over the local network. USB is used only for service/configuration when needed; POS printing does not use USB.
 
 Current working network configuration:
 - printer is in STA mode;
