@@ -78,7 +78,8 @@ private enum ReceiptEncoder {
         } else {
             add("ПРИЛАВОК",title,.center,14)
             add("Сотрудник: "+((order["employeeName"] as? String) ?? "Сотрудник"),small,.left,2)
-            add("Касса: "+((order["registerName"] as? String) ?? "POS 1"),small,.left,11)
+            let registerLabel=(cfg["registerLabel"] as? String)?.trimmingCharacters(in:.whitespacesAndNewlines) ?? "POS 1"
+            if !registerLabel.isEmpty {add("Касса: "+registerLabel,small,.left,11)}
             if let customer=order["customer"] as? [String:Any] {
                 let name=(customer["name"] as? String) ?? "",phone=(customer["phone"] as? String) ?? ""
                 if !name.isEmpty {add("Клиент: "+name,regular,.left,2)}
@@ -111,6 +112,13 @@ private enum ReceiptEncoder {
             }
             separator(9)
             pair(dateText(order),(order["receiptDisplayNumber"] as? String) ?? "#—",small,8)
+            if let phrases=cfg["receiptRandomPhrases"] as? [String] {
+                let clean=phrases.map{$0.trimmingCharacters(in:.whitespacesAndNewlines)}.filter{!$0.isEmpty}
+                if let phrase=clean.randomElement() {
+                    add("",small,.center,5)
+                    add(phrase,regular,.center,10)
+                }
+            }
         }
 
         func attrs(_ font:UIFont,_ alignment:NSTextAlignment)->[NSAttributedString.Key:Any]{let p=NSMutableParagraphStyle();p.alignment=alignment;p.lineBreakMode = .byWordWrapping;return [.font:font,.foregroundColor:UIColor.black,.paragraphStyle:p]}
