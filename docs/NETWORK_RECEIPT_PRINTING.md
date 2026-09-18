@@ -143,11 +143,6 @@ After a payment is finalized, the completed immutable order is routed once throu
 
 Payment receipt template controls include visibility of receipt number, date/time, employee, register, customer, order label/type, item comments, payment details and other existing visual fields. These controls affect the native raster renderer, not just the settings UI.
 
-## Full-page template editor and live preview
-
-Receipt appearance editing is a dedicated full-screen iPad page opened from a printer profile, with Back/Cancel navigation rather than a modal. Payment-receipt profiles expose text blocks, metadata visibility, financial blocks, font sizes and spacing controls. Kitchen-role profiles use a deliberately reduced editor focused on ticket number/type, operational metadata, large item text, comments and separators; financial controls are not shown.
-
-The editor includes an always-visible receipt-paper preview on the right on iPad. Changes update the preview immediately before saving. The preview is illustrative but uses the same persisted printer profile fields consumed by the native raster renderer. Saving returns to the printer profile.
 
 ## Kitchen dispatch timing and print test reliability
 
@@ -168,3 +163,9 @@ The manual **Печать** button shown after payment and in receipt history is
 The kitchen/order ticket header is intentionally minimal and must render each field once: **ticket number → date/time → order format → ordered items**. Employee name and POS/register are not printed on kitchen tickets. The order format must never be duplicated as both a heading and a second body field.
 
 When a physical printer has both payment-receipt and order-ticket routing enabled, editing the kitchen ticket template must not overwrite or disable payment-receipt fields. Hidden controls in one document type must preserve the saved values belonging to the other document type.
+
+## Fixed payment receipt layout
+
+Payment receipts have one fixed Prilavok POS layout, structurally based on the supplied Loyverse reference. There is no user-facing “Шаблон и внешний вид чека” editor. Printer settings control routing, categories, copies and technical LAN settings only.
+
+Canonical payment receipt order: centered business title; employee and register; optional customer name/phone; separator; order format; separator; item name with line total and a second quantity × unit-price line; optional item discount/comment; optional delivery; separator; large total; payment/tender/change details; separator; date/time and receipt number in the footer. Loyalty-points and VAT rows are not fabricated when Prilavok POS has no corresponding transaction data.
