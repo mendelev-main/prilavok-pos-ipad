@@ -169,3 +169,9 @@ When a physical printer has both payment-receipt and order-ticket routing enable
 Payment receipts have one fixed Prilavok POS layout, structurally based on the supplied Loyverse reference. There is no user-facing “Шаблон и внешний вид чека” editor. Printer settings control routing, categories, copies and technical LAN settings only.
 
 Canonical payment receipt order: centered business title; employee and register; optional customer name/phone; separator; order format; separator; item name with line total and a second quantity × unit-price line; optional item discount/comment; optional delivery; separator; large total; payment/tender/change details; separator; date/time and receipt number in the footer. Loyalty-points and VAT rows are not fabricated when Prilavok POS has no corresponding transaction data.
+
+## Comment routing and kitchen readability
+
+LAN printer profiles include **Печатать комментарии в платежном чеке** (default on). It affects only item comments on payment receipts; kitchen/order tickets always retain item comments because they are operational preparation information.
+
+Kitchen tickets use a tighter top margin and slightly larger typography than payment receipts. An item comment is printed directly beneath its item with a down-right arrow marker (↳) so the comment is visually subordinate to, and clearly associated with, that item.
