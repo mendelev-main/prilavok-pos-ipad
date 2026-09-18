@@ -137,3 +137,9 @@ The printer settings UI must keep connection, role/routing, receipt template, an
 After a payment is finalized, the completed immutable order is routed once through the configured printer profiles. Receipt-role printers with automatic printing enabled receive the full payment receipt. Kitchen/bar-role printers with automatic printing enabled receive only items matching their assigned categories; an empty filtered ticket is never printed. Each printer may independently print 1–3 copies.
 
 Payment receipt template controls include visibility of receipt number, date/time, employee, register, customer, order label/type, item comments, payment details and other existing visual fields. These controls affect the native raster renderer, not just the settings UI.
+
+## Full-page template editor and live preview
+
+Receipt appearance editing is a dedicated full-screen iPad page opened from a printer profile, with Back/Cancel navigation rather than a modal. Payment-receipt profiles expose text blocks, metadata visibility, financial blocks, font sizes and spacing controls. Kitchen-role profiles use a deliberately reduced editor focused on ticket number/type, operational metadata, large item text, comments and separators; financial controls are not shown.
+
+The editor includes an always-visible receipt-paper preview on the right on iPad. Changes update the preview immediately before saving. The preview is illustrative but uses the same persisted printer profile fields consumed by the native raster renderer. Saving returns to the printer profile.
