@@ -113,3 +113,11 @@ The main POS state is a top-level lexical `const state` in `pos.html`; it must n
 ## Graphic receipt mode
 
 When `__printerConfig.printMode == "graphic"` (the default for the XP-N160II profile), the native iPad layer renders the receipt with UIKit fonts, converts it to a monochrome bitmap and sends it with the ESC/POS `GS v 0` raster command. Cyrillic is therefore rendered by iOS and does not depend on the printer code page. Paper width, requested print width and DPI are taken from printer configuration. Text mode remains available as a compatibility fallback.
+
+## Receipt designer
+
+Each configured receipt printer has its own locally stored receipt appearance profile. The printer editor exposes **Настроить внешний вид чека**. The profile is passed inside `__printerConfig` and applied by the native raster renderer.
+
+Supported customization includes custom receipt title/subtitle, header and footer comments, payment-section and total labels, visibility of order label/type, items, item comments, payments, cash tender/change, order comment, currency, separators and footer; title/body/small/total font sizes; content padding, line spacing, section spacing and item spacing. These settings are per printer and offline-first. Printer connection settings and receipt appearance settings must remain independent so changing visual design cannot break TCP connectivity.
+
+Future receipt-designer additions should extend the same `__printerConfig` profile rather than create a second print pipeline. Suitable extensions include logo/QR blocks, alignment controls, custom fields, duplicate copies, kitchen templates and a live on-screen preview.
