@@ -3673,6 +3673,11 @@ function printReceipt(orderId){
   const order = state.orders.find(o=>o.id===orderId);
   if(!order) return;
   if(window.webkit?.messageHandlers?.printer){
+    const configured=Array.isArray(window.__networkReceiptPrinters)?window.__networkReceiptPrinters:[];
+    if(configured.length){
+      configured.forEach(p=>window.webkit.messageHandlers.printer.postMessage({action:'print',order:{...order,currency:order.currency||state.currency,__networkPrinterIp:p.ip,__networkPrinterPort:Number(p.port)||9100,__printerConfig:p}}));
+      return;
+    }
     const p=state.printer||{};
     if(p.enabled && p.ip){
       window.webkit.messageHandlers.printer.postMessage({action:'print',order:{...order,currency:order.currency||state.currency,__networkPrinterIp:p.ip,__networkPrinterPort:Number(p.port)||9100}});
