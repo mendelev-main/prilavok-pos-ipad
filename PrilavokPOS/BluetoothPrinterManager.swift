@@ -246,6 +246,26 @@ private enum ReceiptEncoder {
         }
         func separator() { add(String(repeating: "—", count: 28), small, .center, 7) }
 
+        let isKitchen = (order["__printDocumentType"] as? String) == "kitchen"
+        if isKitchen {
+            add((order["receiptDisplayNumber"] as? String) ?? "#—", title, .center, sectionGap)
+            add((order["orderLabel"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? ((order["orderType"] as? String) ?? "Заказ"), title, .center, sectionGap)
+            let dateText = DateFormatter.localizedString(from: Date(timeIntervalSince1970: (number(order["timestamp"]) / 1000)), dateStyle: .short, timeStyle: .short)
+            add(dateText, small, .left, 2)
+            add("\((order["employeeName"] as? String) ?? "Сотрудник"), \((order["registerName"] as? String) ?? "POS 1")", small, .left, sectionGap)
+            if cfgBool("showSeparators") { separator() }
+            add((order["orderType"] as? String) ?? "Заказ", bold, .center, sectionGap)
+            if cfgBool("showSeparators") { separator() }
+            if let items = order["items"] as? [[String: Any]] {
+                for item in items {
+                    let name = (item["name"] as? String) ?? ""
+                    let qty = number(item["qty"], fallback: 1)
+                    add("\(formatQty(qty)) × \(name)", bold, .left, itemGap)
+                    if let comment = item["comment"] as? String, !comment.isEmpty { add(comment, small, .left, itemGap) }
+                }
+            }
+            if cfgBool("showSeparators") { separator() }
+        } else {
         add(cfgText("receiptTitle", "ПРИЛАВОК"), title, .center, sectionGap)
         add(cfgText("receiptSubtitle"), medium, .center, lineGap)
         add(cfgText("receiptHeaderComment"), small, .center, sectionGap)
@@ -291,7 +311,11 @@ private enum ReceiptEncoder {
         }
         if cfgBool("showThankYou") { add(cfgText("receiptFooter", "Спасибо!"), regular, .center, lineGap) }
         add(cfgText("receiptFooterComment"), small, .center, 18)
-
+        let dateText = DateFormatter.localizedString(from: Date(timeIntervalSince1970: (number(order["timestamp"]) / 1000)), dateStyle: .short, timeStyle: .short)
+        add(dateText + "     " + ((order["receiptDisplayNumber"] as? String) ?? "#—"), small, .left, 10)
+        add("Сотрудник: " + ((order["employeeName"] as? String) ?? "Сотрудник"), small, .left, 6)
+        }
+        
         func attrs(_ font: UIFont, _ alignment: NSTextAlignment) -> [NSAttributedString.Key: Any] {
             let p = NSMutableParagraphStyle()
             p.alignment = alignment
