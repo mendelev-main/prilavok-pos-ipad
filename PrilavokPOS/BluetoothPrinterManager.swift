@@ -76,7 +76,8 @@ private enum ReceiptEncoder {
                 }
             }
         } else {
-            add("ПРИЛАВОК",title,.center,14)
+            let paymentTitle=(cfg["paymentReceiptTitle"] as? String)?.trimmingCharacters(in:.whitespacesAndNewlines) ?? "ПРИЛАВОК"
+            if !paymentTitle.isEmpty {add(paymentTitle,title,.center,14)}
             add("Сотрудник: "+((order["employeeName"] as? String) ?? "Сотрудник"),small,.left,2)
             let registerLabel=(cfg["registerLabel"] as? String)?.trimmingCharacters(in:.whitespacesAndNewlines) ?? "POS 1"
             if !registerLabel.isEmpty {add("Касса: "+registerLabel,small,.left,11)}
