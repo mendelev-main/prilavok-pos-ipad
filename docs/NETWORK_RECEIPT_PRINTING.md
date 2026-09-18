@@ -121,3 +121,13 @@ Each configured receipt printer has its own locally stored receipt appearance pr
 Supported customization includes custom receipt title/subtitle, header and footer comments, payment-section and total labels, visibility of order label/type, items, item comments, payments, cash tender/change, order comment, currency, separators and footer; title/body/small/total font sizes; content padding, line spacing, section spacing and item spacing. These settings are per printer and offline-first. Printer connection settings and receipt appearance settings must remain independent so changing visual design cannot break TCP connectivity.
 
 Future receipt-designer additions should extend the same `__printerConfig` profile rather than create a second print pipeline. Suitable extensions include logo/QR blocks, alignment controls, custom fields, duplicate copies, kitchen templates and a live on-screen preview.
+
+## Printer roles and document architecture
+
+Printer configuration is a full-page settings flow rather than a modal editor. Every printer has one primary role: **payment receipts** or **order tickets (kitchen/bar)**.
+
+Payment receipt printers receive the complete paid order and render receipt identity metadata including a stable receipt number, payment timestamp and shift employee. Kitchen/order printers do not render financial totals; they render the order/ticket number, order label/type, time, employee/register and the routed item list with item comments.
+
+Kitchen printers can be assigned product categories. Before a kitchen job is sent, POS filters the order items to the categories assigned to that printer. An empty category assignment means all categories. Item category is snapshotted into the completed order so later product/category edits do not change historical routing metadata.
+
+The printer settings UI must keep connection, role/routing, receipt template, and technical ESC/POS settings as separate sections. The established native TCP/9100 raster pipeline remains unchanged.
