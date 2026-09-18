@@ -162,3 +162,9 @@ Payment receipt raster layout follows the current Prilavok receipt structure ins
 Each LAN printer profile has two independent routing checkboxes: **Печатать платежные чеки** and **Печатать чеки заказов**. A single physical LAN printer may have either checkbox or both enabled. Enabling order-ticket printing reveals the category selector; only matching item categories are routed to that order ticket, with an empty category selection meaning all categories. Payment receipt printing never uses the kitchen/order layout or category filter.
 
 The manual **Печать** button shown after payment and in receipt history is payment-receipt-only. It calls the same payment routing function as automatic payment receipt printing and must never fall back to a kitchen printer or legacy printer configuration.
+
+## Kitchen ticket canonical order
+
+The kitchen/order ticket header is intentionally minimal and must render each field once: **ticket number → date/time → order format → ordered items**. Employee name and POS/register are not printed on kitchen tickets. The order format must never be duplicated as both a heading and a second body field.
+
+When a physical printer has both payment-receipt and order-ticket routing enabled, editing the kitchen ticket template must not overwrite or disable payment-receipt fields. Hidden controls in one document type must preserve the saved values belonging to the other document type.
