@@ -3043,7 +3043,10 @@ function flash(msg){
 /* ---- Park (save receipt for later) ---- */
 function parkOrder(){
   if(!state.cart.length) return;
-  const parked = {id:uid(), items: JSON.parse(JSON.stringify(state.cart)), total: cartTotal(), subtotal: cartSubtotal(), deliveryFee: state.orderType==='Доставка'?Number(state.deliveryFee||0):0, orderLabel: state.orderLabel, orderType: state.orderType, customer: JSON.parse(JSON.stringify(state.customer)), createdAt: Date.now()};
+  const shift=currentShift(), employee=state.employees.find(e=>e.id===shift?.employeeId);
+  const parked = {id:uid(), receiptDisplayNumber:'#'+(state.parked.length+1), items: state.cart.map(i=>{const product=getProduct(i.productId);return {...JSON.parse(JSON.stringify(i)),category:product?.category||i.category||''}}), total: cartTotal(), subtotal: cartSubtotal(), deliveryFee: state.orderType==='Доставка'?Number(state.deliveryFee||0):0, orderLabel: state.orderLabel, orderType: state.orderType, customer: JSON.parse(JSON.stringify(state.customer)), employeeName:employee?.name||employee?.fullName||'Сотрудник',registerName:'POS 1',timestamp:Date.now(),createdAt: Date.now(),kitchenPrinted:true};
+  if(typeof window.printKitchenOrderNow==='function')window.printKitchenOrderNow(parked);
+  window.__currentOrderKitchenPrinted=false;
   state.parked.push(parked);
   saveKey('parked', state.parked);
   state.cart = [];
@@ -3082,6 +3085,7 @@ function resumeParked(id){
   state.orderType = o.orderType || 'На месте';
   state.customer = o.customer || {name:'',phone:'',address:''};
   state.deliveryFee = Number(o.deliveryFee||0);
+  window.__currentOrderKitchenPrinted=!!o.kitchenPrinted;
   saveCurrentOrderSession();
   state.parked = state.parked.filter(x=>x.id!==id);
   saveKey('parked', state.parked);
@@ -3506,7 +3510,7 @@ function finalizePayment(payments){
   saveKey('products',state.products);saveKey('orders',state.orders);saveKey('shifts',state.shifts);
   state.cart=[];state.orderLabel='';state.orderType='На месте';state.deliveryFee=0;state.customer={name:'',phone:'',address:''};state._splitPayments=[];state._splitCount=0;
   clearCurrentOrderSession();
-  render();showReceipt(order);setTimeout(()=>{if(typeof window.printCompletedOrder==='function')window.printCompletedOrder(order);else if(state.printer?.autoPrint)sendOrderToPrint(order)},250);
+  render();showReceipt(order);setTimeout(()=>{if(typeof window.printCompletedOrder==='function')window.printCompletedOrder(order);else if(state.printer?.autoPrint)sendOrderToPrint(order);window.__currentOrderKitchenPrinted=false},250);
 }
 function openCashModal(){openPaymentModal();}
 function openCardModal(){openPaymentModal();}
