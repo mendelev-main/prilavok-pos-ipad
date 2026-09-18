@@ -143,3 +143,11 @@ Payment receipt template controls include visibility of receipt number, date/tim
 Receipt appearance editing is a dedicated full-screen iPad page opened from a printer profile, with Back/Cancel navigation rather than a modal. Payment-receipt profiles expose text blocks, metadata visibility, financial blocks, font sizes and spacing controls. Kitchen-role profiles use a deliberately reduced editor focused on ticket number/type, operational metadata, large item text, comments and separators; financial controls are not shown.
 
 The editor includes an always-visible receipt-paper preview on the right on iPad. Changes update the preview immediately before saving. The preview is illustrative but uses the same persisted printer profile fields consumed by the native raster renderer. Saving returns to the printer profile.
+
+## Kitchen dispatch timing and print test reliability
+
+A kitchen/bar ticket is dispatched when the cashier parks/sends the active order to work, not only after payment. The parked order stores that it has already been sent to kitchen so completing payment does not print the same kitchen ticket a second time. Orders paid directly without first being parked still dispatch to kitchen at payment. Category metadata is snapshotted before dispatch.
+
+The printer-profile test action persists the currently visible connection settings first, displays the exact target IP/9100 being tested, and then exercises the native TCP test-print path. Printer discovery for runtime routing is role-based; legacy printReceipts/printOrders flags must not silently exclude a printer after migration to printerRole.
+
+Payment receipt raster layout follows the current Prilavok receipt structure inspired by the supplied reference: operational metadata near the top, item discounts directly under their items, delivery as a separate line, payment section, emphasized total, and date/time plus stable receipt number in the footer.
