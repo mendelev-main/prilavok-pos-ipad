@@ -105,3 +105,7 @@ Printing is a local function and must not depend on Railway, Supabase, internet 
 The previous design that routed receipt jobs through a local Print Bridge / HTTP bridge is retired. Do not add `bridgeUrl`, HTTP print forwarding, or a required desktop helper back into the receipt flow.
 
 Historical references to that design should be treated as obsolete. The source of truth is the native iPad TCP/9100 implementation described above.
+
+## Implementation note: state scope
+
+The main POS state is a top-level lexical `const state` in `pos.html`; it must not be assumed to exist as `window.state`. External scripts such as `network-printer.js` must not use `window.state.orders` to resolve receipt history. The configured-printer layer passes its selected receipt printers into the legacy receipt function explicitly, so reprints use the same saved LAN printer configuration as the successful test-print flow.
