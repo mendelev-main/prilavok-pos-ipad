@@ -270,6 +270,16 @@ private enum ReceiptEncoder {
         add(cfgText("receiptSubtitle"), medium, .center, lineGap)
         add(cfgText("receiptHeaderComment"), small, .center, sectionGap)
         if cfgBool("showSeparators") { separator() }
+        if cfgBool("showReceiptNumber") { add((order["receiptDisplayNumber"] as? String) ?? "#—", medium, .right, lineGap) }
+        let metaDate = DateFormatter.localizedString(from: Date(timeIntervalSince1970: (number(order["timestamp"]) / 1000)), dateStyle: .short, timeStyle: .short)
+        if cfgBool("showDate") { add(metaDate, small, .left, lineGap) }
+        if cfgBool("showEmployee") { add("Сотрудник: " + ((order["employeeName"] as? String) ?? "Сотрудник"), small, .left, lineGap) }
+        if cfgBool("showRegister") { add("Касса: " + ((order["registerName"] as? String) ?? "POS 1"), small, .left, sectionGap) }
+        if cfgBool("showCustomer"), let customer = order["customer"] as? [String: Any] {
+            let name = (customer["name"] as? String) ?? "", phone = (customer["phone"] as? String) ?? ""
+            if !name.isEmpty { add("Клиент: " + name, small, .left, 2) }
+            if !phone.isEmpty { add(phone, small, .left, sectionGap) }
+        }
         let label = (order["orderLabel"] as? String) ?? ""
         if cfgBool("showOrderLabel") { add(label, medium) }
         if cfgBool("showOrderType"), let type = order["orderType"] as? String { add(type, medium) }
@@ -311,9 +321,6 @@ private enum ReceiptEncoder {
         }
         if cfgBool("showThankYou") { add(cfgText("receiptFooter", "Спасибо!"), regular, .center, lineGap) }
         add(cfgText("receiptFooterComment"), small, .center, 18)
-        let dateText = DateFormatter.localizedString(from: Date(timeIntervalSince1970: (number(order["timestamp"]) / 1000)), dateStyle: .short, timeStyle: .short)
-        add(dateText + "     " + ((order["receiptDisplayNumber"] as? String) ?? "#—"), small, .left, 10)
-        add("Сотрудник: " + ((order["employeeName"] as? String) ?? "Сотрудник"), small, .left, 6)
         }
         
         func attrs(_ font: UIFont, _ alignment: NSTextAlignment) -> [NSAttributedString.Key: Any] {
