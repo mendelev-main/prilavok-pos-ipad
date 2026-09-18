@@ -45,80 +45,103 @@ private enum ReceiptEncoder {
         let cfg=(order["__printerConfig"] as? [String:Any]) ?? [:]
         let paper=(cfg["paperWidth"] as? NSNumber)?.intValue ?? 80
         let width=paper<=58 ? 384 : 576
-        let margin:CGFloat=paper<=58 ? 14 : 20
+        let margin:CGFloat=paper<=58 ? 14 : 24
         let contentWidth=CGFloat(width)-margin*2
-        let small=UIFont.systemFont(ofSize:paper<=58 ? 18:20)
+        let small=UIFont.systemFont(ofSize:paper<=58 ? 17:19)
         let regular=UIFont.systemFont(ofSize:paper<=58 ? 20:22)
         let medium=UIFont.systemFont(ofSize:paper<=58 ? 21:23,weight:.semibold)
         let bold=UIFont.systemFont(ofSize:paper<=58 ? 27:30,weight:.bold)
-        let title=UIFont.systemFont(ofSize:paper<=58 ? 28:32,weight:.bold)
-        typealias Row=(String,UIFont,NSTextAlignment,CGFloat)
+        let title=UIFont.systemFont(ofSize:paper<=58 ? 28:31,weight:.bold)
+
+        enum Kind { case text, pair, separator }
+        struct Row { let kind:Kind; let left:String; let right:String; let font:UIFont; let align:NSTextAlignment; let gap:CGFloat }
         var rows:[Row]=[]
-        func add(_ text:String,_ font:UIFont=regular,_ align:NSTextAlignment = .left,_ gap:CGFloat=4){ rows.append((text,font,align,gap)) }
-        func separator(){ add(String(repeating:"·",count:paper<=58 ? 34:48),small,.center,8) }
-        func money(_ v:Double)->String { String(format:"%.2f BYN",v) }
-        func pair(_ left:String,_ right:String)->String { left+"                              "+right }
+        func add(_ text:String,_ font:UIFont=regular,_ align:NSTextAlignment = .left,_ gap:CGFloat=4){rows.append(Row(kind:.text,left:text,right:"",font:font,align:align,gap:gap))}
+        func pair(_ left:String,_ right:String,_ font:UIFont=regular,_ gap:CGFloat=4){rows.append(Row(kind:.pair,left:left,right:right,font:font,align:.left,gap:gap))}
+        func separator(_ gap:CGFloat=8){rows.append(Row(kind:.separator,left:"",right:"",font:small,align:.left,gap:gap))}
+        func money(_ v:Double)->String{String(format:"%.2f BYN",v)}
         let kitchen=(order["__printDocumentType"] as? String)=="kitchen"
 
         if kitchen {
             add((order["receiptDisplayNumber"] as? String) ?? "#—",title,.center,3)
-            let date=dateText(order)
-            add(date,small,.center,8)
-            separator()
+            add(dateText(order),small,.center,8)
+            separator(7)
             add((order["orderType"] as? String) ?? "Заказ",medium,.center,8)
-            separator()
+            separator(8)
             if let items=order["items"] as? [[String:Any]] {
                 for item in items {
                     let q=number(item["qty"],1), name=(item["name"] as? String) ?? ""
                     add("\(qty(q)) × \(name)",bold,.left,4)
-                    if let comment=item["comment"] as? String,!comment.isEmpty { add(comment,small,.left,8) }
+                    if let comment=item["comment"] as? String,!comment.isEmpty {add(comment,small,.left,9)}
                 }
             }
-            separator()
         } else {
-            add("ПРИЛАВОК",title,.center,12)
+            add("ПРИЛАВОК",title,.center,14)
             add("Сотрудник: "+((order["employeeName"] as? String) ?? "Сотрудник"),small,.left,2)
-            add("Касса: "+((order["registerName"] as? String) ?? "POS 1"),small,.left,10)
+            add("Касса: "+((order["registerName"] as? String) ?? "POS 1"),small,.left,11)
             if let customer=order["customer"] as? [String:Any] {
-                let name=(customer["name"] as? String) ?? "", phone=(customer["phone"] as? String) ?? ""
-                if !name.isEmpty { add("Клиент: "+name,regular,.left,2) }
-                if !phone.isEmpty { add(phone,regular,.left,8) }
+                let name=(customer["name"] as? String) ?? "",phone=(customer["phone"] as? String) ?? ""
+                if !name.isEmpty {add("Клиент: "+name,regular,.left,2)}
+                if !phone.isEmpty {add(phone,regular,.left,10)}
             }
-            separator()
-            add((order["orderType"] as? String) ?? "На месте",regular,.left,8)
-            separator()
+            separator(8)
+            add((order["orderType"] as? String) ?? "На месте",regular,.left,9)
+            separator(10)
             if let items=order["items"] as? [[String:Any]] {
                 for item in items {
-                    let name=(item["name"] as? String) ?? "", q=number(item["qty"],1), price=number(item["price"])
-                    let gross=q*price, dv=number(item["discountValue"]), dt=(item["discountType"] as? String) ?? ""
+                    let name=(item["name"] as? String) ?? "",q=number(item["qty"],1),price=number(item["price"])
+                    let gross=q*price,dv=number(item["discountValue"]),dt=(item["discountType"] as? String) ?? ""
                     let disc=dt=="percent" ? gross*dv/100 : (dt.isEmpty ? 0 : dv*q)
-                    add(pair(name,money(max(0,gross-disc))),medium,.left,1)
-                    add("\(qty(q)) × "+money(price),regular,.left,2)
-                    if disc>0 { add("Скидка: −"+money(disc),small,.left,2) }
-                    if let comment=item["comment"] as? String,!comment.isEmpty { add("Комментарий: "+comment,small,.left,3) }
-                    add("",small,.left,5)
+                    pair(name,money(max(0,gross-disc)),medium,2)
+                    add("\(qty(q)) × "+money(price),regular,.left,3)
+                    if disc>0 {add("Скидка: −"+money(disc),small,.left,2)}
+                    if let comment=item["comment"] as? String,!comment.isEmpty {add("Комментарий: "+comment,small,.left,3)}
+                    add("",small,.left,8)
                 }
             }
             let delivery=number(order["deliveryFee"])
-            if delivery>0 { add(pair("Доставка",money(delivery)),regular,.left,8) }
-            separator()
-            add(pair("Итого",money(number(order["total"]))),bold,.left,10)
-            let method=(order["method"] as? String)=="cash" ? "Наличные" : "Карта"
-            add(pair(method,money(number(order["total"]))),regular,.left,2)
-            if (order["method"] as? String)=="cash" {
+            if delivery>0 {pair("Доставка",money(delivery),regular,10)}
+            separator(10)
+            pair("Итого",money(number(order["total"])),bold,12)
+            let cash=(order["method"] as? String)=="cash"
+            pair(cash ? "Наличные":"Карта",money(number(order["total"])),regular,3)
+            if cash {
                 let given=number(order["cashGiven"])
-                if given>0 { add(pair("Внесено",money(given)),regular,.left,2); add(pair("Сдача",money(number(order["change"]))),medium,.left,8) }
+                if given>0 {pair("Внесено",money(given),regular,3);pair("Сдача",money(number(order["change"])),medium,10)}
             }
-            separator()
-            add(pair(dateText(order),(order["receiptDisplayNumber"] as? String) ?? "#—"),small,.left,8)
+            separator(9)
+            pair(dateText(order),(order["receiptDisplayNumber"] as? String) ?? "#—",small,8)
         }
 
-        func attrs(_ font:UIFont,_ alignment:NSTextAlignment)->[NSAttributedString.Key:Any] { let p=NSMutableParagraphStyle();p.alignment=alignment;p.lineBreakMode = .byWordWrapping;return [.font:font,.foregroundColor:UIColor.black,.paragraphStyle:p] }
-        var measured:[(String,[NSAttributedString.Key:Any],CGFloat,CGFloat)]=[], height:CGFloat=10
-        for row in rows { let a=attrs(row.1,row.2);let box=(row.0 as NSString).boundingRect(with:CGSize(width:contentWidth,height:.greatestFiniteMagnitude),options:[.usesLineFragmentOrigin,.usesFontLeading],attributes:a,context:nil);let h=ceil(box.height)+2;measured.append((row.0,a,h,row.3));height+=h+row.3 }
-        height+=12
+        func attrs(_ font:UIFont,_ alignment:NSTextAlignment)->[NSAttributedString.Key:Any]{let p=NSMutableParagraphStyle();p.alignment=alignment;p.lineBreakMode = .byWordWrapping;return [.font:font,.foregroundColor:UIColor.black,.paragraphStyle:p]}
+        struct Measured {let row:Row;let leftAttrs:[NSAttributedString.Key:Any];let rightAttrs:[NSAttributedString.Key:Any];let height:CGFloat}
+        var measured:[Measured]=[],height:CGFloat=12
+        for row in rows {
+            if row.kind == .separator {measured.append(Measured(row:row,leftAttrs:[:],rightAttrs:[:],height:1));height += 1+row.gap;continue}
+            let la=attrs(row.font,row.align),ra=attrs(row.font,.right)
+            let available=row.kind == .pair ? contentWidth*0.67 : contentWidth
+            let lb=(row.left as NSString).boundingRect(with:CGSize(width:available,height:.greatestFiniteMagnitude),options:[.usesLineFragmentOrigin,.usesFontLeading],attributes:la,context:nil)
+            let rb=(row.right as NSString).boundingRect(with:CGSize(width:contentWidth*0.31,height:.greatestFiniteMagnitude),options:[.usesLineFragmentOrigin,.usesFontLeading],attributes:ra,context:nil)
+            let h=max(ceil(lb.height),ceil(rb.height))+2
+            measured.append(Measured(row:row,leftAttrs:la,rightAttrs:ra,height:h));height += h+row.gap
+        }
+        height += 14
         let format=UIGraphicsImageRendererFormat();format.scale=1;format.opaque=true
-        let image=UIGraphicsImageRenderer(size:CGSize(width:CGFloat(width),height:ceil(height)),format:format).image { ctx in UIColor.white.setFill();ctx.fill(CGRect(x:0,y:0,width:CGFloat(width),height:ceil(height)));var y:CGFloat=10;for row in measured{(row.0 as NSString).draw(with:CGRect(x:margin,y:y,width:contentWidth,height:row.2),options:[.usesLineFragmentOrigin,.usesFontLeading],attributes:row.1,context:nil);y+=row.2+row.3} }
+        let image=UIGraphicsImageRenderer(size:CGSize(width:CGFloat(width),height:ceil(height)),format:format).image {ctx in
+            UIColor.white.setFill();ctx.fill(CGRect(x:0,y:0,width:CGFloat(width),height:ceil(height)))
+            var y:CGFloat=12
+            for m in measured {
+                if m.row.kind == .separator {
+                    let c=ctx.cgContext;c.setStrokeColor(UIColor.black.cgColor);c.setLineWidth(1);c.setLineDash(phase:0,lengths:[3,3]);c.move(to:CGPoint(x:margin,y:y));c.addLine(to:CGPoint(x:CGFloat(width)-margin,y:y));c.strokePath()
+                } else if m.row.kind == .pair {
+                    (m.row.left as NSString).draw(with:CGRect(x:margin,y:y,width:contentWidth*0.66,height:m.height),options:[.usesLineFragmentOrigin,.usesFontLeading],attributes:m.leftAttrs,context:nil)
+                    (m.row.right as NSString).draw(with:CGRect(x:margin+contentWidth*0.68,y:y,width:contentWidth*0.32,height:m.height),options:[.usesLineFragmentOrigin,.usesFontLeading],attributes:m.rightAttrs,context:nil)
+                } else {
+                    (m.row.left as NSString).draw(with:CGRect(x:margin,y:y,width:contentWidth,height:m.height),options:[.usesLineFragmentOrigin,.usesFontLeading],attributes:m.leftAttrs,context:nil)
+                }
+                y += m.height+m.row.gap
+            }
+        }
         guard let cg=image.cgImage else{return Data()}
         return raster(cg,width)
     }
