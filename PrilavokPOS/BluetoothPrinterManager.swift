@@ -291,13 +291,23 @@ private enum ReceiptEncoder {
                 let qty = number(item["qty"], fallback: 1)
                 let price = number(item["price"])
                 add("\(name) \(cfgText("itemQtySymbol", "×")) \(formatQty(qty))", medium, .left, 2)
-                add(money(price * qty), regular, .right, itemGap)
+                let discountValue = number(item["discountValue"])
+                let discountType = (item["discountType"] as? String) ?? ""
+                let gross = price * qty
+                let discountAmount = discountType == "percent" ? gross * discountValue / 100.0 : (discountType.isEmpty ? 0 : discountValue * qty)
+                add(money(max(0, gross - discountAmount)), regular, .right, discountAmount > 0 ? 2 : itemGap)
+                if discountAmount > 0 { add("Скидка: −" + money(discountAmount), small, .right, itemGap) }
                 if cfgBool("showItemComments"), let comment = item["comment"] as? String, !comment.isEmpty {
                     add("Комментарий: \(comment)", small, .left, lineGap)
                 }
             }
         }
 
+        let deliveryFee = number(order["deliveryFee"])
+        if deliveryFee > 0 {
+            add("Доставка", regular, .left, 2)
+            add(money(deliveryFee), regular, .right, sectionGap)
+        }
         if cfgBool("showSeparators") { separator() }
         if cfgBool("showPayments") { add(cfgText("paymentsTitle", "ПЛАТЕЖИ"), medium, .left, lineGap) }
         if cfgBool("showPayments"), let payments = order["payments"] as? [[String: Any]], !payments.isEmpty {
@@ -320,7 +330,15 @@ private enum ReceiptEncoder {
             add("Комментарий: \(comment)", small, .left, sectionGap)
         }
         if cfgBool("showThankYou") { add(cfgText("receiptFooter", "Спасибо!"), regular, .center, lineGap) }
-        add(cfgText("receiptFooterComment"), small, .center, 18)
+        add(cfgText("receiptFooterComment"), small, .center, sectionGap)
+        if cfgBool("showSeparators") { separator() }
+        let footerDate = DateFormatter.localizedString(from: Date(timeIntervalSince1970: (number(order["timestamp"]) / 1000)), dateStyle: .short, timeStyle: .short)
+        let footerNumber = (order["receiptDisplayNumber"] as? String) ?? "#—"
+        if cfgBool("showDate") || cfgBool("showReceiptNumber") {
+            let left = cfgBool("showDate") ? footerDate : ""
+            let right = cfgBool("showReceiptNumber") ? footerNumber : ""
+            add(left + (left.isEmpty || right.isEmpty ? "" : "          ") + right, small, .left, 10)
+        }
         }
         
         func attrs(_ font: UIFont, _ alignment: NSTextAlignment) -> [NSAttributedString.Key: Any] {
