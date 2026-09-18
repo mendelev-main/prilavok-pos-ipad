@@ -218,13 +218,22 @@ private enum ReceiptEncoder {
         width = max(128, min(width, 576))
         width -= width % 8
 
-        let margin: CGFloat = 12
+        func cfgNumber(_ key: String, _ fallback: CGFloat) -> CGFloat { (config?[key] as? NSNumber).map { CGFloat($0.doubleValue) } ?? fallback }
+        func cfgBool(_ key: String, _ fallback: Bool = true) -> Bool { (config?[key] as? Bool) ?? fallback }
+        func cfgText(_ key: String, _ fallback: String = "") -> String { (config?[key] as? String) ?? fallback }
+        let margin = cfgNumber("contentPadding", 12)
         let contentWidth = CGFloat(width) - margin * 2
-        let regular = UIFont.systemFont(ofSize: 24, weight: .regular)
-        let medium = UIFont.systemFont(ofSize: 24, weight: .semibold)
-        let bold = UIFont.systemFont(ofSize: 28, weight: .bold)
-        let title = UIFont.systemFont(ofSize: 32, weight: .bold)
-        let small = UIFont.systemFont(ofSize: 21, weight: .regular)
+        let regular = UIFont.systemFont(ofSize: cfgNumber("bodySize", 24), weight: .regular)
+        let medium = UIFont.systemFont(ofSize: cfgNumber("bodySize", 24), weight: .semibold)
+        let bold = UIFont.systemFont(ofSize: cfgNumber("totalSize", 28), weight: .bold)
+        let title = UIFont.systemFont(ofSize: cfgNumber("titleSize", 32), weight: .bold)
+        let small = UIFont.systemFont(ofSize: cfgNumber("smallSize", 21), weight: .regular)
+        let lineGap = cfgNumber("lineSpacing", 5)
+        let sectionGap = cfgNumber("sectionSpacing", 8)
+        let itemGap = cfgNumber("itemSpacing", 8)
+        let showCurrency = cfgBool("showCurrency")
+        let curr = showCurrency ? currency(order) : ""
+        func money(_ value: Double) -> String { showCurrency ? String(format: "%.2f %@", value, curr) : String(format: "%.2f", value) }
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineBreakMode = .byWordWrapping
         let right = NSMutableParagraphStyle()
@@ -237,48 +246,51 @@ private enum ReceiptEncoder {
         }
         func separator() { add(String(repeating: "—", count: 28), small, .center, 7) }
 
-        add("ПРИЛАВОК", title, .center, 10)
-        separator()
+        add(cfgText("receiptTitle", "ПРИЛАВОК"), title, .center, sectionGap)
+        add(cfgText("receiptSubtitle"), medium, .center, lineGap)
+        add(cfgText("receiptHeaderComment"), small, .center, sectionGap)
+        if cfgBool("showSeparators") { separator() }
         let label = (order["orderLabel"] as? String) ?? ""
-        add(label, medium)
-        if let type = order["orderType"] as? String { add(type, medium) }
-        separator()
+        if cfgBool("showOrderLabel") { add(label, medium) }
+        if cfgBool("showOrderType"), let type = order["orderType"] as? String { add(type, medium) }
+        if cfgBool("showSeparators") { separator() }
 
-        if let items = order["items"] as? [[String: Any]] {
+        if cfgBool("showItems"), let items = order["items"] as? [[String: Any]] {
             for item in items {
                 let name = (item["name"] as? String) ?? ""
                 let qty = number(item["qty"], fallback: 1)
                 let price = number(item["price"])
-                add("\(name) × \(formatQty(qty))", medium, .left, 2)
-                add(String(format: "%.2f %@", price * qty, currency(order)), regular, .right, 8)
-                if let comment = item["comment"] as? String, !comment.isEmpty {
-                    add("Комментарий: \(comment)", small, .left, 7)
+                add("\(name) \(cfgText("itemQtySymbol", "×")) \(formatQty(qty))", medium, .left, 2)
+                add(money(price * qty), regular, .right, itemGap)
+                if cfgBool("showItemComments"), let comment = item["comment"] as? String, !comment.isEmpty {
+                    add("Комментарий: \(comment)", small, .left, lineGap)
                 }
             }
         }
 
-        separator()
-        add("ПЛАТЕЖИ", medium, .left, 5)
-        if let payments = order["payments"] as? [[String: Any]], !payments.isEmpty {
+        if cfgBool("showSeparators") { separator() }
+        if cfgBool("showPayments") { add(cfgText("paymentsTitle", "ПЛАТЕЖИ"), medium, .left, lineGap) }
+        if cfgBool("showPayments"), let payments = order["payments"] as? [[String: Any]], !payments.isEmpty {
             for (index, payment) in payments.enumerated() {
                 let method = ((payment["method"] as? String) == "cash") ? "Наличные" : "Карта"
                 add("\(index + 1). \(method)", regular, .left, 2)
-                add(String(format: "%.2f %@", number(payment["amount"]), currency(order)), regular, .right, 5)
-                if method == "Наличные", payment["cashGiven"] != nil {
-                    add(String(format: "Внесено: %.2f %@", number(payment["cashGiven"]), currency(order)), small)
-                    add(String(format: "Сдача: %.2f %@", number(payment["change"]), currency(order)), small)
+                add(money(number(payment["amount"])), regular, .right, lineGap)
+                if cfgBool("showCashDetails"), method == "Наличные", payment["cashGiven"] != nil {
+                    add("Внесено: \(money(number(payment["cashGiven"])))", small)
+                    add("Сдача: \(money(number(payment["change"])))", small)
                 }
             }
-        } else {
+        } else if cfgBool("showPayments") {
             add(((order["method"] as? String) == "cash") ? "НАЛИЧНЫЕ" : "КАРТА", regular)
         }
 
-        separator()
-        add(String(format: "ИТОГО: %.2f %@", number(order["total"]), currency(order)), bold, .right, 10)
-        if let comment = order["comment"] as? String, !comment.isEmpty {
-            add("Комментарий: \(comment)", small, .left, 10)
+        if cfgBool("showSeparators") { separator() }
+        add("\(cfgText("totalPrefix", "ИТОГО:")) \(money(number(order["total"])))", bold, .right, sectionGap)
+        if cfgBool("showOrderComment"), let comment = order["comment"] as? String, !comment.isEmpty {
+            add("Комментарий: \(comment)", small, .left, sectionGap)
         }
-        add("Спасибо!", regular, .center, 18)
+        if cfgBool("showThankYou") { add(cfgText("receiptFooter", "Спасибо!"), regular, .center, lineGap) }
+        add(cfgText("receiptFooterComment"), small, .center, 18)
 
         func attrs(_ font: UIFont, _ alignment: NSTextAlignment) -> [NSAttributedString.Key: Any] {
             let p = NSMutableParagraphStyle()
