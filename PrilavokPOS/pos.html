@@ -1119,6 +1119,7 @@ function categories(){
   const set = new Set(state.products.map(p=>p.category).filter(Boolean));
   return ['Все', ...Array.from(set)];
 }
+window.__prilavokCategories=()=>categories();
 function currentShift(){
   return state.shifts.find(s=>s.status==='open') || null;
 }
