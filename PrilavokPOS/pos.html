@@ -850,7 +850,7 @@ let state = {
   orderType: 'На месте',
   customer: {name:'', phone:'', address:''},
   orderLabel: '',
-  printer: {enabled:false, autoPrint:false, ip:'', port:9100, bridgeUrl:''},
+  printer: {enabled:false, autoPrint:false, ip:'', port:9100 },
   company: {establishmentName:'', legalName:'', address:'', deliveryAddress:''},
   deliveryRates: [],
   deliveryFee: 0,
@@ -930,7 +930,7 @@ async function loadAll(){
     loadKey('purchaseOrders', []),
     loadKey('discounts', []),
     loadKey('layout', {categoryOrder:[], categoryColors:{}, categorySymbols:{}, categoryOnline:{}}),
-    loadKey('printer', {enabled:false, autoPrint:false, ip:'', port:9100, bridgeUrl:''}),
+    loadKey('printer', {enabled:false, autoPrint:false, ip:'', port:9100 }),
     loadKey('theme', 'light'),
     loadKey('company', {establishmentName:'', legalName:'', address:'', deliveryAddress:''}),
     loadKey('deliveryRates', []),
@@ -964,7 +964,7 @@ async function loadAll(){
   state.posNavigation=normalizePosNavigation(posNavigation);
   state.posFolder='';
   state.posPath = null;
-  state.printer = Object.assign({enabled:false, autoPrint:false, ip:'', port:9100, bridgeUrl:''}, printer || {});
+  state.printer = Object.assign({enabled:false, autoPrint:false, ip:'', port:9100 }, printer || {});
   state.company = Object.assign({establishmentName:'', legalName:'', address:'', deliveryAddress:''}, company || {});
   state.deliveryRates = Array.isArray(deliveryRates) ? deliveryRates : [];
   state.telegram = Object.assign({enabled:false, botToken:'', chatId:'', threadId:'', notifyShiftOpened:true, notifyShiftClosed:true}, telegram || {});
@@ -2151,10 +2151,10 @@ function renderNetworkScreen(){
         </div>
         <div class="printer-status"><span class="dot ${configured && p.enabled?'on':'off'}"></span>${configured && p.enabled ? escapeHtml(p.ip)+':'+(Number(p.port)||9100) : 'Принтер не настроен'}</div>
         <div class="settings-note" style="margin-top:14px;">
-          XP-N160II с сетевым интерфейсом принимает печать по LAN. Для прямой сетевой печати используется TCP/9100 и ESC/POS. Браузер на iPad не может самостоятельно открыть произвольное TCP-соединение к порту 9100, поэтому для полностью автоматической печати используется нативный мост приложения или локальный Print Bridge.
+          XP-N160II подключается к локальной сети по Wi‑Fi или Ethernet. Prilavok POS на iPad печатает напрямую через нативный сетевой модуль приложения: TCP/9100 + ESC/POS. Отдельный компьютер или драйвер для печати чеков не требуется.
         </div>
         <div style="font-weight:800;font-size:14px;margin-top:18px;margin-bottom:6px;">Как подключить</div>
-        <div class="setting-sub" style="line-height:1.6;">1. Подключите принтер Ethernet-кабелем к той же сети.
+        <div class="setting-sub" style="line-height:1.6;">1. Подключите принтер к той же локальной сети, что и iPad (Wi‑Fi или Ethernet).
         <br>2. Узнайте IP принтера через self-test.
         <br>3. Укажите IP и порт 9100 здесь.
         <br>4. Проверьте подключение кнопкой «Проверить».
@@ -2449,7 +2449,10 @@ function testPrinterConnection(){
   const ip=(document.getElementById('printer-ip')?.value||'').trim();
   const port=parseInt(document.getElementById('printer-port')?.value,10)||9100;
   if(!ip){ flash('Введите IP-адрес принтера'); return; }
-  showModal(`<div class="modal-title">Проверка принтера</div><div class="settings-note">Адрес сохранён как <b>${escapeHtml(ip)}:${port}</b>. Сам браузер не может напрямую проверить TCP/9100 или отправить ESC/POS-команды на LAN-принтер. Для реальной проверки нужен локальный Print Bridge.</div><div class="modal-actions"><button class="btn btn-primary" onclick="closeModal()">Понятно</button></div>`);
+  const handler=window.webkit?.messageHandlers?.printer;
+  if(!handler){ flash('Сетевая печать доступна только в приложении на iPad'); return; }
+  flash('Отправляем пробную печать…');
+  handler.postMessage({action:'print',order:{__networkPrinterIp:ip,__networkPrinterPort:port,__networkTest:true}});
 }
 function setTab(t){ state.tab = t; render(); }
 
@@ -3546,13 +3549,9 @@ function receiptBodyHtml(order){
 async function sendOrderToPrint(order){
   const p=state.printer||{};
   if(!p.enabled || !p.ip) return;
-  // Browser cannot open raw TCP/9100. If a local Print Bridge is installed, it can accept this payload.
-  if(!p.bridgeUrl){ flash('Автопечать настроена, но Print Bridge ещё не подключён'); return; }
-  try{
-    const r=await fetch(p.bridgeUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({printer:{ip:p.ip,port:Number(p.port)||9100},order,app:'prilavok-pos',currency:state.currency})});
-    if(!r.ok) throw new Error('bridge');
-    flash('Чек отправлен на печать');
-  }catch(e){ flash('Не удалось отправить чек в Print Bridge'); }
+  const handler=window.webkit?.messageHandlers?.printer;
+  if(!handler){ flash('Сетевая печать доступна только в приложении на iPad'); return; }
+  handler.postMessage({action:'print',order:{...order,currency:order?.currency||state.currency,__networkPrinterIp:p.ip,__networkPrinterPort:Number(p.port)||9100}});
 }
 
 function showReceipt(order){
@@ -3674,8 +3673,12 @@ function printReceipt(orderId){
   const order = state.orders.find(o=>o.id===orderId);
   if(!order) return;
   if(window.webkit?.messageHandlers?.printer){
-    window.webkit.messageHandlers.printer.postMessage({action:'print',order:order});
-    flash('Чек отправлен на печать');
+    const p=state.printer||{};
+    if(p.enabled && p.ip){
+      window.webkit.messageHandlers.printer.postMessage({action:'print',order:{...order,currency:order.currency||state.currency,__networkPrinterIp:p.ip,__networkPrinterPort:Number(p.port)||9100}});
+      return;
+    }
+    flash('Сетевой принтер не настроен');
     return;
   }
   const body = document.getElementById('receipt-body');
@@ -5510,5 +5513,6 @@ function escapeAttr(s){ return escapeHtml(s); }
 /* ============================= INIT ============================= */
 loadAll();
 </script>
+<script src="network-printer.js"></script>
 </body>
 </html>
