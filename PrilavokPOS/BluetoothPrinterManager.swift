@@ -150,11 +150,9 @@ private enum ReceiptEncoder {
 
         let isKitchen = (order["__printDocumentType"] as? String) == "kitchen"
         if isKitchen {
-            add((order["receiptDisplayNumber"] as? String) ?? "#—", title, .center, sectionGap)
-            add((order["orderLabel"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? ((order["orderType"] as? String) ?? "Заказ"), title, .center, sectionGap)
+            add((order["receiptDisplayNumber"] as? String) ?? "#—", title, .center, lineGap)
             let dateText = DateFormatter.localizedString(from: Date(timeIntervalSince1970: (number(order["timestamp"]) / 1000)), dateStyle: .short, timeStyle: .short)
-            add(dateText, small, .left, 2)
-            add("\((order["employeeName"] as? String) ?? "Сотрудник"), \((order["registerName"] as? String) ?? "POS 1")", small, .left, sectionGap)
+            add(dateText, small, .center, sectionGap)
             if cfgBool("showSeparators") { separator() }
             add((order["orderType"] as? String) ?? "Заказ", bold, .center, sectionGap)
             if cfgBool("showSeparators") { separator() }
