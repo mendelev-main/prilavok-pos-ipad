@@ -270,9 +270,6 @@ private enum ReceiptEncoder {
         add(cfgText("receiptSubtitle"), medium, .center, lineGap)
         add(cfgText("receiptHeaderComment"), small, .center, sectionGap)
         if cfgBool("showSeparators") { separator() }
-        if cfgBool("showReceiptNumber") { add((order["receiptDisplayNumber"] as? String) ?? "#—", medium, .right, lineGap) }
-        let metaDate = DateFormatter.localizedString(from: Date(timeIntervalSince1970: (number(order["timestamp"]) / 1000)), dateStyle: .short, timeStyle: .short)
-        if cfgBool("showDate") { add(metaDate, small, .left, lineGap) }
         if cfgBool("showEmployee") { add("Сотрудник: " + ((order["employeeName"] as? String) ?? "Сотрудник"), small, .left, lineGap) }
         if cfgBool("showRegister") { add("Касса: " + ((order["registerName"] as? String) ?? "POS 1"), small, .left, sectionGap) }
         if cfgBool("showCustomer"), let customer = order["customer"] as? [String: Any] {
