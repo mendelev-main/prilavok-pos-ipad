@@ -109,3 +109,7 @@ Historical references to that design should be treated as obsolete. The source o
 ## Implementation note: state scope
 
 The main POS state is a top-level lexical `const state` in `pos.html`; it must not be assumed to exist as `window.state`. External scripts such as `network-printer.js` must not use `window.state.orders` to resolve receipt history. The configured-printer layer passes its selected receipt printers into the legacy receipt function explicitly, so reprints use the same saved LAN printer configuration as the successful test-print flow.
+
+## Graphic receipt mode
+
+When `__printerConfig.printMode == "graphic"` (the default for the XP-N160II profile), the native iPad layer renders the receipt with UIKit fonts, converts it to a monochrome bitmap and sends it with the ESC/POS `GS v 0` raster command. Cyrillic is therefore rendered by iOS and does not depend on the printer code page. Paper width, requested print width and DPI are taken from printer configuration. Text mode remains available as a compatibility fallback.
