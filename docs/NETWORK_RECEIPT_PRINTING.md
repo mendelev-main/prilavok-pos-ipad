@@ -156,3 +156,9 @@ A kitchen/bar ticket is dispatched when the cashier parks/sends the active order
 The printer-profile test action persists the currently visible connection settings first, displays the exact target IP/9100 being tested, and then exercises the native TCP test-print path. Printer discovery for runtime routing is role-based; legacy printReceipts/printOrders flags must not silently exclude a printer after migration to printerRole.
 
 Payment receipt raster layout follows the current Prilavok receipt structure inspired by the supplied reference: operational metadata near the top, item discounts directly under their items, delivery as a separate line, payment section, emphasized total, and date/time plus stable receipt number in the footer.
+
+## Independent print-job checkboxes
+
+Each LAN printer profile has two independent routing checkboxes: **Печатать платежные чеки** and **Печатать чеки заказов**. A single physical LAN printer may have either checkbox or both enabled. Enabling order-ticket printing reveals the category selector; only matching item categories are routed to that order ticket, with an empty category selection meaning all categories. Payment receipt printing never uses the kitchen/order layout or category filter.
+
+The manual **Печать** button shown after payment and in receipt history is payment-receipt-only. It calls the same payment routing function as automatic payment receipt printing and must never fall back to a kitchen printer or legacy printer configuration.
