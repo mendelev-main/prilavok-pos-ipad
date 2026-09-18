@@ -50,192 +50,72 @@ final class BluetoothPrinterManager: NSObject {
                         if let error = error {
                             self.onEvent?(["type":"printError", "status":"network_error", "message":"Не удалось выполнить пробную печать: \(error.localizedDescription)"])
                         } else {
-                            self.onEvent?(["type":"printed", "status":"network_connected", "ip":ip, "port":Int(port), "message":"Пробная печать отправлена"])
-                        }
-                        finish()
-                    })
-                    return
-                }
-                let data = ReceiptEncoder.encode(order: order)
-                connection.send(content: data, completion: .contentProcessed { error in
-                    if let error = error {
-                        self.onEvent?(["type":"printError", "status":"network_error", "message":"Не удалось отправить чек: \(error.localizedDescription)"])
-                    } else {
-                        self.onEvent?(["type":"printed", "status":"network_connected", "ip":ip, "message":"Чек отправлен на принтер"])
-                    }
-                    finish()
-                })
-            case .failed:
-                self.onEvent?(["type":"printError", "status":"network_error", "message":"Принтер недоступен. Проверьте IP-адрес и подключение к одной сети"])
-                finish()
-            case .cancelled:
-                self.networkConnections.removeValue(forKey: id)
-            default:
-                break
-            }
-        }
+        // Fixed Prilavok payment receipt layout. This is intentionally not user-configurable.
+        let receiptTitle = cfgText("receiptTitle", "ПРИЛАВОК")
+        if !receiptTitle.isEmpty { add(receiptTitle, title, .center, sectionGap) }
 
-        connection.start(queue: .main)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
-            guard let self = self, self.networkConnections[id] != nil, !completed else { return }
-            self.onEvent?(["type":"printError", "status":"network_error", "message":"Принтер не отвечает. Проверьте IP-адрес и Wi‑Fi"])
-            finish()
-        }
-    }
+        add("Сотрудник: " + ((order["employeeName"] as? String) ?? "Сотрудник"), small, .left, 2)
+        add("Касса: " + ((order["registerName"] as? String) ?? "POS 1"), small, .left, sectionGap)
 
-    private func isValidIPv4(_ value: String) -> Bool {
-        let parts = value.split(separator: ".", omittingEmptySubsequences: false)
-        guard parts.count == 4 else { return false }
-        return parts.allSatisfy { part in
-            guard !part.isEmpty, part.count <= 3, let number = Int(part) else { return false }
-            return number >= 0 && number <= 255
-        }
-    }
-
-}
-
-
-private enum ReceiptEncoder {
-    static func encode(order: [String: Any]) -> Data {
-        let config = order["__printerConfig"] as? [String: Any]
-        let mode = (config?["printMode"] as? String) ?? "graphic"
-        if mode == "graphic" {
-            return encodeGraphic(order: order, config: config)
-        }
-        return encodeText(order: order)
-    }
-
-    private static func encodeGraphic(order: [String: Any], config: [String: Any]?) -> Data {
-        let paperWidth = (config?["paperWidth"] as? NSNumber)?.intValue ?? 80
-        let requestedWidth = config?["printWidth"] as? String
-        let dpi = (config?["dpi"] as? NSNumber)?.intValue ?? 203
-        let dotsPerMM = CGFloat(dpi) / 25.4
-        let printableMM: CGFloat
-        if let requestedWidth, let mm = Double(requestedWidth) {
-            printableMM = CGFloat(mm)
-        } else {
-            printableMM = paperWidth >= 80 ? 72 : 48
-        }
-        var width = Int((printableMM * dotsPerMM).rounded(.down))
-        width = max(128, min(width, 576))
-        width -= width % 8
-
-        func cfgNumber(_ key: String, _ fallback: CGFloat) -> CGFloat { (config?[key] as? NSNumber).map { CGFloat($0.doubleValue) } ?? fallback }
-        func cfgBool(_ key: String, _ fallback: Bool = true) -> Bool { (config?[key] as? Bool) ?? fallback }
-        func cfgText(_ key: String, _ fallback: String = "") -> String { (config?[key] as? String) ?? fallback }
-        let margin = cfgNumber("contentPadding", 12)
-        let contentWidth = CGFloat(width) - margin * 2
-        let regular = UIFont.systemFont(ofSize: cfgNumber("bodySize", 24), weight: .regular)
-        let medium = UIFont.systemFont(ofSize: cfgNumber("bodySize", 24), weight: .semibold)
-        let bold = UIFont.systemFont(ofSize: cfgNumber("totalSize", 28), weight: .bold)
-        let title = UIFont.systemFont(ofSize: cfgNumber("titleSize", 32), weight: .bold)
-        let small = UIFont.systemFont(ofSize: cfgNumber("smallSize", 21), weight: .regular)
-        let lineGap = cfgNumber("lineSpacing", 5)
-        let sectionGap = cfgNumber("sectionSpacing", 8)
-        let itemGap = cfgNumber("itemSpacing", 8)
-        let showCurrency = cfgBool("showCurrency")
-        let curr = showCurrency ? currency(order) : ""
-        func money(_ value: Double) -> String { showCurrency ? String(format: "%.2f %@", value, curr) : String(format: "%.2f", value) }
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.lineBreakMode = .byWordWrapping
-        let right = NSMutableParagraphStyle()
-        right.alignment = .right
-
-        var rows: [(String, UIFont, NSTextAlignment, CGFloat)] = []
-        func add(_ text: String, _ font: UIFont = regular, _ align: NSTextAlignment = .left, _ gap: CGFloat = 5) {
-            guard !text.isEmpty else { return }
-            rows.append((text, font, align, gap))
-        }
-        func separator() { add(String(repeating: "—", count: 28), small, .center, 7) }
-
-        let isKitchen = (order["__printDocumentType"] as? String) == "kitchen"
-        if isKitchen {
-            add((order["receiptDisplayNumber"] as? String) ?? "#—", title, .center, lineGap)
-            let dateText = DateFormatter.localizedString(from: Date(timeIntervalSince1970: (number(order["timestamp"]) / 1000)), dateStyle: .short, timeStyle: .short)
-            add(dateText, small, .center, sectionGap)
-            if cfgBool("showSeparators") { separator() }
-            add((order["orderType"] as? String) ?? "Заказ", bold, .center, sectionGap)
-            if cfgBool("showSeparators") { separator() }
-            if let items = order["items"] as? [[String: Any]] {
-                for item in items {
-                    let name = (item["name"] as? String) ?? ""
-                    let qty = number(item["qty"], fallback: 1)
-                    add("\(formatQty(qty)) × \(name)", bold, .left, itemGap)
-                    if let comment = item["comment"] as? String, !comment.isEmpty { add(comment, small, .left, itemGap) }
-                }
-            }
-            if cfgBool("showSeparators") { separator() }
-        } else {
-        add(cfgText("receiptTitle", "ПРИЛАВОК"), title, .center, sectionGap)
-        add(cfgText("receiptSubtitle"), medium, .center, lineGap)
-        add(cfgText("receiptHeaderComment"), small, .center, sectionGap)
-        if cfgBool("showSeparators") { separator() }
-        if cfgBool("showEmployee") { add("Сотрудник: " + ((order["employeeName"] as? String) ?? "Сотрудник"), small, .left, lineGap) }
-        if cfgBool("showRegister") { add("Касса: " + ((order["registerName"] as? String) ?? "POS 1"), small, .left, sectionGap) }
-        if cfgBool("showCustomer"), let customer = order["customer"] as? [String: Any] {
-            let name = (customer["name"] as? String) ?? "", phone = (customer["phone"] as? String) ?? ""
+        if let customer = order["customer"] as? [String: Any] {
+            let name = (customer["name"] as? String) ?? ""
+            let phone = (customer["phone"] as? String) ?? ""
             if !name.isEmpty { add("Клиент: " + name, small, .left, 2) }
             if !phone.isEmpty { add(phone, small, .left, sectionGap) }
         }
-        let label = (order["orderLabel"] as? String) ?? ""
-        if cfgBool("showOrderLabel") { add(label, medium) }
-        if cfgBool("showOrderType"), let type = order["orderType"] as? String { add(type, medium) }
-        if cfgBool("showSeparators") { separator() }
 
-        if cfgBool("showItems"), let items = order["items"] as? [[String: Any]] {
+        separator()
+        add((order["orderType"] as? String) ?? "На месте", regular, .left, sectionGap)
+        separator()
+
+        if let items = order["items"] as? [[String: Any]] {
             for item in items {
                 let name = (item["name"] as? String) ?? ""
                 let qty = number(item["qty"], fallback: 1)
                 let price = number(item["price"])
-                add("\(name) \(cfgText("itemQtySymbol", "×")) \(formatQty(qty))", medium, .left, 2)
                 let discountValue = number(item["discountValue"])
                 let discountType = (item["discountType"] as? String) ?? ""
                 let gross = price * qty
                 let discountAmount = discountType == "percent" ? gross * discountValue / 100.0 : (discountType.isEmpty ? 0 : discountValue * qty)
-                add(money(max(0, gross - discountAmount)), regular, .right, discountAmount > 0 ? 2 : itemGap)
-                if discountAmount > 0 { add("Скидка: −" + money(discountAmount), small, .right, itemGap) }
-                if cfgBool("showItemComments"), let comment = item["comment"] as? String, !comment.isEmpty {
-                    add("Комментарий: \(comment)", small, .left, lineGap)
-                }
+                let lineTotal = max(0, gross - discountAmount)
+                add(name + "                                      " + money(lineTotal), medium, .left, 1)
+                add("\(formatQty(qty)) × " + money(price), regular, .left, 2)
+                if discountAmount > 0 { add("Скидка: −" + money(discountAmount), small, .left, 2) }
+                if let comment = item["comment"] as? String, !comment.isEmpty { add("Комментарий: " + comment, small, .left, 2) }
+                add("", small, .left, itemGap)
             }
         }
 
         let deliveryFee = number(order["deliveryFee"])
         if deliveryFee > 0 {
-            add("Доставка", regular, .left, 2)
-            add(money(deliveryFee), regular, .right, sectionGap)
-        }
-        if cfgBool("showSeparators") { separator() }
-        if cfgBool("showPayments") { add(cfgText("paymentsTitle", "ПЛАТЕЖИ"), medium, .left, lineGap) }
-        if cfgBool("showPayments"), let payments = order["payments"] as? [[String: Any]], !payments.isEmpty {
-            for (index, payment) in payments.enumerated() {
-                let method = ((payment["method"] as? String) == "cash") ? "Наличные" : "Карта"
-                add("\(index + 1). \(method)", regular, .left, 2)
-                add(money(number(payment["amount"])), regular, .right, lineGap)
-                if cfgBool("showCashDetails"), method == "Наличные", payment["cashGiven"] != nil {
-                    add("Внесено: \(money(number(payment["cashGiven"])))", small)
-                    add("Сдача: \(money(number(payment["change"])))", small)
-                }
-            }
-        } else if cfgBool("showPayments") {
-            add(((order["method"] as? String) == "cash") ? "НАЛИЧНЫЕ" : "КАРТА", regular)
+            add("Доставка                                      " + money(deliveryFee), regular, .left, sectionGap)
         }
 
-        if cfgBool("showSeparators") { separator() }
-        add("\(cfgText("totalPrefix", "ИТОГО:")) \(money(number(order["total"])))", bold, .right, sectionGap)
-        if cfgBool("showOrderComment"), let comment = order["comment"] as? String, !comment.isEmpty {
-            add("Комментарий: \(comment)", small, .left, sectionGap)
+        separator()
+        add("Итого                                      " + money(number(order["total"])), bold, .left, sectionGap)
+
+        if let payments = order["payments"] as? [[String: Any]], !payments.isEmpty {
+            for payment in payments {
+                let cash = (payment["method"] as? String) == "cash"
+                add((cash ? "Наличные" : "Карта") + "                                      " + money(number(payment["amount"])), regular, .left, 2)
+                if cash, payment["cashGiven"] != nil {
+                    add("Внесено                                      " + money(number(payment["cashGiven"])), regular, .left, 2)
+                    add("Сдача                                      " + money(number(payment["change"])), regular, .left, sectionGap)
+                }
+            }
+        } else {
+            let cash = (order["method"] as? String) == "cash"
+            add((cash ? "Наличные" : "Карта") + "                                      " + money(number(order["total"])), regular, .left, 2)
+            if cash, order["cashGiven"] != nil {
+                add("Внесено                                      " + money(number(order["cashGiven"])), regular, .left, 2)
+                add("Сдача                                      " + money(number(order["change"])), regular, .left, sectionGap)
+            }
         }
-        if cfgBool("showThankYou") { add(cfgText("receiptFooter", "Спасибо!"), regular, .center, lineGap) }
-        add(cfgText("receiptFooterComment"), small, .center, sectionGap)
-        if cfgBool("showSeparators") { separator() }
+
+        separator()
         let footerDate = DateFormatter.localizedString(from: Date(timeIntervalSince1970: (number(order["timestamp"]) / 1000)), dateStyle: .short, timeStyle: .short)
         let footerNumber = (order["receiptDisplayNumber"] as? String) ?? "#—"
-        if cfgBool("showDate") || cfgBool("showReceiptNumber") {
-            let left = cfgBool("showDate") ? footerDate : ""
-            let right = cfgBool("showReceiptNumber") ? footerNumber : ""
-            add(left + (left.isEmpty || right.isEmpty ? "" : "          ") + right, small, .left, 10)
-        }
+        add(footerDate + "                              " + footerNumber, small, .left, 10)
         }
         
         func attrs(_ font: UIFont, _ alignment: NSTextAlignment) -> [NSAttributedString.Key: Any] {
