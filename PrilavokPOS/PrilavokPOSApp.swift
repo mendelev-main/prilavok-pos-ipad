@@ -116,7 +116,7 @@ final class PrilavokPOSApp: UIResponder, UIApplicationDelegate {
 
 final class POSViewController: UIViewController, WKScriptMessageHandler, PHPickerViewControllerDelegate {
     private var webView: WKWebView!
-    private let bluetooth = BluetoothPrinterManager()
+    private let networkPrinter = BluetoothPrinterManager()
 
     override func loadView() {
         let contentController = WKUserContentController()
@@ -154,7 +154,7 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
         super.viewDidLoad()
         NotificationCenter.default.addObserver(self, selector: #selector(pauseAvailability), name: UIApplication.willResignActiveNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(resumeAvailability), name: UIApplication.didBecomeActiveNotification, object: nil)
-        bluetooth.onEvent = { [weak self] event in
+        networkPrinter.onEvent = { [weak self] event in
             self?.sendPrinterEvent(event)
         }
 
@@ -191,16 +191,10 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
             telegramSend(body: body)
         case "sendShiftCloseReport":
             telegramSendShiftCloseReport(body: body)
-        case "scan":
-            bluetooth.scan()
-        case "disconnect":
-            bluetooth.disconnect()
-        case "select":
-            if let id = body["id"] as? String { bluetooth.select(id: id) }
         case "print":
-            if let order = body["order"] as? [String: Any] { bluetooth.print(order: order) }
+            if let order = body["order"] as? [String: Any] { networkPrinter.print(order: order) }
         case "status":
-            sendPrinterEvent(bluetooth.statusEvent())
+            sendPrinterEvent(["type":"status", "status":"network_ready", "message":"Сетевая печать готова"])
         case "shareWarehouseExcel":
             if let report = body["report"] as? [String: Any] { shareWarehouseExcel(report: report) }
         case "shareWarehouseReport":
