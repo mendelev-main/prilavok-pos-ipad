@@ -103,8 +103,19 @@ final class BluetoothPrinterManager: NSObject, CBCentralManagerDelegate, CBPerip
             switch state {
             case .ready:
                 if testOnly {
-                    self.onEvent?(["type":"status", "status":"network_connected", "ip":ip, "port":Int(port), "message":"Принтер доступен"])
-                    finish()
+                    // A test must exercise the full printing path, not only the TCP handshake.
+                    // Keep the payload ASCII-only so it prints independently of the printer code page.
+                    var testData = Data([0x1B, 0x40]) // ESC @ — initialize
+                    testData.append(Data("\nPRILAVOK POS\nTEST PRINT\nPrinter connected\n\n\n".utf8))
+                    testData.append(contentsOf: [0x1D, 0x56, 0x42, 0x00]) // GS V B 0 — cut
+                    connection.send(content: testData, completion: .contentProcessed { error in
+                        if let error = error {
+                            self.onEvent?(["type":"printError", "status":"network_error", "message":"Не удалось выполнить пробную печать: \(error.localizedDescription)"])
+                        } else {
+                            self.onEvent?(["type":"printed", "status":"network_connected", "ip":ip, "port":Int(port), "message":"Пробная печать отправлена"])
+                        }
+                        finish()
+                    })
                     return
                 }
                 let data = ReceiptEncoder.encode(order: order)
