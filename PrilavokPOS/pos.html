@@ -3492,7 +3492,9 @@ function finalizePayment(payments){
   try{ stockConsumption=checkedStockConsumption(state.cart); }
   catch(e){ flash(e.message); return; }
   const method=clean.length===1?clean[0].method:'split';
-  const order={id:uid(),shiftId:shift.id,method,total,payments:clean,cashGiven:method==='cash'?clean[0].cashGiven:null,change:method==='cash'?clean[0].change:null,orderLabel:state.orderLabel||'',orderType:state.orderType,deliveryFee:deliveryFee,customer:JSON.parse(JSON.stringify(state.customer)),items:state.cart.map(i=>{const d=state.discounts.find(x=>x.id===i.discountId);return {...i,discountName:d?.name||'',discountType:d?.type||'',discountValue:Number(d?.value)||0,cost:getProduct(i.productId)?(getProduct(i.productId).type==='simple'?getProduct(i.productId).cost:compositeCost(getProduct(i.productId))):0};}),timestamp:Date.now()};
+  const receiptSequence=(state.orders.filter(o=>o.shiftId===shift.id).length+1);
+  const shiftEmployee=state.employees.find(e=>e.id===shift.employeeId);
+  const order={id:uid(),shiftId:shift.id,receiptNumber:receiptSequence,receiptDisplayNumber:`#${receiptSequence}`,employeeId:shift.employeeId||'',employeeName:shiftEmployee?.name||shiftEmployee?.fullName||'Сотрудник',registerName:'POS 1',method,total,payments:clean,cashGiven:method==='cash'?clean[0].cashGiven:null,change:method==='cash'?clean[0].change:null,orderLabel:state.orderLabel||'',orderType:state.orderType,deliveryFee:deliveryFee,customer:JSON.parse(JSON.stringify(state.customer)),items:state.cart.map(i=>{const d=state.discounts.find(x=>x.id===i.discountId),product=getProduct(i.productId);return {...i,category:product?.category||i.category||'',discountName:d?.name||'',discountType:d?.type||'',discountValue:Number(d?.value)||0,cost:product?(product.type==='simple'?product.cost:compositeCost(product)):0};}),timestamp:Date.now()};
   order.stockConsumption=stockConsumption;
   for(const item of stockConsumption.items){
     const p=getProduct(item.productId);
