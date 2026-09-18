@@ -1,6 +1,7 @@
 import Foundation
 import CoreBluetooth
 import Network
+import UIKit
 
 final class BluetoothPrinterManager: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     private var central: CBCentralManager!
@@ -194,56 +195,202 @@ final class BluetoothPrinterManager: NSObject, CBCentralManagerDelegate, CBPerip
 
 private enum ReceiptEncoder {
     static func encode(order: [String: Any]) -> Data {
-        var d = Data([0x1B, 0x40]) // initialize
+        let config = order["__printerConfig"] as? [String: Any]
+        let mode = (config?["printMode"] as? String) ?? "graphic"
+        if mode == "graphic" {
+            return encodeGraphic(order: order, config: config)
+        }
+        return encodeText(order: order)
+    }
+
+    private static func encodeGraphic(order: [String: Any], config: [String: Any]?) -> Data {
+        let paperWidth = (config?["paperWidth"] as? NSNumber)?.intValue ?? 80
+        let requestedWidth = config?["printWidth"] as? String
+        let dpi = (config?["dpi"] as? NSNumber)?.intValue ?? 203
+        let dotsPerMM = CGFloat(dpi) / 25.4
+        let printableMM: CGFloat
+        if let requestedWidth, let mm = Double(requestedWidth) {
+            printableMM = CGFloat(mm)
+        } else {
+            printableMM = paperWidth >= 80 ? 72 : 48
+        }
+        var width = Int((printableMM * dotsPerMM).rounded(.down))
+        width = max(128, min(width, 576))
+        width -= width % 8
+
+        let margin: CGFloat = 12
+        let contentWidth = CGFloat(width) - margin * 2
+        let regular = UIFont.systemFont(ofSize: 24, weight: .regular)
+        let medium = UIFont.systemFont(ofSize: 24, weight: .semibold)
+        let bold = UIFont.systemFont(ofSize: 28, weight: .bold)
+        let title = UIFont.systemFont(ofSize: 32, weight: .bold)
+        let small = UIFont.systemFont(ofSize: 21, weight: .regular)
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = .byWordWrapping
+        let right = NSMutableParagraphStyle()
+        right.alignment = .right
+
+        var rows: [(String, UIFont, NSTextAlignment, CGFloat)] = []
+        func add(_ text: String, _ font: UIFont = regular, _ align: NSTextAlignment = .left, _ gap: CGFloat = 5) {
+            guard !text.isEmpty else { return }
+            rows.append((text, font, align, gap))
+        }
+        func separator() { add(String(repeating: "—", count: 28), small, .center, 7) }
+
+        add("ПРИЛАВОК", title, .center, 10)
+        separator()
+        let label = (order["orderLabel"] as? String) ?? ""
+        add(label, medium)
+        if let type = order["orderType"] as? String { add(type, medium) }
+        separator()
+
+        if let items = order["items"] as? [[String: Any]] {
+            for item in items {
+                let name = (item["name"] as? String) ?? ""
+                let qty = number(item["qty"], fallback: 1)
+                let price = number(item["price"])
+                add("\(name) × \(formatQty(qty))", medium, .left, 2)
+                add(String(format: "%.2f %@", price * qty, currency(order)), regular, .right, 8)
+                if let comment = item["comment"] as? String, !comment.isEmpty {
+                    add("Комментарий: \(comment)", small, .left, 7)
+                }
+            }
+        }
+
+        separator()
+        add("ПЛАТЕЖИ", medium, .left, 5)
+        if let payments = order["payments"] as? [[String: Any]], !payments.isEmpty {
+            for (index, payment) in payments.enumerated() {
+                let method = ((payment["method"] as? String) == "cash") ? "Наличные" : "Карта"
+                add("\(index + 1). \(method)", regular, .left, 2)
+                add(String(format: "%.2f %@", number(payment["amount"]), currency(order)), regular, .right, 5)
+                if method == "Наличные", payment["cashGiven"] != nil {
+                    add(String(format: "Внесено: %.2f %@", number(payment["cashGiven"]), currency(order)), small)
+                    add(String(format: "Сдача: %.2f %@", number(payment["change"]), currency(order)), small)
+                }
+            }
+        } else {
+            add(((order["method"] as? String) == "cash") ? "НАЛИЧНЫЕ" : "КАРТА", regular)
+        }
+
+        separator()
+        add(String(format: "ИТОГО: %.2f %@", number(order["total"]), currency(order)), bold, .right, 10)
+        if let comment = order["comment"] as? String, !comment.isEmpty {
+            add("Комментарий: \(comment)", small, .left, 10)
+        }
+        add("Спасибо!", regular, .center, 18)
+
+        func attrs(_ font: UIFont, _ alignment: NSTextAlignment) -> [NSAttributedString.Key: Any] {
+            let p = NSMutableParagraphStyle()
+            p.alignment = alignment
+            p.lineBreakMode = .byWordWrapping
+            return [.font: font, .foregroundColor: UIColor.black, .paragraphStyle: p]
+        }
+
+        var measured: [(String, [NSAttributedString.Key: Any], CGFloat, CGFloat)] = []
+        var height: CGFloat = 10
+        for row in rows {
+            let a = attrs(row.1, row.2)
+            let box = (row.0 as NSString).boundingRect(with: CGSize(width: contentWidth, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: a, context: nil)
+            let h = ceil(box.height) + 2
+            measured.append((row.0, a, h, row.3))
+            height += h + row.3
+        }
+        height += 12
+
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: CGFloat(width), height: ceil(height)), format: format)
+        let image = renderer.image { ctx in
+            UIColor.white.setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: CGFloat(width), height: ceil(height)))
+            var y: CGFloat = 10
+            for row in measured {
+                (row.0 as NSString).draw(with: CGRect(x: margin, y: y, width: contentWidth, height: row.2), options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: row.1, context: nil)
+                y += row.2 + row.3
+            }
+        }
+        guard let cg = image.cgImage else { return encodeText(order: order) }
+        return rasterData(cgImage: cg, width: width)
+    }
+
+    private static func rasterData(cgImage: CGImage, width: Int) -> Data {
+        let height = cgImage.height
+        let bytesPerRow = width
+        var pixels = [UInt8](repeating: 255, count: width * height)
+        guard let ctx = CGContext(data: &pixels, width: width, height: height, bitsPerComponent: 8, bytesPerRow: bytesPerRow, space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue) else {
+            return Data()
+        }
+        ctx.setFillColor(gray: 1, alpha: 1)
+        ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        ctx.interpolationQuality = .none
+        ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        let rowBytes = width / 8
+        var bitmap = Data(capacity: rowBytes * height)
+        for y in 0..<height {
+            for byteIndex in 0..<rowBytes {
+                var byte: UInt8 = 0
+                for bit in 0..<8 {
+                    let x = byteIndex * 8 + bit
+                    if pixels[y * bytesPerRow + x] < 180 {
+                        byte |= UInt8(0x80 >> bit)
+                    }
+                }
+                bitmap.append(byte)
+            }
+        }
+
+        var d = Data([0x1B, 0x40])
+        let xL = UInt8(rowBytes & 0xff), xH = UInt8((rowBytes >> 8) & 0xff)
+        let yL = UInt8(height & 0xff), yH = UInt8((height >> 8) & 0xff)
+        d.append(contentsOf: [0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH])
+        d.append(bitmap)
+        d.append(contentsOf: [0x0A, 0x0A, 0x0A, 0x1D, 0x56, 0x42, 0x00])
+        return d
+    }
+
+    private static func encodeText(order: [String: Any]) -> Data {
+        var d = Data([0x1B, 0x40])
         let width = 48
         let label = (order["orderLabel"] as? String) ?? ""
         let method = ((order["method"] as? String) == "cash") ? "НАЛИЧНЫЕ" : "КАРТА"
-        let total = (order["total"] as? NSNumber)?.doubleValue ?? 0
-        let currency = (order["currency"] as? String) ?? "BYN"
-
+        let total = number(order["total"])
+        let curr = currency(order)
         d.append(utf8("ПРИЛАВОК\n"))
         d.append(utf8(String(repeating: "-", count: width) + "\n"))
         if !label.isEmpty { d.append(utf8(label + "\n")) }
         if let type = order["orderType"] as? String { d.append(utf8(type + "\n")) }
         d.append(utf8(String(repeating: "-", count: width) + "\n"))
-
         if let items = order["items"] as? [[String: Any]] {
             for item in items {
                 let name = (item["name"] as? String) ?? ""
-                let qty = (item["qty"] as? NSNumber)?.doubleValue ?? 1
-                let price = (item["price"] as? NSNumber)?.doubleValue ?? 0
-                let sum = price * qty
+                let qty = number(item["qty"], fallback: 1)
+                let sum = number(item["price"]) * qty
                 d.append(utf8("\(name) x\(formatQty(qty))\n"))
-                d.append(utf8(String(format: "%32.2f %@\n", sum, currency)))
+                d.append(utf8(String(format: "%32.2f %@\n", sum, curr)))
             }
         }
-        if let payments = order["payments"] as? [[String: Any]], !payments.isEmpty {
-            d.append(utf8(String(repeating: "-", count: width) + "\n"))
-            d.append(utf8("ПЛАТЕЖИ\n"))
-            for (index, payment) in payments.enumerated() {
-                let paymentMethod = ((payment["method"] as? String) == "cash") ? "Наличные" : "Карта"
-                let amount = (payment["amount"] as? NSNumber)?.doubleValue ?? 0
-                d.append(utf8(String(format: "%d. %@\n", index + 1, paymentMethod)))
-                d.append(utf8(String(format: "%32.2f %@\n", amount, currency)))
-                if paymentMethod == "Наличные", let given = payment["cashGiven"] as? NSNumber {
-                    let change = (payment["change"] as? NSNumber)?.doubleValue ?? 0
-                    d.append(utf8(String(format: "   Внесено: %.2f %@\n", given.doubleValue, currency)))
-                    d.append(utf8(String(format: "   Сдача: %.2f %@\n", change, currency)))
-                }
-            }
-        } else {
-            d.append(utf8(String(repeating: "-", count: width) + "\n"))
-            d.append(utf8("ПЛАТЕЖИ\n"))
-            d.append(utf8("\(method)\n"))
-        }
+        d.append(utf8(String(repeating: "-", count: width) + "\nПЛАТЕЖИ\n"))
+        d.append(utf8("\(method)\n"))
         d.append(Data([0x1B, 0x45, 0x01]))
-        d.append(utf8(String(format: "ИТОГО: %.2f %@\n", total, currency)))
+        d.append(utf8(String(format: "ИТОГО: %.2f %@\n", total, curr)))
         d.append(Data([0x1B, 0x45, 0x00]))
         d.append(utf8("\nСпасибо!\n\n\n"))
-        d.append(Data([0x1D, 0x56, 0x00])) // cut
+        d.append(Data([0x1D, 0x56, 0x00]))
         return d
     }
 
+    private static func number(_ value: Any?, fallback: Double = 0) -> Double {
+        if let n = value as? NSNumber { return n.doubleValue }
+        if let d = value as? Double { return d }
+        if let i = value as? Int { return Double(i) }
+        if let s = value as? String, let d = Double(s.replacingOccurrences(of: ",", with: ".")) { return d }
+        return fallback
+    }
+    private static func currency(_ order: [String: Any]) -> String { (order["currency"] as? String) ?? "BYN" }
     private static func utf8(_ s: String) -> Data { Data(s.utf8) }
     private static func formatQty(_ q: Double) -> String { q.rounded() == q ? String(Int(q)) : String(format: "%.2f", q) }
 }
+
