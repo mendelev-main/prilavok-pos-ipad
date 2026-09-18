@@ -47,11 +47,11 @@ private enum ReceiptEncoder {
         let width=paper<=58 ? 384 : 576
         let margin:CGFloat=paper<=58 ? 14 : 24
         let contentWidth=CGFloat(width)-margin*2
-        let small=UIFont.systemFont(ofSize:paper<=58 ? 17:19)
-        let regular=UIFont.systemFont(ofSize:paper<=58 ? 20:22)
-        let medium=UIFont.systemFont(ofSize:paper<=58 ? 21:23,weight:.semibold)
-        let bold=UIFont.systemFont(ofSize:paper<=58 ? 27:30,weight:.bold)
-        let title=UIFont.systemFont(ofSize:paper<=58 ? 28:31,weight:.bold)
+        let small=UIFont.systemFont(ofSize:paper<=58 ? 18:20)
+        let regular=UIFont.systemFont(ofSize:paper<=58 ? 21:23)
+        let medium=UIFont.systemFont(ofSize:paper<=58 ? 22:24,weight:.semibold)
+        let bold=UIFont.systemFont(ofSize:paper<=58 ? 29:32,weight:.bold)
+        let title=UIFont.systemFont(ofSize:paper<=58 ? 30:33,weight:.bold)
 
         enum Kind { case text, pair, separator }
         struct Row { let kind:Kind; let left:String; let right:String; let font:UIFont; let align:NSTextAlignment; let gap:CGFloat }
@@ -72,7 +72,7 @@ private enum ReceiptEncoder {
                 for item in items {
                     let q=number(item["qty"],1), name=(item["name"] as? String) ?? ""
                     add("\(qty(q)) × \(name)",bold,.left,4)
-                    if let comment=item["comment"] as? String,!comment.isEmpty {add(comment,small,.left,9)}
+                    if let comment=item["comment"] as? String,!comment.isEmpty {add("↳ "+comment,regular,.left,9)}
                 }
             }
         } else {
@@ -95,7 +95,7 @@ private enum ReceiptEncoder {
                     pair(name,money(max(0,gross-disc)),medium,2)
                     add("\(qty(q)) × "+money(price),regular,.left,3)
                     if disc>0 {add("Скидка: −"+money(disc),small,.left,2)}
-                    if let comment=item["comment"] as? String,!comment.isEmpty {add("Комментарий: "+comment,small,.left,3)}
+                    if cfg["printPaymentComments"] as? Bool != false, let comment=item["comment"] as? String,!comment.isEmpty {add("Комментарий: "+comment,small,.left,3)}
                     add("",small,.left,8)
                 }
             }
@@ -115,7 +115,7 @@ private enum ReceiptEncoder {
 
         func attrs(_ font:UIFont,_ alignment:NSTextAlignment)->[NSAttributedString.Key:Any]{let p=NSMutableParagraphStyle();p.alignment=alignment;p.lineBreakMode = .byWordWrapping;return [.font:font,.foregroundColor:UIColor.black,.paragraphStyle:p]}
         struct Measured {let row:Row;let leftAttrs:[NSAttributedString.Key:Any];let rightAttrs:[NSAttributedString.Key:Any];let height:CGFloat}
-        var measured:[Measured]=[],height:CGFloat=12
+        var measured:[Measured]=[],height:CGFloat=kitchen ? 4 : 12
         for row in rows {
             if row.kind == .separator {measured.append(Measured(row:row,leftAttrs:[:],rightAttrs:[:],height:1));height += 1+row.gap;continue}
             let la=attrs(row.font,row.align),ra=attrs(row.font,.right)
@@ -129,7 +129,7 @@ private enum ReceiptEncoder {
         let format=UIGraphicsImageRendererFormat();format.scale=1;format.opaque=true
         let image=UIGraphicsImageRenderer(size:CGSize(width:CGFloat(width),height:ceil(height)),format:format).image {ctx in
             UIColor.white.setFill();ctx.fill(CGRect(x:0,y:0,width:CGFloat(width),height:ceil(height)))
-            var y:CGFloat=12
+            var y:CGFloat=kitchen ? 4 : 12
             for m in measured {
                 if m.row.kind == .separator {
                     let c=ctx.cgContext;c.setStrokeColor(UIColor.black.cgColor);c.setLineWidth(1);c.setLineDash(phase:0,lengths:[3,3]);c.move(to:CGPoint(x:margin,y:y));c.addLine(to:CGPoint(x:CGFloat(width)-margin,y:y));c.strokePath()
