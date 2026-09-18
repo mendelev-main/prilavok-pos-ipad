@@ -175,3 +175,9 @@ Canonical payment receipt order: centered business title; employee and register;
 LAN printer profiles include **Печатать комментарии в платежном чеке** (default on). It affects only item comments on payment receipts; kitchen/order tickets always retain item comments because they are operational preparation information.
 
 Kitchen tickets use a tighter top margin and slightly larger typography than payment receipts. An item comment is printed directly beneath its item with a down-right arrow marker (↳) so the comment is visually subordinate to, and clearly associated with, that item.
+
+## Payment receipt register label and rotating footer phrases
+
+Each LAN printer profile may define the text printed after `Касса:` on payment receipts. The default is `POS 1` but the operator can set a human-readable register name such as `Основная касса` or `Касса 1`.
+
+A payment-receipt printer may also store multiple custom footer phrases, one phrase per line. For each generated payment receipt, the native raster renderer randomly selects one non-empty phrase and prints it centered after the date/time and receipt number. If the list is empty, no phrase is printed. This feature affects payment receipts only and never kitchen/order tickets.
