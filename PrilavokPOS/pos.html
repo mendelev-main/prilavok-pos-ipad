@@ -3506,7 +3506,7 @@ function finalizePayment(payments){
   saveKey('products',state.products);saveKey('orders',state.orders);saveKey('shifts',state.shifts);
   state.cart=[];state.orderLabel='';state.orderType='На месте';state.deliveryFee=0;state.customer={name:'',phone:'',address:''};state._splitPayments=[];state._splitCount=0;
   clearCurrentOrderSession();
-  render();showReceipt(order);if(state.printer?.autoPrint)setTimeout(()=>sendOrderToPrint(order),250);
+  render();showReceipt(order);setTimeout(()=>{if(typeof window.printCompletedOrder==='function')window.printCompletedOrder(order);else if(state.printer?.autoPrint)sendOrderToPrint(order)},250);
 }
 function openCashModal(){openPaymentModal();}
 function openCardModal(){openPaymentModal();}
