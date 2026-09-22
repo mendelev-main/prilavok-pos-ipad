@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>Прилавок — касса</title>
+<title>M POS — касса</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -867,7 +867,7 @@ let state = {
   selectedHallTableId: null,
   hallEditMode: false,
   telegram: {enabled:false, botToken:'', chatId:'', threadId:'', notifyShiftOpened:true, notifyShiftClosed:true},
-  network: {backendUrl:'https://prilavok-backend-production.up.railway.app', deviceKey:'', deviceName:'Прилавок iPad', lastSyncAt:null, lastSyncStatus:''}
+  network: {backendUrl:'https://prilavok-backend-production.up.railway.app', deviceKey:'', deviceName:'M POS iPad', lastSyncAt:null, lastSyncStatus:''}
 };
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,8);
@@ -935,7 +935,7 @@ async function loadAll(){
     loadKey('company', {establishmentName:'', legalName:'', address:'', deliveryAddress:''}),
     loadKey('deliveryRates', []),
     loadKey('telegram', {enabled:false, botToken:'', chatId:'', threadId:'', notifyShiftOpened:true, notifyShiftClosed:true}),
-    loadKey('network', {backendUrl:'https://prilavok-backend-production.up.railway.app', deviceKey:'', deviceName:'Прилавок iPad', lastSyncAt:null, lastSyncStatus:''}),
+    loadKey('network', {backendUrl:'https://prilavok-backend-production.up.railway.app', deviceKey:'', deviceName:'M POS iPad', lastSyncAt:null, lastSyncStatus:''}),
     loadKey('currentOrderSession', null),
     loadKey('hallTables', []),
     loadKey('bookings', []),
@@ -968,7 +968,7 @@ async function loadAll(){
   state.company = Object.assign({establishmentName:'', legalName:'', address:'', deliveryAddress:''}, company || {});
   state.deliveryRates = Array.isArray(deliveryRates) ? deliveryRates : [];
   state.telegram = Object.assign({enabled:false, botToken:'', chatId:'', threadId:'', notifyShiftOpened:true, notifyShiftClosed:true}, telegram || {});
-  state.network = Object.assign({backendUrl:'https://prilavok-backend-production.up.railway.app', deviceKey:'', deviceName:'Прилавок iPad', lastSyncAt:null, lastSyncStatus:''}, network || {});
+  state.network = Object.assign({backendUrl:'https://prilavok-backend-production.up.railway.app', deviceKey:'', deviceName:'M POS iPad', lastSyncAt:null, lastSyncStatus:''}, network || {});
   if(!state.network.deviceKey){
     state.network.deviceKey = (crypto?.randomUUID ? crypto.randomUUID() : ('dev_'+uid()+'_'+uid()));
     saveKey('network', state.network);
@@ -1224,7 +1224,7 @@ function renderTopbar(shift){
   const tabs = [['purchaseOrders','Заказы'],['receiving','Приёмка'],['receipts','Чеки'],['settings','Настройки'],['analytics','Аналитика'],['bookings','Бронирования']];
   return `
   <div class="topbar">
-    <button class="brand ${state.tab==='pos'?'active':''}" onclick="setTab('pos')">Прилавок</button>
+    <button class="brand ${state.tab==='pos'?'active':''}" onclick="setTab('pos')">M POS</button>
     <div class="tabs">
       ${tabs.map(([k,label])=>`<button class="tab ${state.tab===k?'active':''}" onclick="setTab('${k}')">${label}</button>`).join('')}
     </div>
@@ -1960,12 +1960,12 @@ async function acceptWebOrder(id){
 function testWebOrder(){const n=networkConfigFromState();fetch(n.backendUrl.replace(/\/+$/,'')+'/api/orders/test',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Key':n.deviceKey},body:'{}',cache:'no-store'}).then(async r=>{const d=await r.json().catch(()=>null);if(!r.ok)throw new Error(d?.error||('HTTP '+r.status));flash('Тестовый заказ отправлен');}).catch(()=>flash('Не удалось создать тестовый заказ'));}
 
 function networkConfigFromState(){
-  return state.network || {backendUrl:'https://prilavok-backend-production.up.railway.app',deviceKey:'',deviceName:'Прилавок iPad',lastSyncAt:null,lastSyncStatus:''};
+  return state.network || {backendUrl:'https://prilavok-backend-production.up.railway.app',deviceKey:'',deviceName:'M POS iPad',lastSyncAt:null,lastSyncStatus:''};
 }
 function saveNetworkSettings(){
   if(!currentShiftEmployeeIsAdmin()){ flash('Сетевые конфигурации доступны только администратору'); return false; }
   const url=(document.getElementById('network-backend-url')?.value||'').trim().replace(/\/+$/,'');
-  const deviceName=(document.getElementById('network-device-name')?.value||'').trim() || 'Прилавок iPad';
+  const deviceName=(document.getElementById('network-device-name')?.value||'').trim() || 'M POS iPad';
   if(!/^https:\/\//i.test(url)){ flash('Адрес backend должен начинаться с https://'); return false; }
   const n=networkConfigFromState();
   n.backendUrl=url;
@@ -2107,14 +2107,14 @@ function renderNetworkScreen(){
     <div class="settings-grid">
       <div class="settings-card">
         <div style="font-size:16px;font-weight:800;margin-bottom:4px;">Синхронизация меню</div>
-        <div class="setting-sub">Передаёт текущее меню с iPad в Prilavok Backend. Повторная синхронизация обновляет существующие товары без создания дубликатов.</div>
+        <div class="setting-sub">Передаёт текущее меню с iPad в M POS Backend. Повторная синхронизация обновляет существующие товары без создания дубликатов.</div>
         <div class="field" style="margin-top:18px;">
           <label>Адрес backend</label>
           <input id="network-backend-url" value="${escapeAttr((state.network?.backendUrl||'https://prilavok-backend-production.up.railway.app').replace(/\/$/,''))}" placeholder="https://...railway.app" inputmode="url" autocomplete="off">
         </div>
         <div class="field">
           <label>Название устройства</label>
-          <input id="network-device-name" value="${escapeAttr(state.network?.deviceName||'Прилавок iPad')}" placeholder="Прилавок iPad">
+          <input id="network-device-name" value="${escapeAttr(state.network?.deviceName||'M POS iPad')}" placeholder="M POS iPad">
         </div>
         <div class="setting-row">
           <div>
@@ -2152,7 +2152,7 @@ function renderNetworkScreen(){
         </div>
         <div class="printer-status"><span class="dot ${configured && p.enabled?'on':'off'}"></span>${configured && p.enabled ? escapeHtml(p.ip)+':'+(Number(p.port)||9100) : 'Принтер не настроен'}</div>
         <div class="settings-note" style="margin-top:14px;">
-          XP-N160II подключается к локальной сети по Wi‑Fi или Ethernet. Prilavok POS на iPad печатает напрямую через нативный сетевой модуль приложения: TCP/9100 + ESC/POS. Отдельный компьютер или драйвер для печати чеков не требуется.
+          XP-N160II подключается к локальной сети по Wi‑Fi или Ethernet. M POS на iPad печатает напрямую через нативный сетевой модуль приложения: TCP/9100 + ESC/POS. Отдельный компьютер или драйвер для печати чеков не требуется.
         </div>
         <div style="font-weight:800;font-size:14px;margin-top:18px;margin-bottom:6px;">Как подключить</div>
         <div class="setting-sub" style="line-height:1.6;">1. Подключите принтер к той же локальной сети, что и iPad (Wi‑Fi или Ethernet).
