@@ -5,7 +5,7 @@
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleDisplayName</key>
-    <string>Прилавок</string>
+    <string>M POS</string>
     <key>CFBundleName</key>
     <string>PrilavokPOS</string>
     <key>CFBundleIdentifier</key>
