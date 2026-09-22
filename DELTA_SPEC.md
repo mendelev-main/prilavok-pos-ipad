@@ -1,4 +1,4 @@
-# Prilavok POS — DELTA SPEC
+# M POS — DELTA SPEC
 
 > Единственный список того, что ЕЩЁ НЕ завершено.
 >
