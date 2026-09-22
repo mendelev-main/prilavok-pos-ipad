@@ -275,7 +275,7 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
             sendTelegramResult(ok: false, message: "Укажите токен бота и ID рабочей группы.")
             return
         }
-        let text = "🟢 <b>Telegram подключён</b>\nПрилавок POS успешно связался с рабочей группой."
+        let text = "🟢 <b>Telegram подключён</b>\nM POS успешно связался с рабочей группой."
         telegramRequest(token: token, chatId: chatId, threadId: threadId, text: text) { [weak self] ok, message in
             self?.sendTelegramResult(ok: ok, message: message)
         }
@@ -1023,7 +1023,7 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
 
             func drawPageFooter() {
                 drawRule(at: pageRect.height - 43)
-                drawText("PRILAVOK POS", x: margin, y: pageRect.height - 32, width: 160, font: smallBold, color: muted)
+                drawText("M POS", x: margin, y: pageRect.height - 32, width: 160, font: smallBold, color: muted)
                 drawText("Заказ поставщику", x: pageRect.width - margin - 150, y: pageRect.height - 32, width: 150, font: smallFont, color: muted, alignment: .right)
                 drawText("\(pageNumber)", x: pageRect.width - margin - 20, y: pageRect.height - 32, width: 20, font: smallBold, color: ink, alignment: .right)
             }
