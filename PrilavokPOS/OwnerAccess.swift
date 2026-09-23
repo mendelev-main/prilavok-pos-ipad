@@ -124,7 +124,7 @@ final class AccessCore {
 
 #if canImport(UIKit)
 final class OwnerAccessController {
-    static let backend="https://prilavok-backend-production.up.railway.app"
+    static let backend="https://project-dubrovno.up.railway.app"
     weak var presenter:UIViewController?
     private let queue=DispatchQueue(label:"mpos.owner-access")
     private var core:AccessCore?

@@ -868,7 +868,7 @@ let state = {
   selectedHallTableId: null,
   hallEditMode: false,
   telegram: {enabled:false, notifyShiftOpened:true, notifyShiftClosed:true},
-  network: {backendUrl:'https://prilavok-backend-production.up.railway.app', deviceKey:'', deviceName:'M POS iPad', lastSyncAt:null, lastSyncStatus:''}
+  network: {backendUrl:'https://project-dubrovno.up.railway.app', deviceKey:'', deviceName:'M POS iPad', lastSyncAt:null, lastSyncStatus:''}
 };
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,8);
@@ -1007,7 +1007,7 @@ async function loadAll(){
     loadKey('company', {establishmentName:'', legalName:'', address:'', deliveryAddress:''}),
     loadKey('deliveryRates', []),
     loadKey('telegram', {enabled:false, notifyShiftOpened:true, notifyShiftClosed:true}),
-    loadKey('network', {backendUrl:'https://prilavok-backend-production.up.railway.app', deviceKey:'', deviceName:'M POS iPad', lastSyncAt:null, lastSyncStatus:''}),
+    loadKey('network', {backendUrl:'https://project-dubrovno.up.railway.app', deviceKey:'', deviceName:'M POS iPad', lastSyncAt:null, lastSyncStatus:''}),
     loadKey('currentOrderSession', null),
     loadKey('hallTables', []),
     loadKey('bookings', []),
@@ -1059,7 +1059,7 @@ async function loadAll(){
   state.telegram = {enabled:!!telegram?.enabled,notifyShiftOpened:telegram?.notifyShiftOpened!==false,notifyShiftClosed:telegram?.notifyShiftClosed!==false};
   // Retire only obsolete transport credentials; keep existing notification preferences.
   if(telegram && ['botToken','chatId','threadId'].some(k=>Object.prototype.hasOwnProperty.call(telegram,k)))await saveKey('telegram',state.telegram);
-  state.network = Object.assign({backendUrl:'https://prilavok-backend-production.up.railway.app', deviceKey:'', deviceName:'M POS iPad', lastSyncAt:null, lastSyncStatus:''}, network || {});
+  state.network = Object.assign({backendUrl:'https://project-dubrovno.up.railway.app', deviceKey:'', deviceName:'M POS iPad', lastSyncAt:null, lastSyncStatus:''}, network || {});
   if(!state.network.deviceKey){
     state.network.deviceKey = (crypto?.randomUUID ? crypto.randomUUID() : ('dev_'+uid()+'_'+uid()));
     saveKey('network', state.network);
@@ -2060,7 +2060,7 @@ function testWebOrder(){
   if(!window.POSAccess?.require('network.manage'))return false;const n=networkConfigFromState();fetch(n.backendUrl.replace(/\/+$/,'')+'/api/orders/test',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Key':n.deviceKey},body:'{}',cache:'no-store'}).then(async r=>{const d=await r.json().catch(()=>null);if(!r.ok)throw new Error(d?.error||('HTTP '+r.status));flash('Тестовый заказ отправлен');}).catch(()=>flash('Не удалось создать тестовый заказ'));}
 
 function networkConfigFromState(){
-  return state.network || {backendUrl:'https://prilavok-backend-production.up.railway.app',deviceKey:'',deviceName:'M POS iPad',lastSyncAt:null,lastSyncStatus:''};
+  return state.network || {backendUrl:'https://project-dubrovno.up.railway.app',deviceKey:'',deviceName:'M POS iPad',lastSyncAt:null,lastSyncStatus:''};
 }
 function saveNetworkSettings(){
   if(!window.POSAccess?.require('network.manage'))return false;
@@ -2214,7 +2214,7 @@ function renderNetworkScreen(){
         <div class="setting-sub">Передаёт текущее меню с iPad в M POS Backend. Повторная синхронизация обновляет существующие товары без создания дубликатов.</div>
         <div class="field" style="margin-top:18px;">
           <label>Адрес backend</label>
-          <input id="network-backend-url" value="${escapeAttr((state.network?.backendUrl||'https://prilavok-backend-production.up.railway.app').replace(/\/$/,''))}" placeholder="https://...railway.app" inputmode="url" autocomplete="off">
+          <input id="network-backend-url" value="${escapeAttr((state.network?.backendUrl||'https://project-dubrovno.up.railway.app').replace(/\/$/,''))}" placeholder="https://...railway.app" inputmode="url" autocomplete="off">
         </div>
         <div class="field">
           <label>Название устройства</label>
