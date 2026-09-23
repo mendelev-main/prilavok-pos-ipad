@@ -3,7 +3,6 @@ import Security
 import CommonCrypto
 #if canImport(UIKit)
 import UIKit
-import CoreImage.CIFilterBuiltins
 #endif
 
 struct AccessHTTPError: LocalizedError { let status:Int;let text:String;var errorDescription:String?{text} }
@@ -110,21 +109,26 @@ final class AccessCore {
         let verifier=try AccessPIN(pin)
         try update("account-updated",target:id){d in d.accounts.removeAll{$0.id==id};d.accounts.append(AccessAccount(id:id,name:String(name.prefix(120)),roleId:roleId,pin:verifier));d.attempts[id]=AccessAttempt()}
     }
-    func installOwner(_ owner:AccessOwner,pin:String,session:String) throws {
-        guard let pending=document.pending,pending.id==session,pending.employeeId==owner.employeeId,owner.installationId==document.installationId,document.owner==nil || (document.owner?.employeeId==owner.employeeId && owner.epoch>(document.owner?.epoch ?? 0)) else {throw AccessError.message("Подтверждение владельца устарело")}
+    func createOwner(id:String,name:String,telegramId:String,pin:String) throws {
+        guard document.owner==nil else {throw AccessError.message("Владелец уже создан. Повторное создание запрещено")}
+        guard id.range(of:"^[A-Za-z0-9_-]{1,100}$",options:.regularExpression) != nil,!name.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty,
+              telegramId.isEmpty || telegramId.range(of:"^[0-9]{1,20}$",options:.regularExpression) != nil else {throw AccessError.message("Проверьте имя и Telegram ID владельца")}
         let verifier=try AccessPIN(pin)
-        try update(pending.kind=="bind" ? "owner-bound":"owner-recovered",target:owner.employeeId){d in d.owner=owner;d.accounts.removeAll{$0.id==owner.employeeId};d.accounts.append(AccessAccount(id:owner.employeeId,name:owner.name,roleId:"owner",pin:verifier));d.pending=nil;d.appliedSession=session;d.attempts[owner.employeeId]=AccessAttempt()}
-        actor=owner.employeeId;expires=Date().timeIntervalSince1970+15*60
+        try update("owner-created",target:id){d in
+            d.owner=AccessOwner(employeeId:id,name:String(name.prefix(120)),installationId:d.installationId,telegramId:telegramId,telegramName:"",epoch:1)
+            d.accounts.removeAll{$0.id==id};d.accounts.append(AccessAccount(id:id,name:String(name.prefix(120)),roleId:"owner",pin:verifier))
+            d.pending=nil;d.deviceKey="";d.appliedSession="";d.attempts[id]=AccessAttempt()
+        }
+        actor=id;expires=Date().timeIntervalSince1970+15*60
     }
     func publicState()->[String:Any] {
         let active=activeAccount()
-        return ["expiresAt":expires*1000,"configured":document.owner != nil,"ownerId":document.owner?.employeeId ?? "","telegramName":document.owner?.telegramName ?? "","actorId":active?.id ?? "","actorName":active?.name ?? "","isOwner":active != nil && active?.id==document.owner?.employeeId,"permissions":Self.permissions.filter{allows($0)},"accounts":document.accounts.map{["id":$0.id,"name":$0.name,"roleId":$0.roleId]},"roles":document.roles.map{["id":$0.id,"name":$0.name,"permissions":$0.permissions] as [String:Any]},"pending":document.pending != nil]
+        return ["expiresAt":expires*1000,"configured":document.owner != nil,"ownerId":document.owner?.employeeId ?? "","telegramId":document.owner?.telegramId ?? "","actorId":active?.id ?? "","actorName":active?.name ?? "","isOwner":active != nil && active?.id==document.owner?.employeeId,"permissions":Self.permissions.filter{allows($0)},"accounts":document.accounts.map{["id":$0.id,"name":$0.name,"roleId":$0.roleId]},"roles":document.roles.map{["id":$0.id,"name":$0.name,"permissions":$0.permissions] as [String:Any]},"pending":document.pending != nil]
     }
 }
 
 #if canImport(UIKit)
 final class OwnerAccessController {
-    static let backend="https://project-dubrovno.up.railway.app"
     weak var presenter:UIViewController?
     private let queue=DispatchQueue(label:"mpos.owner-access")
     private var core:AccessCore?
@@ -157,19 +161,6 @@ final class OwnerAccessController {
             presenter.present(alert,animated:true)
         }
     }
-    static func request(_ action:String,body:[String:Any],key:String,completion:@escaping(Result<[String:Any],Error>)->Void){
-        guard let url=URL(string:backend+"/api/owner/"+action) else{return}
-        var request=URLRequest(url:url);request.httpMethod="POST";request.timeoutInterval=15;request.setValue("application/json",forHTTPHeaderField:"Content-Type");request.setValue(key,forHTTPHeaderField:"X-Device-Key")
-        do{request.httpBody=try JSONSerialization.data(withJSONObject:body)}catch{completion(.failure(error));return}
-        URLSession.shared.dataTask(with:request){data,response,error in
-            if let error=error{completion(.failure(error));return}
-            guard let data=data,let json=(try? JSONSerialization.jsonObject(with:data)) as? [String:Any] else{completion(.failure(AccessError.message("Нет ответа сервера")));return}
-            guard let status=(response as? HTTPURLResponse)?.statusCode,(200..<300).contains(status) else{completion(.failure(AccessHTTPError(status:(response as? HTTPURLResponse)?.statusCode ?? 503,text:json["error"] as? String ?? "Сервер временно недоступен")));return}
-            completion(.success(json))
-        }.resume()
-    }
-    private func randomToken() throws -> String {var bytes=[UInt8](repeating:0,count:32);guard SecRandomCopyBytes(kSecRandomDefault,bytes.count,&bytes)==errSecSuccess else{throw AccessError.message("Не удалось создать запрос")};return Data(bytes).base64EncodedString().replacingOccurrences(of:"+",with:"-").replacingOccurrences(of:"/",with:"_").replacingOccurrences(of:"=",with:"")}
-    private func pendingBody(_ p:AccessPending) throws -> [String:Any]{try JSONSerialization.jsonObject(with:JSONEncoder().encode(p)) as! [String:Any]}
     func handle(_ body:[String:Any],completion:@escaping(Result<[String:Any],Error>)->Void){
         queue.async{
             guard !self.busy else{completion(.failure(AccessError.message("Дождитесь завершения проверки")));return};self.busy=true
@@ -196,42 +187,10 @@ final class OwnerAccessController {
                     self.prompt("PIN: \(name)",repeatPIN:true){pin in self.queue.async{do{guard let pin=pin else{throw AccessError.message("Настройка PIN отменена")};try core.saveAccount(id:id,name:name,roleId:role,pin:pin);done()}catch{finish(.failure(error))}}}
                 case "deleteAccount":
                     try core.requireOwner();let id=body["id"] as? String ?? "";guard id != core.document.owner?.employeeId,id != core.actor else{throw AccessError.message("Нельзя удалить владельца или текущего пользователя")};try core.update("account-deleted",target:id){$0.accounts.removeAll{$0.id==id};$0.attempts.removeValue(forKey:id)};done()
-                case "start":
-                    let kind=core.document.owner==nil ? "bind":"recover"
-                    if core.document.pending==nil{
-                        let employeeId=core.document.owner?.employeeId ?? (body["employeeId"] as? String ?? ""),name=core.document.owner?.name ?? (body["name"] as? String ?? "")
-                        guard !employeeId.isEmpty,!name.isEmpty else{throw AccessError.message("Выберите владельца")}
-                        let pending=AccessPending(id:UUID().uuidString,secret:try self.randomToken(),token:try self.randomToken(),installationId:core.document.installationId,employeeId:employeeId,name:name,kind:kind)
-                        try core.update("request-started",target:employeeId){d in d.pending=pending;if d.deviceKey.isEmpty{d.deviceKey=body["deviceKey"] as? String ?? ""}}
-                    }
-                    if let key=body["deviceKey"] as? String,!key.isEmpty,key != core.document.deviceKey {try core.update("device-key-updated"){$0.deviceKey=key}}
-                    let p=core.document.pending!
-                    Self.request("start",body:try self.pendingBody(p),key:core.document.deviceKey){result in
-                        switch result {
-                        case .failure: finish(result)
-                        case .success(var data):
-                            if let link=data["telegramUrl"] as? String {
-                                let filter=CIFilter.qrCodeGenerator();filter.message=Data(link.utf8)
-                                if let output=filter.outputImage,let cg=CIContext().createCGImage(output.transformed(by:CGAffineTransform(scaleX:7,y:7)),from:output.extent.applying(CGAffineTransform(scaleX:7,y:7))),let png=UIImage(cgImage:cg).pngData(){data["qr"]="data:image/png;base64,"+png.base64EncodedString()}
-                            }
-                            finish(.success(data))
-                        }
-                    }
-                case "poll":
-                    guard let p=core.document.pending else{throw AccessError.message("Нет активного запроса")}
-                    Self.request("status",body:try self.pendingBody(p),key:core.document.deviceKey){result in finish(result)}
-                case "cancel":
-                    guard let p=core.document.pending else{done();return}
-                    Self.request("cancel",body:try self.pendingBody(p),key:core.document.deviceKey){result in self.queue.async{do{if case .failure(let error)=result{if let http=error as? AccessHTTPError,[404,410].contains(http.status){}else{throw error}};try core.update("request-cancelled"){$0.pending=nil};done()}catch{finish(.failure(error))}}}
-                case "finish":
-                    guard let p=core.document.pending else{throw AccessError.message("Нет активного запроса")}
-                    // Server consumes first; same session can return its result after a lost response/Keychain error.
-                    Self.request("finish",body:try self.pendingBody(p),key:core.document.deviceKey){result in self.queue.async{
-                        do{
-                            let response=try result.get();let owner=try JSONDecoder().decode(AccessOwner.self,from:JSONSerialization.data(withJSONObject:response["owner"] as Any))
-                            self.prompt("Новый PIN владельца",repeatPIN:true){pin in self.queue.async{do{guard let pin=pin else{throw AccessError.message("PIN не изменён. Повторите завершение привязки")};try core.installOwner(owner,pin:pin,session:p.id);done()}catch{finish(.failure(error))}}}
-                        }catch{finish(.failure(error))}
-                    }}
+                case "createOwner":
+                    guard core.document.owner==nil else {throw AccessError.message("Владелец уже создан")}
+                    let id=body["employeeId"] as? String ?? "",name=body["name"] as? String ?? "",telegramId=body["telegramId"] as? String ?? ""
+                    self.prompt("Создать владельца. Восстановления PIN нет",repeatPIN:true){pin in self.queue.async{do{guard let pin=pin else{throw AccessError.message("Создание владельца отменено")};try core.createOwner(id:id,name:name,telegramId:telegramId,pin:pin);done()}catch{finish(.failure(error))}}}
                 default:throw AccessError.message("Неизвестная команда доступа")
                 }
             }catch{finish(.failure(error))}

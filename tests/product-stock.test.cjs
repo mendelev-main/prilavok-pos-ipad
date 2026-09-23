@@ -845,3 +845,11 @@ test('stock edit is checked at save even after privileged editor was opened',asy
 test('unconfigured POS retains offline cashier access but cannot self-assign administration',async()=>{
  const f=accessFixture({configured:false,ownerId:'',actorId:'',isOwner:false,permissions:['pos','settings.view']});await f.c.POSAccess.initialize();assert.equal(f.c.POSAccess.can('pos'),true);assert.equal(f.c.POSAccess.can('owner.manage'),false);assert.equal(f.c.POSAccess.can('stock.edit'),false);
 });
+
+test('shift reports use existing local Telegram credentials without a backend device key',()=>{
+ const f=fixture(),sent=[];f.state.network={};f.state.telegram={enabled:true,botToken:'test-token',chatId:'-100123',threadId:'7'};
+ f.c.webkit={messageHandlers:{telegram:{postMessage:m=>sent.push(m)}}};
+ f.c.sendTelegramShiftOpened(f.state.shifts[0]);f.c.sendTelegramShiftClosed(f.state.shifts[0]);
+ assert.equal(sent.length,2);assert.equal(sent[0].botToken,'test-token');assert.equal(sent[1].chatId,'-100123');assert.equal(sent[1].threadId,'7');
+ f.state.telegram.enabled=false;f.c.sendTelegramShiftOpened(f.state.shifts[0]);assert.equal(sent.length,2);
+});

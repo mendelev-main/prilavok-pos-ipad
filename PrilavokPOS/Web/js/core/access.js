@@ -66,15 +66,14 @@
     const accountOptions=state.employees.map(e=>`<option value="${esc(e.id)}">${esc(e.name)}</option>`).join('');
     let html=`<p class="setting-sub">${snapshot.actorId?'Вы вошли: '+esc(snapshot.actorName)+' · '+esc(roleLabel(snapshot.actorId)):'Вход не выполнен'}</p>`;
     if (!snapshot.configured) {
-      html+=`<p>Один владелец управляет ролями и доступом на этом iPad.</p><div class="field"><label>Сотрудник</label><select id="owner-employee"><option value="">Новый сотрудник</option>${accountOptions}</select></div><div class="field"><label>ФИО нового владельца</label><input id="owner-name" maxlength="120" autocomplete="name"></div><button class="btn btn-primary" onclick="POSAccess.start()">Привязать владельца через Telegram</button>`;
+      html+=`<p>Один владелец управляет ролями и доступом на этом iPad.</p><div class="field"><label>Сотрудник</label><select id="owner-employee"><option value="">Новый сотрудник</option>${accountOptions}</select></div><div class="field"><label>ФИО нового владельца</label><input id="owner-name" maxlength="120" autocomplete="name"></div><div class="field"><label>Telegram ID владельца · необязательно</label><input id="owner-telegram-id" inputmode="numeric" maxlength="20"></div><p class="setting-sub">PIN хранится на этом iPad. Восстановление забытого PIN не предусмотрено. Сохраните его в надёжном месте.</p><button class="btn btn-primary" onclick="POSAccess.createOwner()">Создать владельца</button>`;
     } else {
-      html+=`<div class="setting-row"><span>Telegram владельца</span><b>${esc(snapshot.telegramName)}</b></div><div class="modal-actions"><button class="btn btn-primary" onclick="POSAccess.login()">Войти / сменить сотрудника</button><button class="btn btn-secondary" onclick="POSAccess.logout()">Выйти</button></div><button class="btn btn-secondary" style="margin-top:12px;width:100%" onclick="POSAccess.start()">Восстановить PIN владельца через Telegram</button>`;
+      html+=`<div class="setting-row"><span>Telegram владельца</span><b>${esc(snapshot.telegramId||"Не указан")}</b></div><div class="modal-actions"><button class="btn btn-primary" onclick="POSAccess.login()">Войти / сменить сотрудника</button><button class="btn btn-secondary" onclick="POSAccess.logout()">Выйти</button></div>`;
       if (snapshot.isOwner && can('owner.manage')) {
         html+=`<div class="access-card"><h3>Сотрудники</h3>${state.employees.map(e=>`<div class="setting-row"><span>${esc(employeeDisplayName(e.name))}<small style="display:block;color:var(--muted)">${esc(roleLabel(e.id))}</small></span>${e.id===snapshot.ownerId?'<b>Owner</b>':`<button class="btn btn-secondary" onclick="POSAccess.employee(${arg(e.id)})">Изменить</button>`}</div>`).join('')}<button class="btn btn-primary" onclick="POSAccess.employee()">Добавить сотрудника</button></div>`;
         html+=`<div class="access-card"><h3>Роли и права</h3>${snapshot.roles.map(r=>`<div class="setting-row"><b>${esc(r.name)}</b><button class="btn btn-secondary" onclick="POSAccess.role(${arg(r.id)})">Настроить</button></div>`).join('')}<button class="btn btn-primary" onclick="POSAccess.role()">Создать роль</button></div>`;
       }
     }
-    if (snapshot.pending) html+=`<div class="access-card"><b>Незавершённый запрос</b><div class="modal-actions"><button class="btn btn-primary" onclick="POSAccess.start()">Продолжить</button><button class="btn btn-secondary" onclick="POSAccess.cancel()">Отменить запрос</button></div></div>`;
     return html;
   }
   function showPanel() { showModal(`<div class="modal-title">Владелец и доступ</div><div style="max-height:68vh;overflow:auto">${panelHTML()}</div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Закрыть</button></div>`,true); }
@@ -92,17 +91,15 @@
     open() { return run(async()=>{await call('status');showPanel();}); },
     login() { return run(async()=>{await call('login');await mergeAccounts();render();showPanel();}); },
     logout() { return run(async()=>{await call('logout');render();showPanel();}); },
-    start() { return run(async()=>{
+    createOwner() { return run(async()=>{
       const employeeId=document.getElementById('owner-employee')?.value||'';
       const employee=state.employees.find(e=>e.id===employeeId);
       const name=employee?.name||document.getElementById('owner-name')?.value?.trim()||'';
-      if(!snapshot?.configured&&!snapshot?.pending&&!name)throw new Error('Укажите ФИО владельца');
-      const result=await call('start',{employeeId:employeeId||uid(),name,deviceKey:networkConfigFromState().deviceKey});
-      await call('status');
-      showModal(`<div class="modal-title">Подтверждение в Telegram</div><p>Откройте камеру телефона и отсканируйте код. Подтвердите запрос в личном чате с вашим ботом.</p>${result.qr?`<img alt="QR привязки владельца" src="${esc(result.qr)}" style="display:block;width:220px;height:220px;max-width:100%;margin:12px auto;image-rendering:pixelated;border:12px solid white;border-radius:16px">`:''}<p style="word-break:break-all;font-size:12px">${esc(result.telegramUrl)}</p><p class="setting-sub">Ссылка действует 10 минут. PIN вводится только на iPad.</p><div class="modal-actions"><button class="btn btn-secondary" onclick="POSAccess.open()">Назад</button><button class="btn btn-primary" onclick="POSAccess.finish()">Я подтвердил в Telegram</button></div>`);
+      const telegramId=document.getElementById('owner-telegram-id')?.value?.trim()||'';
+      if(!name)throw new Error('Укажите ФИО владельца');
+      await call('createOwner',{employeeId:employeeId||uid(),name,telegramId});
+      await mergeAccounts();render();showPanel();flash('Владелец создан. Сохраните PIN: восстановления нет.');
     }); },
-    finish() { return run(async()=>{const status=await call('poll');if(!['approved','consumed'].includes(status.status))throw new Error('Сначала подтвердите запрос в Telegram');await call('finish');await mergeAccounts();render();showPanel();flash('Владелец настроен. PIN работает без интернета.');}); },
-    cancel() { return run(async()=>{await call('cancel');showPanel();}); },
     employee(id='') { if(!requirePermission('owner.manage'))return;
       if(id===snapshot.ownerId)return flash('Владелец защищён от удаления и смены роли');
       const employee=state.employees.find(e=>e.id===id),account=snapshot.accounts.find(a=>a.id===id);

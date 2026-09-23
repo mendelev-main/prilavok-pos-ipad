@@ -1056,9 +1056,7 @@ async function loadAll(){
   state.printer = Object.assign({enabled:false, autoPrint:false, ip:'', port:9100 }, printer || {});
   state.company = Object.assign({establishmentName:'', legalName:'', address:'', deliveryAddress:''}, company || {});
   state.deliveryRates = Array.isArray(deliveryRates) ? deliveryRates : [];
-  state.telegram = {enabled:!!telegram?.enabled,notifyShiftOpened:telegram?.notifyShiftOpened!==false,notifyShiftClosed:telegram?.notifyShiftClosed!==false};
-  // Retire only obsolete transport credentials; keep existing notification preferences.
-  if(telegram && ['botToken','chatId','threadId'].some(k=>Object.prototype.hasOwnProperty.call(telegram,k)))await saveKey('telegram',state.telegram);
+  state.telegram = Object.assign({enabled:false, botToken:'', chatId:'', threadId:'', notifyShiftOpened:true, notifyShiftClosed:true}, telegram || {});
   state.network = Object.assign({backendUrl:'https://project-dubrovno.up.railway.app', deviceKey:'', deviceName:'M POS iPad', lastSyncAt:null, lastSyncStatus:''}, network || {});
   if(!state.network.deviceKey){
     state.network.deviceKey = (crypto?.randomUUID ? crypto.randomUUID() : ('dev_'+uid()+'_'+uid()));
@@ -2272,7 +2270,17 @@ function renderNetworkScreen(){
       <div class="settings-card">
         <div style="font-size:16px;font-weight:800;margin-bottom:4px;">Telegram</div>
         <div class="setting-sub">Подключение рабочего Telegram-бота для уведомлений в группу.</div>
-        <p class="setting-sub">Бот и получатель отчётов настраиваются на сервере. Токен бота на iPad не хранится.</p>
+        <div class="field" style="margin-top:18px;">
+          <label>Токен бота</label>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input id="telegram-token" type="password" value="${escapeAttr(t.botToken||'')}" placeholder="Токен от @BotFather" autocomplete="off" style="flex:1;">
+            <button class="btn btn-secondary" style="width:auto;white-space:nowrap;" onclick="toggleTelegramToken()">Показать</button>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="field"><label>ID рабочей группы</label><input id="telegram-chat-id" value="${escapeAttr(t.chatId||'')}" placeholder="Например: -1001234567890" inputmode="text"></div>
+          <div class="field"><label>ID темы · необязательно</label><input id="telegram-thread-id" value="${escapeAttr(t.threadId||'')}" placeholder="Например: 123" inputmode="numeric"></div>
+        </div>
         <div class="setting-row">
           <div><div class="setting-title">Включить Telegram</div><div class="setting-sub">Если выключено, приложение не отправляет уведомления.</div></div>
           <label class="switch"><input id="telegram-enabled" type="checkbox" ${t.enabled?'checked':''}><span></span></label>
@@ -2295,11 +2303,20 @@ function renderNetworkScreen(){
   </div>`;
 }
 
+function toggleTelegramToken(){
+  const input=document.getElementById('telegram-token');
+  const btn=event?.currentTarget;
+  if(!input) return;
+  const show=input.type==='password'; input.type=show?'text':'password'; if(btn) btn.textContent=show?'Скрыть':'Показать';
+}
 function saveTelegramSettings(){
   if(!window.POSAccess?.require('network.manage'))return false;
   if(!currentShiftEmployeeIsAdmin()){ flash('Сетевые конфигурации доступны только администратору'); return; }
   state.telegram={
     enabled:!!document.getElementById('telegram-enabled')?.checked,
+    botToken:(document.getElementById('telegram-token')?.value||'').trim(),
+    chatId:(document.getElementById('telegram-chat-id')?.value||'').trim(),
+    threadId:(document.getElementById('telegram-thread-id')?.value||'').trim(),
     notifyShiftOpened:!!document.getElementById('telegram-shift-opened')?.checked,
     notifyShiftClosed:!!document.getElementById('telegram-shift-closed')?.checked
   };
@@ -2307,11 +2324,11 @@ function saveTelegramSettings(){
 }
 function telegramConfigFromState(){
   const t=state.telegram||{};
-  return {enabled:!!t.enabled,deviceKey:networkConfigFromState().deviceKey,notifyShiftOpened:t.notifyShiftOpened!==false,notifyShiftClosed:t.notifyShiftClosed!==false};
+  return {enabled:!!t.enabled,botToken:String(t.botToken||''),chatId:String(t.chatId||''),threadId:String(t.threadId||''),notifyShiftOpened:t.notifyShiftOpened!==false,notifyShiftClosed:t.notifyShiftClosed!==false};
 }
 function telegramNativeRequest(action, extra={}){
   const cfg=telegramConfigFromState();
-  if(!cfg.enabled || !cfg.deviceKey) return false;
+  if(!cfg.enabled || !cfg.botToken || !cfg.chatId) return false;
   if(window.webkit?.messageHandlers?.telegram){
     window.webkit.messageHandlers.telegram.postMessage({...cfg,action,...extra});
     return true;
@@ -2321,10 +2338,14 @@ function telegramNativeRequest(action, extra={}){
 function testTelegramConnection(){
   if(!window.POSAccess?.require('network.manage'))return false;
   if(!currentShiftEmployeeIsAdmin()){flash('Сетевые конфигурации доступны только администратору');return;}
-  const deviceKey=networkConfigFromState().deviceKey;
+  const token=(document.getElementById('telegram-token')?.value||'').trim();
+  const chatId=(document.getElementById('telegram-chat-id')?.value||'').trim();
+  const threadId=(document.getElementById('telegram-thread-id')?.value||'').trim();
+  if(!token){flash('Введите токен бота');return;}
+  if(!chatId){flash('Введите ID рабочей группы');return;}
   const status=document.getElementById('telegram-status'); if(status) status.textContent='Проверяем подключение…';
   if(window.webkit?.messageHandlers?.telegram){
-    window.webkit.messageHandlers.telegram.postMessage({action:'test',deviceKey});
+    window.webkit.messageHandlers.telegram.postMessage({action:'test',botToken:token,chatId,threadId});
   } else {
     if(status) status.textContent='Проверка доступна в установленном приложении на iPad.';
   }
@@ -2335,7 +2356,7 @@ window.onTelegramResult=function(result){
 };
 function sendTelegramShiftOpened(shift){
   const t=telegramConfigFromState();
-  if(!t.enabled || !t.notifyShiftOpened || !t.deviceKey) return;
+  if(!t.enabled || !t.notifyShiftOpened || !t.botToken || !t.chatId) return;
   const date=new Date(shift.openedAt||Date.now()).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
   const text=`🟢 <b>Смена открыта</b>\n👤 Сотрудник: ${escapeHtml(shift.employeeName||'Сотрудник')}\n🕐 Время: ${date}`;
   if(window.webkit?.messageHandlers?.telegram){
@@ -2361,7 +2382,7 @@ function buildShiftReportPayload(shift){
 }
 function sendTelegramShiftClosed(shift){
   const t=telegramConfigFromState();
-  if(!t.enabled || !t.notifyShiftClosed || !t.deviceKey) return;
+  if(!t.enabled || !t.notifyShiftClosed || !t.botToken || !t.chatId) return;
   if(window.webkit?.messageHandlers?.telegram){
     window.webkit.messageHandlers.telegram.postMessage({...t,action:'sendShiftCloseReport',report:buildShiftReportPayload(shift)});
   }

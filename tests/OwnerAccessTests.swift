@@ -11,13 +11,13 @@ final class MemoryVault: AccessVault {
   func rejected(_ action:()throws->Void){do{try action();fatalError("Expected rejection")}catch{}}
   let pin="246810",ownerId="owner-person"
   check(!core.allows("owner.manage"),"No implicit owner")
-  let pending=AccessPending(id:"bind",secret:"secret",token:"token",installationId:core.document.installationId,employeeId:ownerId,name:"Owner",kind:"bind")
-  try core.update("test"){$0.pending=pending}
-  let owner=AccessOwner(employeeId:ownerId,name:"Owner",installationId:core.document.installationId,telegramId:"123",telegramName:"Owner TG",epoch:1)
-  try core.installOwner(owner,pin:pin,session:"bind")
+  let empty=MemoryVault();empty.fail=true;let failed=try AccessCore(vault:empty)
+  rejected{try failed.createOwner(id:ownerId,name:"Owner",telegramId:"123",pin:pin)}
+  check(failed.document.owner==nil && !failed.allows("owner.manage"),"Failed write cannot create owner")
+  try core.createOwner(id:ownerId,name:"Owner",telegramId:"123",pin:pin)
   check(core.allows("owner.manage") && core.allows("backup.import"),"Owner has all rights")
   check(!String(data:vault.data!,encoding:.utf8)!.contains(pin),"PIN never stored in plaintext")
-  rejected{try core.installOwner(owner,pin:pin,session:"bind")}
+  rejected{try core.createOwner(id:"second",name:"Second",telegramId:"456",pin:pin)}
   try core.saveRole(id:"reader",name:"Reader",permissions:["receipts.view"])
   try core.saveAccount(id:"reader-person",name:"Reader",roleId:"reader",pin:"135790")
   rejected{try core.saveAccount(id:ownerId,name:"Demote",roleId:"reader",pin:pin)}
@@ -36,12 +36,10 @@ final class MemoryVault: AccessVault {
   for _ in 0..<5{rejected{try reload.login(id:"reader-person",pin:"000000")}}
   let blocked=try AccessCore(vault:vault);rejected{try blocked.login(id:"reader-person",pin:"135790")}
   check(blocked.document.attempts["reader-person"]!.failures==5,"Persistent throttle")
-  var recovery=pending;recovery.id="recovery";recovery.kind="recover"
-  try reload.update("test"){$0.pending=recovery}
-  var recovered=owner;recovered.epoch=2
-  try reload.installOwner(recovered,pin:"975310",session:"recovery")
-  reload.logout();rejected{try reload.login(id:ownerId,pin:pin)};try reload.login(id:ownerId,pin:"975310")
-  check(reload.allows("owner.manage"),"Recovery retains owner")
-  print("OwnerAccess native core: 19 security assertions passed")
+  rejected{try reload.createOwner(id:ownerId,name:"Replacement",telegramId:"456",pin:"975310")}
+  try reload.login(id:ownerId,pin:pin)
+  check(reload.allows("owner.manage"),"Original owner PIN survives restart")
+  check(reload.document.owner?.telegramId=="123","Owner identity cannot be replaced")
+  print("OwnerAccess local creation, durability, roles, throttle and immutable owner checks passed")
  }
 }
