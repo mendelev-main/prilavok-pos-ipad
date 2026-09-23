@@ -9,8 +9,13 @@ final class MemoryVault: AccessVault {
   let vault=MemoryVault(),core=try AccessCore(vault:vault)
   func check(_ condition:Bool,_ message:String){precondition(condition,message)}
   func rejected(_ action:()throws->Void){do{try action();fatalError("Expected rejection")}catch{}}
-  let pin="246810",ownerId="owner-person"
+  let pin="Пароль Owner! 42",ownerId="owner-person"
   check(!core.allows("owner.manage"),"No implicit owner")
+  rejected{_ = try AccessPIN("short")}
+  rejected{_ = try AccessPIN(String(repeating:"x",count:129))}
+  rejected{_ = try AccessPIN("      ")}
+  let legacy=try AccessPIN("246810");check(try legacy.matches("246810"),"Legacy numeric credentials remain valid")
+  let exact=try AccessPIN("  Abc!42  ");check(try exact.matches("  Abc!42  "),"Spaces preserved");check(try !exact.matches("Abc!42"),"No silent trimming")
   let empty=MemoryVault();empty.fail=true;let failed=try AccessCore(vault:empty)
   rejected{try failed.createOwner(id:ownerId,name:"Owner",telegramId:"123",pin:pin)}
   check(failed.document.owner==nil && !failed.allows("owner.manage"),"Failed write cannot create owner")

@@ -19,10 +19,10 @@ struct AccessPIN: Codable {
         let result=password.withUnsafeBytes { p in salt.withUnsafeBytes { s in
             CCKeyDerivationPBKDF(CCPBKDFAlgorithm(kCCPBKDF2),p.bindMemory(to:Int8.self).baseAddress,password.count,s.bindMemory(to:UInt8.self).baseAddress,salt.count,CCPseudoRandomAlgorithm(kCCPRFHmacAlgSHA256),600_000,&output,output.count)
         }}
-        guard result==kCCSuccess else { throw AccessError.message("Не удалось защитить PIN") };return Data(output)
+        guard result==kCCSuccess else { throw AccessError.message("Не удалось защитить пароль") };return Data(output)
     }
     init(_ pin:String) throws {
-        guard pin.range(of:"^[0-9]{6,12}$",options:.regularExpression) != nil else { throw AccessError.message("PIN должен содержать 6–12 цифр") }
+        guard (6...128).contains(pin.count),!pin.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty else { throw AccessError.message("Пароль должен содержать от 6 до 128 символов") }
         var bytes=[UInt8](repeating:0,count:16);guard SecRandomCopyBytes(kSecRandomDefault,bytes.count,&bytes)==errSecSuccess else { throw AccessError.message("Недоступен генератор случайных чисел") }
         salt=Data(bytes);hash=try Self.derive(pin,salt:salt)
     }
@@ -92,10 +92,10 @@ final class AccessCore {
         logout()
         let now=Date().timeIntervalSince1970;let attempt=document.attempts[id] ?? AccessAttempt()
         guard attempt.blockedUntil<=now else {throw AccessError.message("Слишком много попыток. Повторите через \(Int(ceil(attempt.blockedUntil-now))) сек.")}
-        guard let account=document.accounts.first(where:{$0.id==id}) else{throw AccessError.message("Сотруднику ещё не назначен PIN")}
+        guard let account=document.accounts.first(where:{$0.id==id}) else{throw AccessError.message("Сотруднику ещё не назначен пароль")}
         guard try account.pin.matches(pin) else {
             try update("pin-failed",target:id){d in var a=d.attempts[id] ?? AccessAttempt();a.failures+=1;if a.failures>=5{a.blockedUntil=now+min(900,60*pow(2,Double(min(4,a.failures-5))))};d.attempts[id]=a}
-            throw AccessError.message("Неверный PIN")
+            throw AccessError.message("Неверный пароль")
         }
         try update("login",target:id){$0.attempts[id]=AccessAttempt()};actor=id;expires=now+15*60
     }
@@ -139,9 +139,9 @@ final class OwnerAccessController {
     private func prompt(_ title:String,repeatPIN:Bool=false,completion:@escaping(String?)->Void){
         DispatchQueue.main.async{
             guard let presenter=self.presenter,presenter.presentedViewController==nil else{completion(nil);return}
-            let alert=UIAlertController(title:title,message:repeatPIN ? "PIN: 6–12 цифр. Он хранится только на этом iPad.":"Введите PIN сотрудника",preferredStyle:.alert)
-            alert.addTextField{$0.isSecureTextEntry=true;$0.keyboardType = .numberPad;$0.placeholder="PIN";$0.textContentType = .password}
-            if repeatPIN{alert.addTextField{$0.isSecureTextEntry=true;$0.keyboardType = .numberPad;$0.placeholder="Повторите PIN"}}
+            let alert=UIAlertController(title:title,message:repeatPIN ? "Пароль: 6–128 символов — буквы, цифры и символы. Восстановления нет.":"Введите пароль сотрудника",preferredStyle:.alert)
+            alert.addTextField{$0.isSecureTextEntry=true;$0.keyboardType = .default;$0.autocapitalizationType = .none;$0.autocorrectionType = .no;$0.spellCheckingType = .no;$0.placeholder="Пароль";$0.textContentType = repeatPIN ? .newPassword : .password}
+            if repeatPIN{alert.addTextField{$0.isSecureTextEntry=true;$0.keyboardType = .default;$0.autocapitalizationType = .none;$0.autocorrectionType = .no;$0.spellCheckingType = .no;$0.placeholder="Повторите пароль"}}
             alert.addAction(UIAlertAction(title:"Отмена",style:.cancel){_ in completion(nil)})
             alert.addAction(UIAlertAction(title:"Продолжить",style:.default){_ in let value=alert.textFields?[0].text ?? "";if repeatPIN && value != alert.textFields?[1].text{completion("")}else{completion(value)}})
             presenter.present(alert,animated:true)
@@ -151,7 +151,7 @@ final class OwnerAccessController {
         guard let core=core else{completion(loadError);return}
         func select(_ account:AccessAccount){self.prompt("Вход: \(account.name)"){pin in self.queue.async{guard let pin=pin else{completion(AccessError.message("Вход отменён"));return};do{try core.login(id:account.id,pin:pin);completion(nil)}catch{completion(error)}}}}
         if let requested=requested,let account=core.document.accounts.first(where:{$0.id==requested}){select(account);return}
-        if requested != nil{completion(AccessError.message("Владелец должен назначить сотруднику роль и PIN"));return}
+        if requested != nil{completion(AccessError.message("Владелец должен назначить сотруднику роль и пароль"));return}
         DispatchQueue.main.async{
             guard let presenter=self.presenter,presenter.presentedViewController==nil else{completion(AccessError.message("Закройте открытый диалог"));return}
             let alert=UIAlertController(title:"Выберите сотрудника",message:nil,preferredStyle:.actionSheet)
@@ -184,13 +184,13 @@ final class OwnerAccessController {
                 case "saveAccount":
                     try core.requireOwner();let id=body["id"] as? String ?? "",name=body["name"] as? String ?? "",role=body["roleId"] as? String ?? "employee"
                     guard !id.isEmpty,!name.isEmpty else{throw AccessError.message("Укажите сотрудника")}
-                    self.prompt("PIN: \(name)",repeatPIN:true){pin in self.queue.async{do{guard let pin=pin else{throw AccessError.message("Настройка PIN отменена")};try core.saveAccount(id:id,name:name,roleId:role,pin:pin);done()}catch{finish(.failure(error))}}}
+                    self.prompt("Пароль: \(name)",repeatPIN:true){pin in self.queue.async{do{guard let pin=pin else{throw AccessError.message("Настройка пароля отменена")};try core.saveAccount(id:id,name:name,roleId:role,pin:pin);done()}catch{finish(.failure(error))}}}
                 case "deleteAccount":
                     try core.requireOwner();let id=body["id"] as? String ?? "";guard id != core.document.owner?.employeeId,id != core.actor else{throw AccessError.message("Нельзя удалить владельца или текущего пользователя")};try core.update("account-deleted",target:id){$0.accounts.removeAll{$0.id==id};$0.attempts.removeValue(forKey:id)};done()
                 case "createOwner":
                     guard core.document.owner==nil else {throw AccessError.message("Владелец уже создан")}
                     let id=body["employeeId"] as? String ?? "",name=body["name"] as? String ?? "",telegramId=body["telegramId"] as? String ?? ""
-                    self.prompt("Создать владельца. Восстановления PIN нет",repeatPIN:true){pin in self.queue.async{do{guard let pin=pin else{throw AccessError.message("Создание владельца отменено")};try core.createOwner(id:id,name:name,telegramId:telegramId,pin:pin);done()}catch{finish(.failure(error))}}}
+                    self.prompt("Создать владельца. Восстановления пароля нет",repeatPIN:true){pin in self.queue.async{do{guard let pin=pin else{throw AccessError.message("Создание владельца отменено")};try core.createOwner(id:id,name:name,telegramId:telegramId,pin:pin);done()}catch{finish(.failure(error))}}}
                 default:throw AccessError.message("Неизвестная команда доступа")
                 }
             }catch{finish(.failure(error))}
