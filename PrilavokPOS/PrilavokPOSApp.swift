@@ -117,14 +117,12 @@ final class PrilavokPOSApp: UIResponder, UIApplicationDelegate {
 final class POSViewController: UIViewController, WKScriptMessageHandler, PHPickerViewControllerDelegate {
     private var webView: WKWebView!
     private let networkPrinter = BluetoothPrinterManager()
-    private lazy var ownerAccess = OwnerAccessController(presenter:self)
 
     override func loadView() {
         let contentController = WKUserContentController()
         contentController.add(self, name: "printer")
         contentController.add(self, name: "telegram")
         contentController.add(self, name: "photoPicker")
-        contentController.add(self, name: "ownerAccess")
 
         let configuration = WKWebViewConfiguration()
         configuration.userContentController = contentController
@@ -169,8 +167,6 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
     }
 
     @objc private func pauseAvailability() {
-        ownerAccess.lock()
-        webView.evaluateJavaScript("window.POSAccess&&window.POSAccess.didLock();",completionHandler:nil)
         webView.evaluateJavaScript("window._availabilityAppActive=false;window.onAvailabilityAppState&&window.onAvailabilityAppState(false);", completionHandler: nil)
     }
 
@@ -179,16 +175,6 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        if message.name == "ownerAccess" {
-            guard message.frameInfo.isMainFrame, message.frameInfo.request.url?.isFileURL==true,
-                  let body=message.body as? [String:Any],let id=body["requestId"] as? String else{return}
-            ownerAccess.handle(body){[weak self] result in
-                var response:[String:Any]=["requestId":id]
-                switch result {case .success(let data):response["data"]=data;case .failure(let error):response["error"]=error.localizedDescription}
-                guard let data=try? JSONSerialization.data(withJSONObject:response),let json=String(data:data,encoding:.utf8) else{return}
-                self?.webView.evaluateJavaScript("window.POSAccess&&window.POSAccess.reply(\(json));",completionHandler:nil)
-            };return
-        }
         if message.name == "photoPicker" {
             presentPhotoPicker()
             return
