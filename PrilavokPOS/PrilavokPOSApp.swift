@@ -117,12 +117,14 @@ final class PrilavokPOSApp: UIResponder, UIApplicationDelegate {
 final class POSViewController: UIViewController, WKScriptMessageHandler, PHPickerViewControllerDelegate {
     private var webView: WKWebView!
     private let networkPrinter = BluetoothPrinterManager()
+    private lazy var ownerAccess = OwnerAccessController(presenter:self)
 
     override func loadView() {
         let contentController = WKUserContentController()
         contentController.add(self, name: "printer")
         contentController.add(self, name: "telegram")
         contentController.add(self, name: "photoPicker")
+        contentController.add(self, name: "ownerAccess")
 
         let configuration = WKWebViewConfiguration()
         configuration.userContentController = contentController
@@ -167,6 +169,8 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
     }
 
     @objc private func pauseAvailability() {
+        ownerAccess.lock()
+        webView.evaluateJavaScript("window.POSAccess&&window.POSAccess.didLock();",completionHandler:nil)
         webView.evaluateJavaScript("window._availabilityAppActive=false;window.onAvailabilityAppState&&window.onAvailabilityAppState(false);", completionHandler: nil)
     }
 
@@ -175,6 +179,16 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        if message.name == "ownerAccess" {
+            guard message.frameInfo.isMainFrame, message.frameInfo.request.url?.isFileURL==true,
+                  let body=message.body as? [String:Any],let id=body["requestId"] as? String else{return}
+            ownerAccess.handle(body){[weak self] result in
+                var response:[String:Any]=["requestId":id]
+                switch result {case .success(let data):response["data"]=data;case .failure(let error):response["error"]=error.localizedDescription}
+                guard let data=try? JSONSerialization.data(withJSONObject:response),let json=String(data:data,encoding:.utf8) else{return}
+                self?.webView.evaluateJavaScript("window.POSAccess&&window.POSAccess.reply(\(json));",completionHandler:nil)
+            };return
+        }
         if message.name == "photoPicker" {
             presentPhotoPicker()
             return
@@ -268,34 +282,28 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
     }
 
     private func telegramTest(body: [String: Any]) {
-        let token = body["botToken"] as? String ?? ""
-        let chatId = body["chatId"] as? String ?? ""
-        let threadId = body["threadId"] as? String ?? ""
-        guard !token.isEmpty, !chatId.isEmpty else {
-            sendTelegramResult(ok: false, message: "Укажите токен бота и ID рабочей группы.")
+        let deviceKey = body["deviceKey"] as? String ?? ""
+        guard !deviceKey.isEmpty else {
+            sendTelegramResult(ok: false, message: "Настройте ключ устройства и получателя отчётов на backend.")
             return
         }
         let text = "🟢 <b>Telegram подключён</b>\nM POS успешно связался с рабочей группой."
-        telegramRequest(token: token, chatId: chatId, threadId: threadId, text: text) { [weak self] ok, message in
+        telegramRequest(deviceKey: deviceKey, text: text) { [weak self] ok, message in
             self?.sendTelegramResult(ok: ok, message: message)
         }
     }
 
     private func telegramSend(body: [String: Any]) {
-        let token = body["botToken"] as? String ?? ""
-        let chatId = body["chatId"] as? String ?? ""
-        let threadId = body["threadId"] as? String ?? ""
+        let deviceKey = body["deviceKey"] as? String ?? ""
         let text = body["text"] as? String ?? ""
-        guard !token.isEmpty, !chatId.isEmpty, !text.isEmpty else { return }
-        telegramRequest(token: token, chatId: chatId, threadId: threadId, text: text, completion: nil)
+        guard !deviceKey.isEmpty, !text.isEmpty else { return }
+        telegramRequest(deviceKey: deviceKey, text: text, completion: nil)
     }
 
     private func telegramSendShiftCloseReport(body: [String: Any]) {
-        let token = body["botToken"] as? String ?? ""
-        let chatId = body["chatId"] as? String ?? ""
-        let threadId = body["threadId"] as? String ?? ""
+        let deviceKey = body["deviceKey"] as? String ?? ""
         let report = body["report"] as? [String: Any] ?? [:]
-        guard !token.isEmpty, !chatId.isEmpty, !report.isEmpty else { return }
+        guard !deviceKey.isEmpty, !report.isEmpty else { return }
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self, let imageData = self.makeShiftReceiptImage(report: report) else {
@@ -311,7 +319,7 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
                 .replacingOccurrences(of: "<", with: "&lt;")
                 .replacingOccurrences(of: ">", with: "&gt;")
             let caption = "🔴 <b>Смена закрыта</b>\n👤 Сотрудник: \(safeEmployee)\n🕐 Время: \(closeDate)"
-            self.telegramPhotoRequest(token: token, chatId: chatId, threadId: threadId, imageData: imageData, caption: caption) { [weak self] ok, message in
+            self.telegramPhotoRequest(deviceKey: deviceKey, imageData: imageData, caption: caption) { [weak self] ok, message in
                 guard let self = self else { return }
                 let payload: [String: Any] = ["ok": ok, "message": message]
                 guard let data = try? JSONSerialization.data(withJSONObject: payload, options: []),
@@ -465,114 +473,21 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
         return image.pngData()
     }
 
-    private func telegramPhotoRequest(token: String, chatId: String, threadId: String, imageData: Data, caption: String? = nil, completion: @escaping (Bool, String) -> Void) {
-        guard let url = URL(string: "https://api.telegram.org/bot\(token)/sendPhoto") else {
-            completion(false, "Некорректный Telegram Bot Token.")
-            return
-        }
-
-        let boundary = "Boundary-\(UUID().uuidString)"
-        var body = Data()
-        func append(_ string: String) {
-            body.append(string.data(using: .utf8)!)
-        }
-        append("--\(boundary)\r\n")
-        append("Content-Disposition: form-data; name=\"chat_id\"\r\n\r\n")
-        append("\(chatId)\r\n")
-        if let thread = Int(threadId), thread > 0 {
-            append("--\(boundary)\r\n")
-            append("Content-Disposition: form-data; name=\"message_thread_id\"\r\n\r\n")
-            append("\(thread)\r\n")
-        }
-        if let caption = caption, !caption.isEmpty {
-            append("--\(boundary)\r\n")
-            append("Content-Disposition: form-data; name=\"caption\"\r\n\r\n")
-            append("\(caption)\r\n")
-            append("--\(boundary)\r\n")
-            append("Content-Disposition: form-data; name=\"parse_mode\"\r\n\r\n")
-            append("HTML\r\n")
-        }
-        append("--\(boundary)\r\n")
-        append("Content-Disposition: form-data; name=\"photo\"; filename=\"shift-report.png\"\r\n")
-        append("Content-Type: image/png\r\n\r\n")
-        body.append(imageData)
-        append("\r\n--\(boundary)--\r\n")
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 15
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        request.httpBody = body
-
-        URLSession.shared.dataTask(with: request) { data, _, error in
-            if let error = error {
-                DispatchQueue.main.async { completion(false, "Ошибка сети: \(error.localizedDescription)") }
-                return
-            }
-            guard let data = data else {
-                DispatchQueue.main.async { completion(false, "Telegram не вернул ответ.") }
-                return
-            }
-            do {
-                let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-                let ok = json?["ok"] as? Bool ?? false
-                let description = json?["description"] as? String
-                DispatchQueue.main.async {
-                    completion(ok, ok ? "Отчёт о закрытии смены отправлен в Telegram одним сообщением." : "Telegram: \(description ?? "Неизвестная ошибка Telegram")")
-                }
-            } catch {
-                DispatchQueue.main.async { completion(false, "Не удалось прочитать ответ Telegram.") }
-            }
-        }.resume()
+    private func telegramPhotoRequest(deviceKey: String, imageData: Data, caption: String? = nil, completion: @escaping (Bool, String) -> Void) {
+        telegramRelay(deviceKey:deviceKey,body:["photo":imageData.base64EncodedString(),"caption":caption ?? ""],completion:completion)
     }
 
-    private func telegramRequest(token: String, chatId: String, threadId: String, text: String, completion: ((Bool, String) -> Void)?) {
-        guard let url = URL(string: "https://api.telegram.org/bot\(token)/sendMessage") else {
-            completion?(false, "Некорректный Telegram Bot Token.")
-            return
-        }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        var payload: [String: Any] = ["chat_id": chatId, "text": text, "parse_mode": "HTML"]
-        if let thread = Int(threadId), thread > 0 { payload["message_thread_id"] = thread }
-        do {
-            request.httpBody = try JSONSerialization.data(withJSONObject: payload, options: [])
-        } catch {
-            completion?(false, "Не удалось подготовить запрос Telegram.")
-            return
-        }
-        let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            let finish: (Bool, String) -> Void = { ok, message in
-                DispatchQueue.main.async { completion?(ok, message) }
-            }
-            if let error = error {
-                finish(false, "Ошибка сети: \(error.localizedDescription)")
-                return
-            }
-            guard let data = data else {
-                finish(false, "Telegram не вернул ответ.")
-                return
-            }
-            do {
-                let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-                let ok = json?["ok"] as? Bool ?? false
-                if ok {
-                    finish(true, "Telegram подключён. Тестовое сообщение отправлено.")
-                } else {
-                    let description = ((json?["description"] as? String) ?? "Неизвестная ошибка Telegram")
-                    finish(false, "Telegram: \(description)")
+    private func telegramRequest(deviceKey: String, text: String, completion: ((Bool, String) -> Void)?) {
+        telegramRelay(deviceKey:deviceKey,body:["text":text],completion:completion)
+    }
+
+    private func telegramRelay(deviceKey:String,body:[String:Any],completion:((Bool,String)->Void)?) {
+        OwnerAccessController.request("report",body:body,key:deviceKey){result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success:completion?(true,"Сообщение отправлено в Telegram")
+                case .failure(let error):completion?(false,error.localizedDescription)
                 }
-            } catch {
-                finish(false, "Не удалось прочитать ответ Telegram.")
-            }
-            _ = self
-        }
-        task.resume()
-        DispatchQueue.global().asyncAfter(deadline: .now() + 15) {
-            if task.state == .running {
-                task.cancel()
-                DispatchQueue.main.async { completion?(false, "Превышено время ожидания ответа Telegram (15 сек). Проверите интернет и данные бота.") }
             }
         }
     }

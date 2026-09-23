@@ -51,7 +51,7 @@
   };
 
   if (originalOpenParkedModal) window.openParkedModal = function () {
-    const list = state.parked.slice().sort((a,b)=>b.createdAt-a.createdAt);
+    const list = state.parked.filter(o=>!o.cancelledAt).slice().sort((a,b)=>b.createdAt-a.createdAt);
     showModal(`
       <div style="width:min(900px,86vw);max-width:100%;min-width:0;">
         <div class="modal-title">Отложенные чеки</div>
@@ -72,9 +72,9 @@
       </div>
     `);
   };
-  window.markWebOrderReady = async function (parkedId) {
+  window.markWebOrderReady = async function (parkedId) {if(!window.POSAccess?.require('pos'))return false;
     if (readyBusy) return;
-    const parked = state.parked.find(x=>x.id===parkedId); if (!parked?.webOrderId || parked.webReadyAt) return;
+    const parked = state.parked.find(x=>x.id===parkedId); if (!parked?.webOrderId || parked.cancelledAt || parked.webReadyAt) return;
     const n = networkConfigFromState(); if (!n.backendUrl || !n.deviceKey) { flash('Проверьте сетевые настройки'); window.openParkedModal(); return; }
     readyBusy = true;
     try {

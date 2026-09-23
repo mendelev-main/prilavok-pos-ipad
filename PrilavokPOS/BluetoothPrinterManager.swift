@@ -4,36 +4,64 @@ import UIKit
 
 final class BluetoothPrinterManager: NSObject {
     var onEvent: (([String: Any]) -> Void)?
-    private var networkConnections: [UUID: NWConnection] = [:]
+    // All connection state and per-printer queues are confined to this serial queue.
+    private let printQueue = DispatchQueue(label: "mpos.lan-print")
+    private var pending: [String: [[String: Any]]] = [:]
+    private var active: Set<String> = []
 
     func print(order: [String: Any]) {
         guard let raw = order["__networkPrinterIp"] as? String else { event("printError","network_error","Не указан IP-адрес сетевого принтера"); return }
         let ip=raw.trimmingCharacters(in:.whitespacesAndNewlines)
         let portValue=(order["__networkPrinterPort"] as? NSNumber)?.intValue ?? 9100
-        guard validIPv4(ip), let port=NWEndpoint.Port(rawValue: UInt16(clamping:portValue)) else { event("printError","network_error","Неверный IP-адрес принтера"); return }
+        guard validIPv4(ip), (1...65535).contains(portValue) else { event("printError","network_error","Неверный адрес принтера"); return }
+        let endpoint="\(ip):\(portValue)"
+        printQueue.async {
+            self.pending[endpoint, default: []].append(order)
+            self.startNext(endpoint, ip, UInt16(portValue))
+        }
+    }
+    private func startNext(_ endpoint: String, _ ip: String, _ port: UInt16) {
+        guard !active.contains(endpoint), var jobs=pending[endpoint], !jobs.isEmpty else { return }
+        let order=jobs.removeFirst();pending[endpoint]=jobs;active.insert(endpoint)
         let test=(order["__networkTest"] as? Bool)==true
-        let id=UUID(), connection=NWConnection(host:NWEndpoint.Host(ip),port:port,using:.tcp)
-        networkConnections[id]=connection
-        var finished=false
-        func finish(){ guard !finished else{return}; finished=true; connection.cancel(); self.networkConnections.removeValue(forKey:id) }
-        connection.stateUpdateHandler={ [weak self] state in
-            guard let self=self,!finished else{return}
+        let connection=NWConnection(host:NWEndpoint.Host(ip),port:NWEndpoint.Port(rawValue:port)!,using:.tcp)
+        var finished=false, sent=false
+        var timeout: DispatchWorkItem?
+        func finish() {
+            guard !finished else { return };finished=true;timeout?.cancel();timeout=nil
+            connection.stateUpdateHandler=nil;connection.cancel();self.active.remove(endpoint)
+            self.startNext(endpoint,ip,port)
+        }
+        timeout=DispatchWorkItem {
+            guard !finished else { return }
+            self.event("printError","network_error","Принтер не ответил. Проверьте бумажный чек перед повторной печатью.")
+            finish()
+        }
+        connection.stateUpdateHandler={ state in
+            guard !finished else { return }
             switch state {
             case .ready:
+                guard !sent else { return };sent=true
                 let data=test ? Self.testData() : ReceiptEncoder.encode(order:order)
-                connection.send(content:data,completion:.contentProcessed{ error in
-                    if let error=error { self.event("printError","network_error","Ошибка печати: \(error.localizedDescription)") }
-                    else { self.event("printed","network_printed",test ? "Пробная печать отправлена" : "Чек отправлен на принтер") }
-                    finish()
+                connection.send(content:data,completion:.contentProcessed { error in
+                    self.printQueue.async {
+                        guard !finished else { return }
+                        if let error=error { self.event("printError","network_error","Ошибка печати: \(error.localizedDescription). Проверьте чек перед повтором.") }
+                        else { self.event("printed","network_printed",test ? "Пробная печать отправлена" : "Чек отправлен на принтер") }
+                        finish()
+                    }
                 })
-            case .failed(let error): self.event("printError","network_error","Не удалось подключиться к принтеру: \(error.localizedDescription)"); finish()
+            case .failed(let error): self.event("printError","network_error","Не удалось подключиться к принтеру: \(error.localizedDescription)");finish()
             case .cancelled: finish()
             default: break
             }
         }
-        connection.start(queue:.global(qos:.userInitiated))
+        printQueue.asyncAfter(deadline:.now()+20,execute:timeout!)
+        connection.start(queue:printQueue)
     }
-    private func event(_ type:String,_ status:String,_ message:String){ onEvent?(["type":type,"status":status,"message":message]) }
+    private func event(_ type:String,_ status:String,_ message:String) {
+        DispatchQueue.main.async { self.onEvent?(["type":type,"status":status,"message":message]) }
+    }
     private func validIPv4(_ ip:String)->Bool { let p=ip.split(separator:"."); return p.count==4 && p.allSatisfy{ Int($0).map{(0...255).contains($0)} ?? false } }
     private static func testData()->Data { var d=Data([0x1B,0x40]); d.append(Data("\nPRILAVOK POS\nTEST PRINT\nLAN TCP 9100 OK\n\n\n".utf8)); d.append(contentsOf:[0x1D,0x56,0x42,0x00]); return d }
 }
@@ -93,7 +121,8 @@ private enum ReceiptEncoder {
                 for item in items {
                     let name=(item["name"] as? String) ?? "",q=number(item["qty"],1),price=number(item["price"])
                     let gross=q*price,dv=number(item["discountValue"]),dt=(item["discountType"] as? String) ?? ""
-                    let disc=dt=="percent" ? gross*dv/100 : (dt.isEmpty ? 0 : dv*q)
+                    let calculated=dt=="percent" ? gross*dv/100 : (dt.isEmpty ? 0 : dv*q)
+                    let disc=number(item["paymentDiscount"],calculated)
                     pair(name,money(max(0,gross-disc)),medium,2)
                     add("\(qty(q)) × "+money(price),regular,.left,3)
                     if disc>0 {add("Скидка: −"+money(disc),small,.left,2)}
@@ -105,11 +134,14 @@ private enum ReceiptEncoder {
             if delivery>0 {pair("Доставка",money(delivery),regular,10)}
             separator(10)
             pair("Итого",money(number(order["total"])),bold,12)
-            let cash=(order["method"] as? String)=="cash"
-            pair(cash ? "Наличные":"Карта",money(number(order["total"])),regular,3)
-            if cash {
-                let given=number(order["cashGiven"])
-                if given>0 {pair("Внесено",money(given),regular,3);pair("Сдача",money(number(order["change"])),medium,10)}
+            let payments=(order["payments"] as? [[String:Any]]) ?? [["method":order["method"] ?? "card","amount":order["total"] ?? 0,"cashGiven":order["cashGiven"] ?? 0,"change":order["change"] ?? 0]]
+            for payment in payments {
+                let cash=(payment["method"] as? String)=="cash"
+                pair(cash ? "Наличные":"Карта",money(number(payment["amount"])),regular,3)
+                if cash {
+                    let given=number(payment["cashGiven"])
+                    if given>0 {pair("Внесено",money(given),regular,3);pair("Сдача",money(number(payment["change"])),medium,10)}
+                }
             }
             separator(9)
             pair(dateText(order),(order["receiptDisplayNumber"] as? String) ?? "#—",small,8)

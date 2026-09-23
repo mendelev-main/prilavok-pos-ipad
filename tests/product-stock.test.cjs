@@ -7,7 +7,7 @@ const path=require('node:path');
 const vm=require('node:vm');
 const root=path.resolve(__dirname,'..');
 const html=fs.readFileSync(path.join(root,'PrilavokPOS/pos.html'),'utf8');
-const inline=[...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].map(m=>m[1]).join('\n');
+const inline=[...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].map(m=>m[1]).join('\n').replace(/\(async\(\)=>\{await POSAccess\.initialize\(\);[\s\S]*?\}\)\(\);/,'');
 const adapter=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/core/storage.js'),'utf8');
 const plain=x=>JSON.parse(JSON.stringify(x));
 const near=(actual,expected)=>assert.ok(Math.abs(actual-expected)<1e-10,`${actual} != ${expected}`);
@@ -15,6 +15,7 @@ function fixture(){
  const data=new Map(),messages=[],writes=[],fields={},events=[];
  const document={getElementById:id=>fields[id]||null,querySelector:()=>null,addEventListener:()=>{}};
  const c={console:{error:()=>{}},document,crypto:{randomUUID:()=> 'device-test'},setTimeout:()=>0,clearTimeout:()=>{},AbortController,localStorage:{getItem:k=>data.has(k)?data.get(k):null,setItem:(k,v)=>{data.set(k,String(v));writes.push(k);},removeItem:k=>data.delete(k)},fetch:()=>{throw Error('Network is prohibited in this test');},setInterval:()=>{throw Error('Timer is prohibited in this test');}};
+ c.POSAccess={can:()=>true,require:()=>true,roleLabel:()=> 'Owner',employeeLabels:x=>x,matchesActor:()=>true,authorizeShift:fn=>fn()};
  c.window=c;vm.createContext(c);vm.runInContext(adapter,c);vm.runInContext(inline.replace(/loadAll\(\);\s*$/,''),c);
  c.flash=m=>messages.push(m);c.render=()=>{};c.showReceipt=()=>{};c.closeModal=()=>{};c.applyTheme=()=>{};
  const state=vm.runInContext('state',c);
@@ -69,7 +70,7 @@ test('fractional consumption permits exact stock, never consumes a material shor
 });
 test('return uses sold recipe after edit and ignores current tracking flag',()=>{
  const f=fixture(),order=f.sale();f.c.getProduct('dough').components[0].qty=0.8;f.c.getProduct('flour').noStockTracking=true;
- f.c.processFullReturn(order.id);near(f.c.getProduct('flour').stock,10);near(f.c.getProduct('water').stock,10);assert.ok(order.returnedAt);
+ f.c.processFullReturn(order.id);near(f.c.getProduct('flour').stock,10);near(f.c.getProduct('water').stock,10);assert.ok(f.state.orders.find(o=>o.id===order.id).returnedAt);
  const first=JSON.stringify(f.state);f.c.processFullReturn(order.id);assert.equal(JSON.stringify(f.state),first,'second return cannot add stock or cash twice');
 });
 test('deleted sold composite does not affect return of recorded ingredients',()=>{
@@ -85,7 +86,7 @@ test('legacy receipt has no fabricated snapshot and retains legacy one-level ret
 });
 test('invalid snapshot or missing target cannot partially change stock, cash or receipt',()=>{
  for(const snapshot of [null,{version:2,items:[]},{version:1,items:[{productId:'flour',qty:0.2},{productId:'missing',qty:0.1}]},{version:1,items:[{productId:'flour',qty:-1}]},{version:1,items:[{productId:'flour',qty:1},{productId:'flour',qty:1}]}]){
-  const f=fixture(),order=f.sale();order.stockConsumption=snapshot;const before=JSON.stringify(f.state);f.c.processFullReturn(order.id);assert.equal(JSON.stringify(f.state),before);assert.match(f.messages.at(-1),/Не удалось выполнить возврат/);
+  const f=fixture(),order=f.sale();order.stockConsumption=snapshot;const before=JSON.stringify(f.state);f.c.processFullReturn(order.id);assert.equal(JSON.stringify(f.state),before);assert.match(f.messages.at(-1),/Операция не выполнена|Не удалось выполнить возврат/);
  }
 });
 test('cycles, absent ingredients, empty recipe and invalid quantity fail safely',()=>{
@@ -108,7 +109,6 @@ test('cannot delete or change type of a tracked product needed by an unreturned 
  const f=fixture();f.sale();Object.assign(f.fields,{'pf-name':{value:'Мука'},'pf-category':{value:'Сырьё'},'pf-price':{value:'2'}});
  f.c._pmType='composite';f.c._pmComponents=[{productId:'water',qty:1}];const before=JSON.stringify(f.state.products);await f.c.saveProduct('flour');assert.equal(JSON.stringify(f.state.products),before);assert.match(f.messages.at(-1),/Нельзя изменить тип/);
  f.state.products=f.state.products.filter(p=>p.type==='simple');
- f.fields['delete-password']={value:html.match(/function confirmDelete[\s\S]*?pass!=='([^']+)'/)[1]};
  f.c.confirmDelete('product','flour');assert.ok(f.c.getProduct('flour'));assert.match(f.messages.at(-1),/Товар нужен для возврата/);
  assert.equal(f.c.hasUnreturnedStockConsumption('flour'),true);f.state.orders[0].returnedAt=1;assert.equal(f.c.hasUnreturnedStockConsumption('flour'),false);
 });
@@ -116,7 +116,7 @@ test('insufficient stock blocks payment screen before card-terminal instruction'
  const f=fixture();f.cart();f.c.getProduct('flour').stock=0;let shown=false;f.c.renderPaymentScreen=()=>{shown=true;};f.c.openCardPartConfirmation=()=>{shown=true;};f.c.openPaymentModal();f.c.confirmPaymentScreen('card');assert.equal(shown,false);
 });
 test('print bridge still receives original receipt fields plus ignored stock snapshot',()=>{
- const f=fixture(),order=f.sale();let sent;f.c.webkit={messageHandlers:{printer:{postMessage:m=>{sent=m;}}}};f.c.printReceipt(order.id);
+ const f=fixture(),order=f.sale();f.state.printer={enabled:true,ip:'192.168.1.10',port:9100};let sent;f.c.webkit={messageHandlers:{printer:{postMessage:m=>{sent=m;}}}};f.c.printReceipt(order.id);
  assert.equal(sent.action,'print');assert.equal(sent.order.total,10);assert.equal(sent.order.items[0].productId,'pizza');assert.equal(sent.order.stockConsumption.version,1);
  assert.match(f.c.receiptBodyHtml(order),/Пицца/);
 });
@@ -389,7 +389,7 @@ test('warehouse export includes limitations, period and receipt registry with no
  assert.equal(all.period,'2026-09-01 — 2026-09-07');assert.equal(docs.sections.length,1);assert.match(all.notes.join(' '),/Ручные изменения/);assert.equal(f.writes.length,0);
 });
 test('warehouse rejects invalid dates and export cannot bypass admin access',()=>{
- const f=fixture();assert.throws(()=>f.c.warehouseRange('2026-02-30','2026-03-01'));assert.throws(()=>f.c.warehouseRange('2026-09-07','2026-09-01'));let sent=false;f.c.currentShiftEmployeeIsAdmin=()=>false;f.c.webkit={messageHandlers:{printer:{postMessage:()=>{sent=true;}}}};f.c.exportWarehousePDF();assert.equal(sent,false);
+ const f=fixture();assert.throws(()=>f.c.warehouseRange('2026-02-30','2026-03-01'));assert.throws(()=>f.c.warehouseRange('2026-09-07','2026-09-01'));let sent=false;f.c.POSAccess.can=()=>false;f.c.POSAccess.require=()=>false;f.c.webkit={messageHandlers:{printer:{postMessage:()=>{sent=true;}}}};f.c.exportWarehousePDF();assert.equal(sent,false);
 });
 
 test('warehouse selected export keeps only requested sections and numeric Excel cells',()=>{
@@ -405,7 +405,7 @@ test('warehouse generation routes selected format and blocks invalid or unauthor
  f.c.generateWarehouseReport();assert.equal(sent[0].action,'shareWarehouseExcel');assert.equal(sent[0].report.sections.length,1);
  fields['warehouse-report-format'].value='pdf';f.c.generateWarehouseReport();assert.equal(sent[1].action,'shareWarehouseReport');
  fields['warehouse-report-format'].value='bad';f.c.generateWarehouseReport();assert.equal(sent.length,2);
- f.c.currentShiftEmployeeIsAdmin=()=>false;f.c.generateWarehouseReport();assert.equal(sent.length,2);assert.equal(f.writes.length,0);
+ f.c.POSAccess.can=()=>false;f.c.POSAccess.require=()=>false;f.c.generateWarehouseReport();assert.equal(sent.length,2);assert.equal(f.writes.length,0);
 });
 
 test('simplified warehouse combines suppliers without duplicating movement or balance',()=>{
@@ -492,21 +492,15 @@ function adminDeletionFixture(){const f=fixture();f.state.employees=[{id:'admin'
 test('administrator product delete omits password but preserves recipe protection',()=>{
  const f=adminDeletionFixture();let modal='';f.c.showModal=h=>modal=h;f.c.requestDelete('product','flour');assert.ok(!modal.includes('id="delete-password"'));f.c.confirmDelete('product','flour');assert.ok(f.c.getProduct('flour'));assert.match(f.messages.at(-1),/составном/);
  f.state.products.push({id:'unused',name:'Не используется',type:'simple'});f.c.confirmDelete('product','unused');assert.equal(f.c.getProduct('unused'),undefined);
- f.c.requestDelete('category','Категория');assert.ok(modal.includes('id="delete-password"'));
+ f.c.requestDelete('category','Категория');assert.ok(!modal.includes('id="delete-password"'));
 });
-test('non-administrator cannot bypass product password and rights are rechecked',()=>{
- const f=adminDeletionFixture();f.state.products.push({id:'unused',name:'Товар',type:'simple'});f.c.showModal=()=>{};f.c.requestDelete('product','unused');f.state.employees[0].role='employee';f.c.confirmDelete('product','unused');assert.ok(f.c.getProduct('unused'));assert.match(f.messages.at(-1),/пароль/);
+test('product deletion rechecks role and ignores forged legacy employee.role',()=>{
+ const f=adminDeletionFixture();f.state.products.push({id:'unused',name:'Товар',type:'simple'});f.c.showModal=()=>{};f.c.requestDelete('product','unused');f.c.POSAccess.require=()=>false;f.c.confirmDelete('product','unused');assert.ok(f.c.getProduct('unused'));assert.equal(f.writes.length,0);
 });
-test('employees including administrators cannot delete themselves, including direct confirmation',async()=>{
- const f=adminDeletionFixture(),before=JSON.stringify(f.state.employees);await f.c.confirmDeleteEmployee('admin');assert.equal(JSON.stringify(f.state.employees),before);assert.equal(f.writes.length,0);
- f.state.employees[0].role='employee';await f.c.confirmDeleteEmployee('other');assert.equal(f.state.employees.length,2);assert.equal(f.writes.length,0);
-});
-test('employee deletion uses POS confirmation and preserves shifts and receipts',async()=>{
- const f=adminDeletionFixture();let modal='';f.c.showModal=h=>modal=h;f.c.deleteEmployee('other');assert.match(modal,/confirmDeleteEmployee/);assert.equal(f.state.employees.length,2);
- f.fields['employee-delete-password']={value:html.match(/function confirmDelete[\s\S]*?pass!=='([^']+)'/)[1]};const shifts=JSON.stringify(f.state.shifts),orders=JSON.stringify(f.state.orders);await f.c.confirmDeleteEmployee('other');assert.equal(f.state.employees.length,1);assert.deepEqual(f.writes,['prilavok_employees']);assert.equal(JSON.stringify(f.state.shifts),shifts);assert.equal(JSON.stringify(f.state.orders),orders);
-});
-test('employee deletion failure leaves local state intact',async()=>{
- const f=adminDeletionFixture();f.fields['employee-delete-password']={value:html.match(/function confirmDelete[\s\S]*?pass!=='([^']+)'/)[1]};f.c.localStorage.setItem=()=>{throw Error('quota');};await f.c.confirmDeleteEmployee('other');assert.equal(f.state.employees.length,2);assert.match(f.messages.at(-1),/Не удалось/);
+test('legacy employee entry points delegate exclusively to protected access module',async()=>{
+ const f=adminDeletionFixture();const calls=[];
+ f.c.POSAccess.employee=id=>calls.push(['edit',id]);f.c.POSAccess.deleteEmployee=id=>calls.push(['delete',id]);f.c.POSAccess.confirmDeleteEmployee=id=>calls.push(['confirm',id]);
+ f.c.openEmployeeModal('other');f.c.deleteEmployee('other');await f.c.confirmDeleteEmployee('other');assert.deepEqual(calls,[['edit','other'],['delete','other'],['confirm','other']]);assert.equal(f.writes.length,0);
 });
 
 function navigationFixture(){const f=fixture();f.state.products=[{id:'a',name:'А',category:'Пицца',type:'simple',stock:10,price:5,sortOrder:0},{id:'b',name:'Б',category:'Пицца',type:'simple',stock:10,price:6,sortOrder:1},{id:'c',name:'В',category:'Пицца',type:'simple',stock:10,sortOrder:2}];f.fields['modal-root']={innerHTML:''};f.fields['pos-folder-grid']={dataset:{},addEventListener:()=>{}};f.c.closeModal=()=>{f.c._posFolderModal=null;f.fields['modal-root'].innerHTML='';};f.state.posPath='Пицца';f.state.posFolder='';f.state.editMode=true;f.fields['pos-folder-name']={value:'Популярное'};return f;}
@@ -541,7 +535,7 @@ test('category drag drop delegates correct target and cancelled drag does not sa
  call=null;f.c.dragTest=make();vm.runInContext('layoutDragState=dragTest',f.c);f.c.onLayoutPointerUp({pointerId:1,type:'pointercancel',preventDefault:()=>{}});assert.equal(call,null);assert.equal(f.writes.length,0);
 });
 test('backup export includes versioned navigation and legacy backups normalize to empty folders',async()=>{
- const f=navigationFixture();await f.c.savePosFolder();let saved;f.c.Blob=class{constructor(parts){saved=JSON.parse(parts[0]);}};f.c.URL={createObjectURL:()=>'',revokeObjectURL:()=>{}};f.c.document.createElement=()=>({click:()=>{}});f.c.exportBackup();assert.equal(saved.version,10);assert.equal(saved.posNavigation.version,1);assert.ok(saved.posNavigation.categories[0].items.some(i=>i.type==='folder'));assert.equal(f.c.normalizePosNavigation(undefined).categories.length,0);
+ const f=navigationFixture();await f.c.savePosFolder();let saved;f.c.Blob=class{constructor(parts){saved=JSON.parse(parts[0]);}};f.c.URL={createObjectURL:()=>'',revokeObjectURL:()=>{}};f.c.document.createElement=()=>({click:()=>{}});f.c.exportBackup();assert.equal(saved.version,11);assert.equal(saved.posNavigation.version,1);assert.ok(saved.posNavigation.categories[0].items.some(i=>i.type==='folder'));assert.equal(f.c.normalizePosNavigation(undefined).categories.length,0);
 });
 
 test('folder modal leaves category visible and renders six products without folder icon or counter',async()=>{
@@ -550,11 +544,8 @@ test('folder modal leaves category visible and renders six products without fold
  f.c.openPosFolder(id);assert.equal(f.state.posPath,'Пицца');assert.equal(f.state.posFolder,'');const html=f.fields['modal-root'].innerHTML;assert.match(html,/pos-folder-modal/);assert.equal((html.match(/data-tile-type="product"/g)||[]).length,6);assert.match(html,/Закрыть/);f.c.closeModal();assert.equal(f.c._posFolderModal,null);assert.equal(f.state.posPath,'Пицца');
 });
 
-test('employee deletion requires password for both administrator and ordinary operator',async()=>{
- for(const role of ['admin','employee']){const f=adminDeletionFixture();f.state.employees[0].role=role;await f.c.confirmDeleteEmployee('other');assert.equal(f.state.employees.length,2);f.fields['employee-delete-password']={value:'wrong'};await f.c.confirmDeleteEmployee('other');assert.equal(f.writes.length,0);f.fields['employee-delete-password'].value=html.match(/function confirmDelete[\s\S]*?pass!=='([^']+)'/)[1];await f.c.confirmDeleteEmployee('other');assert.equal(f.state.employees.length,1);}
-});
-test('administrator target is protected even with valid password; settings show aligned controls',async()=>{
- const f=adminDeletionFixture();f.state.employees[1].role='admin';f.fields['employee-delete-password']={value:html.match(/function confirmDelete[\s\S]*?pass!=='([^']+)'/)[1]};await f.c.confirmDeleteEmployee('other');assert.equal(f.state.employees.length,2);assert.equal(f.writes.length,0);const view=f.c.renderSettingsScreen();assert.match(view,/employee-settings-row/);assert.equal((view.match(/class="settings-quick-btn"/g)||[]).length,3);assert.equal((view.match(/Информация об администраторе/g)||[]).length,2);
+test('settings keep aligned employee controls and show protected role labels',()=>{
+ const f=adminDeletionFixture();f.c.POSAccess.roleLabel=id=>id==='admin'?'Owner':'Кассир';const view=f.c.renderSettingsScreen();assert.match(view,/employee-settings-row/);assert.equal((view.match(/class="settings-quick-btn"/g)||[]).length,3);assert.match(view,/Owner/);assert.match(view,/Владелец и доступ/);
 });
 
 test('employee list abbreviation preserves full names and handles missing patronymic',()=>{
@@ -613,4 +604,244 @@ test('WEB local write failure never sends confirmation',async()=>{
 });
 test('prepared WEB acceptance recovers persisted parked row on restart without another copy',async()=>{
  const f=webAcceptFixture();const parked={id:'p',webOrderId:'web-1',items:[]};f.state.parked=[parked];await f.c.saveKey('webOrderAcceptances',{'web-1':{stage:'prepared',parked}});await f.c.recoverWebAcceptanceJournal();assert.equal(JSON.parse(f.data.get('prilavok_webOrderAcceptances'))['web-1'].stage,'local');assert.equal(f.state.parked.length,1);
+});
+
+// Receipt durability audit: real adapter, injected write failures and fresh VM restart.
+function checkpoint(f){
+ for(const key of ['products','orders','shifts','parked','employees','receivings','purchaseOrders'])f.data.set('prilavok_'+key,JSON.stringify(f.state[key]||[]));
+ f.data.set('prilavok_currentOrderSession',JSON.stringify(f.c.currentOrderSnapshot()));
+}
+function failWrite(f,index){
+ const write=f.c.localStorage.setItem;let count=0;
+ f.c.localStorage.setItem=(k,v)=>{if(++count===index)throw Error('Injected storage full');write(k,v);};
+ return ()=>{f.c.localStorage.setItem=write;};
+}
+async function restart(f){const n=fixture();for(const [k,v] of f.data)n.data.set(k,v);await n.c.loadAll();return n;}
+for(let stop=1;stop<=6;stop++)test(`payment recovers exactly once after failed write ${stop}/6`,async()=>{
+ const f=fixture();f.cart();checkpoint(f);failWrite(f,stop);let printed=0;f.c.printCompletedOrder=()=>printed++;
+ assert.equal(f.c.finalizePayment([{method:'cash',amount:10}]),false);
+ assert.equal(f.state.orders.length,0);assert.equal(f.state.cart.length,1);near(f.c.getProduct('flour').stock,10);
+ f.c.finalizePayment([{method:'cash',amount:10}]);assert.equal(printed,0);
+ const n=await restart(f);assert.equal(n.state.orders.length,stop===1?0:1);assert.equal(n.state.cart.length,stop===1?1:0);near(n.c.getProduct('flour').stock,stop===1?10:9.8);
+ const again=await restart(n);assert.deepEqual(plain(again.state.orders),plain(n.state.orders));near(again.c.getProduct('flour').stock,n.c.getProduct('flour').stock);
+ assert.equal(again.data.get('prilavok_operationJournalV1')||'null','null');
+});
+for(let stop=1;stop<=5;stop++)test(`refund recovers exactly once after failed write ${stop}/5`,async()=>{
+ const f=fixture(),o=f.sale();checkpoint(f);failWrite(f,stop);f.c.processFullReturn(o.id);
+ assert.equal(f.state.orders[0].returnedAt,undefined);near(f.c.getProduct('flour').stock,9.8);
+ const n=await restart(f);assert.equal(!!n.state.orders[0].returnedAt,stop!==1);near(n.c.getProduct('flour').stock,stop===1?9.8:10);
+ if(stop!==1){n.c.processFullReturn(o.id);assert.equal(n.state.shifts[0].cashMovements.length,1);near(n.c.shiftTotals('shift').cashIn+n.c.shiftTotals('shift').netMovements,0);}
+ const again=await restart(n);assert.deepEqual(plain(again.state.orders),plain(n.state.orders));
+});
+for(const kind of ['park','resume'])for(let stop=1;stop<=4;stop++)test(`${kind} preserves exactly one copy after failed write ${stop}/4`,async()=>{
+ const f=fixture();f.cart();if(kind==='resume')f.c.parkOrder();checkpoint(f);const id=f.state.parked[0]?.id;failWrite(f,stop);
+ if(kind==='park')f.c.parkOrder();else f.c.resumeParked(id);
+ const n=await restart(f);assert.equal(n.state.cart.length+n.state.parked.filter(o=>!o.cancelledAt).length,1);
+ assert.equal(n.state.cart.length,(kind==='park')===(stop===1)?1:0);
+});
+for(let stop=1;stop<=3;stop++)test(`close shift recovery at write ${stop}/3`,async()=>{
+ const f=fixture();checkpoint(f);f.fields['sf-counted']={value:'100'};failWrite(f,stop);f.c.submitCloseShift();
+ assert.equal(f.state.shifts[0].status,'open');const n=await restart(f);assert.equal(n.state.shifts[0].status,stop===1?'open':'closed');
+});
+test('corrupt journal and receipt JSON fail closed without replacing originals',async()=>{
+ for(const key of ['orders','operationJournalV1']){
+  const f=fixture();checkpoint(f);f.data.set('prilavok_'+key,'{broken');const n=await restart(f);
+  assert.equal(n.data.get('prilavok_'+key),'{broken');assert.equal(n.writes.includes('prilavok_orders'),false);
+  n.cart();n.c.finalizePayment([{method:'cash',amount:10}]);assert.equal(n.state.orders.length,0);
+ }
+});
+test('storage unavailable leaves startup blocked and does not seed/overwrite receipts',async()=>{
+ const f=fixture();f.c.localStorage.getItem=()=>{throw Error('unavailable');};await f.c.loadAll();
+ f.cart();f.c.finalizePayment([{method:'cash',amount:10}]);assert.equal(f.writes.length,0);assert.equal(f.state.orders.length,0);
+});
+test('cash refund is deducted once; cross-shift refund does not change original drawer',()=>{
+ const f=fixture(),o=f.sale();f.c.processFullReturn(o.id);let t=f.c.shiftTotals('shift');near(100+t.cashIn+t.netMovements,100);
+ const n=fixture(),old=n.sale();n.state.shifts[0].status='closed';n.state.shifts.push({id:'next',status:'open',openingCash:110});n.c.processFullReturn(old.id);
+ t=n.c.shiftTotals('shift');near(100+t.cashIn+t.netMovements,110);t=n.c.shiftTotals('next');near(110+t.cashIn+t.netMovements,100);
+ assert.equal(n.state.orders[0].returnedShiftId,'next');
+});
+test('mixed payment refund, delivery and subsequent withdrawals balance cash',()=>{
+ const f=fixture();f.cart();f.state.orderType='Доставка';f.state.deliveryFee=2;f.c.finalizePayment([{method:'cash',amount:4},{method:'card',amount:8}]);
+ const id=f.state.orders[0].id;let t=f.c.shiftTotals('shift');near(100+t.cashIn+t.netMovements,102);
+ f.c.processFullReturn(id);t=f.c.shiftTotals('shift');near(100+t.cashIn+t.netMovements,98);
+ f.fields['cash-movement-amount']={value:'98'};f.c.submitCashMovement('withdrawal');t=f.c.shiftTotals('shift');near(100+t.cashIn+t.netMovements,0);
+ f.c.submitCashMovement('withdrawal');assert.equal(f.state.shifts[0].cashMovements.length,3);
+});
+test('invalid payment and malformed refund amounts never write',()=>{
+ for(const payment of [{method:'cash',amount:Infinity},{method:'cash',amount:-10},{method:'other',amount:10},{method:'cash',amount:10,cashGiven:Infinity},{method:'cash',amount:9}]){
+  const f=fixture();f.cart();f.c.finalizePayment([payment]);assert.equal(f.writes.length,0);assert.equal(f.state.orders.length,0);
+ }
+ const f=fixture(),o=f.sale();f.state.orders[0].payments=[{method:'card',amount:100}];f.writes.length=0;f.c.processFullReturn(o.id);assert.equal(f.writes.length,0);assert.equal(f.state.orders[0].returnedAt,undefined);
+});
+test('paid split survives restart and cannot be discarded, parked or closed with shift',async()=>{
+ const f=fixture();f.cart();checkpoint(f);f.c.renderSplitPayment=()=>{};f.state._splitPayments=[{method:'cash',amount:4,paid:false,cashGiven:5},{method:'card',amount:6,paid:false}];
+ f.c.completeSplitPayment(0);assert.equal(f.state.orders.length,0);
+ const n=await restart(f);assert.equal(n.c.splitPaidTotal(),4);assert.equal(n.state._splitPayments[0].cashGiven,5);
+ const before=JSON.stringify(n.state.cart);n.c.removeFromCart('pizza');n.c.parkOrder();n.c.changeQty('pizza',1);n.fields['sf-counted']={value:'100'};n.c.submitCloseShift();
+ assert.equal(JSON.stringify(n.state.cart),before);assert.equal(n.state.parked.length,0);assert.equal(n.state.shifts[0].status,'open');
+ n.c.finalizePayment(n.state._splitPayments);assert.equal(n.state.orders.length,0,'unpaid part cannot become a receipt');
+ n.c.renderSplitPayment=()=>{};n.c.completeSplitPayment(1);assert.equal(n.state.orders.length,1);near(n.c.getProduct('flour').stock,9.8);
+ const again=await restart(n);assert.equal(again.state.orders.length,1);assert.equal(again.state.cart.length,0);
+});
+test('terminal intent survives restart; cash cannot bypass unresolved bank payment',async()=>{
+ const f=fixture();f.cart();checkpoint(f);f.c.showCardConfirmation=()=>{};f.c.openCardPartConfirmation(10);
+ const n=await restart(f);assert.equal(n.state._cardIntent.amount,10);n.c.finalizePayment([{method:'cash',amount:10}]);assert.equal(n.state.orders.length,0);
+ n.c.confirmCardIntent();assert.equal(n.state.orders.length,1);assert.equal(n.state.orders[0].method,'card');n.c.confirmCardIntent();assert.equal(n.state.orders.length,1);
+});
+test('receipt sequence advances past highest saved number, not array length',()=>{
+ const f=fixture();f.state.orders=[{id:'old',shiftId:'shift',receiptNumber:80,total:0,method:'cash',items:[]}];f.sale();assert.equal(f.state.orders[1].receiptNumber,81);
+});
+test('cancelled parked order remains in storage and cannot be resumed',()=>{
+ const f=fixture();f.cart();f.c.parkOrder();const id=f.state.parked[0].id;f.c.deleteParked(id);assert.ok(f.state.parked[0].cancelledAt);
+ assert.equal(JSON.parse(f.data.get('prilavok_parked'))[0].id,id);f.c.resumeParked(id);assert.equal(f.state.cart.length,0);
+});
+test('old backup cannot remove receipts or reverse a return',()=>{
+ const f=fixture();const old={products:plain(f.state.products),shifts:plain(f.state.shifts),orders:[]};f.sale();const before=JSON.stringify(f.state);
+ assert.throws(()=>f.c.restoreBackupData(old),/историю/);assert.equal(JSON.stringify(f.state),before);
+ const recent={...old,products:plain(f.state.products),orders:plain(f.state.orders)};f.c.processFullReturn(f.state.orders[0].id);
+ assert.throws(()=>f.c.restoreBackupData(recent),/историю/);
+});
+test('backup contains in-progress payments and restores them on an empty device',()=>{
+ const f=fixture();f.cart();f.state._splitPayments=[{method:'cash',amount:4,paid:true},{method:'card',amount:6,paid:false}];let backup;
+ f.c.Blob=class{constructor(parts){backup=JSON.parse(parts.join(''));}};f.c.URL={createObjectURL:()=>'',revokeObjectURL:()=>{}};f.c.document.createElement=()=>({click(){}});f.c.exportBackup();
+ assert.equal(backup.version,11);assert.equal(backup.currentOrderSession.splitPayments[0].paid,true);
+ const n=fixture();n.state.shifts=[];assert.equal(n.c.restoreBackupData(backup),true);assert.equal(n.c.splitPaidTotal(),4);assert.equal(n.state.cart.length,1);
+});
+for(let stop=1;stop<=16;stop++)test(`backup restore recovers all sections after failed write ${stop}/16`,async()=>{
+ const f=fixture();checkpoint(f);const backup={products:plain(f.state.products),shifts:plain(f.state.shifts),orders:[],company:{establishmentName:'Restored'}};backup.products[0].name='Imported';
+ failWrite(f,stop);f.c.restoreBackupData(backup);const n=await restart(f);
+ assert.equal(n.c.getProduct('flour').name,stop===1?'Мука':'Imported');assert.equal(n.state.company.establishmentName,stop===1?'':'Restored');
+});
+test('legacy async provider waits for pending writes and recovers interrupted transaction',async()=>{
+ const data=new Map();let release;const gate=new Promise(r=>release=r);let block=true;
+ const c={console,storage:{get:async k=>data.has(k)?{value:data.get(k)}:null,set:async(k,v)=>{if(k==='products'&&block)await gate;data.set(k,v);}}};c.window=c;vm.createContext(c);vm.runInContext(adapter,c);const a=c.PrilavokCore.Storage;
+ const initial=a.set('products',[{id:'p',stock:5}]);const tx=a.transaction('sale',{products:[{id:'p',stock:4}],orders:[{id:'o'}]});
+ assert.equal(a.isBlocked(),true);assert.equal(data.has('operationJournalV1'),false);release();block=false;await initial;await tx;
+ assert.equal(JSON.parse(data.get('products'))[0].stock,4);assert.equal(a.isBlocked(),false);
+ let fail=true;c.storage.set=async(k,v)=>{if(k==='orders'&&fail)throw Error('failure');data.set(k,v);};
+ await assert.rejects(a.transaction('sale',{products:[{id:'p',stock:3}],orders:[{id:'o'},{id:'n'}]}));assert.equal(a.isBlocked(),true);
+ fail=false;await a.recoverTransaction();assert.equal(JSON.parse(data.get('orders')).length,2);assert.equal(data.get('operationJournalV1'),'null');
+});
+function printerFixture(){
+ const f=fixture(),sent=[];f.c.webkit={messageHandlers:{printer:{postMessage:m=>sent.push(plain(m))}}};f.c.MutationObserver=class{observe(){}};f.c.queueMicrotask=()=>{};f.c.document.documentElement={};
+ f.data.set('printers',JSON.stringify([{id:'cash',ip:'192.168.1.10',copies:2,printReceipts:true,printOrders:false,paymentReceiptTitle:'Кафе',registerLabel:'Касса 2',printPaymentComments:false,receiptRandomPhrases:['Спасибо']},{id:'kitchen',ip:'192.168.1.11',printReceipts:false,printOrders:true,orderCategories:['Пицца']}]));
+ vm.runInContext(fs.readFileSync(path.join(root,'PrilavokPOS/network-printer.js'),'utf8'),f.c);return {...f,sent};
+}
+test('actual LAN module routes kitchen categories, copies and receipt configuration',()=>{
+ const f=printerFixture(),o={id:'receipt',total:12,method:'split',payments:[{method:'cash',amount:4},{method:'card',amount:8}],items:[{name:'Пицца',category:'Пицца',qty:1,price:10},{name:'Вода',category:'Напитки',qty:1,price:2}]};
+ f.c.printCompletedOrder(o);assert.equal(f.sent.length,3);const kitchen=f.sent.find(p=>p.order.__printDocumentType==='kitchen');assert.equal(kitchen.order.items.length,1);assert.equal(kitchen.order.__networkPrinterIp,'192.168.1.11');
+ const receipts=f.sent.filter(p=>p.order.__printDocumentType==='receipt');assert.equal(receipts.length,2);assert.equal(receipts[0].order.items.length,2);assert.deepEqual(receipts[0].order.payments,o.payments);assert.equal(receipts[0].order.__printerConfig.paymentReceiptTitle,'Кафе');assert.equal(receipts[0].order.__printerConfig.printPaymentComments,false);
+ f.sent.length=0;f.c.__currentOrderKitchenPrinted=true;f.c.printCompletedOrder(o);assert.equal(f.sent.length,2);assert.ok(f.sent.every(p=>p.order.__printDocumentType==='receipt'));
+});
+test('actual LAN reprint sends saved receipt only and never charges or consumes stock',()=>{
+ const f=printerFixture();const o=f.sale();const before=JSON.stringify(f.state);f.sent.length=0;f.c.printReceipt(o.id);
+ assert.equal(f.sent.length,2);assert.ok(f.sent.every(p=>p.order.__printDocumentType==='receipt'));assert.equal(JSON.stringify(f.state),before);
+});
+test('fully paid split awaiting final receipt recovers without taking money twice',async()=>{
+ const f=fixture();f.cart();checkpoint(f);f.c.renderSplitPayment=()=>{};f.state._splitPayments=[{method:'cash',amount:10,paid:false},{method:'cash',amount:0,paid:false}];
+ failWrite(f,4);f.c.completeSplitPayment(0);assert.equal(f.state.orders.length,0);
+ const n=await restart(f);assert.equal(n.c.splitPaidTotal(),10);assert.ok(n.state._splitPayments.every(p=>p.paid));
+ n.c.finalizePayment(n.state._splitPayments);assert.equal(n.state.orders.length,1);near(n.c.getProduct('flour').stock,9.8);
+});
+for(let stop=1;stop<=5;stop++)test(`interrupted recovery remains repeatable at recovery write ${stop}`,async()=>{
+ const f=fixture();f.cart();checkpoint(f);failWrite(f,3);f.c.finalizePayment([{method:'cash',amount:10}]);
+ const n=fixture();for(const [k,v] of f.data)n.data.set(k,v);const restore=failWrite(n,stop);
+ await n.c.loadAll();assert.notEqual(n.data.get('prilavok_operationJournalV1'),'null');restore();await n.c.retryLocalRecovery();
+ assert.equal(n.state.orders.length,1);assert.equal(n.state.cart.length,0);near(n.c.getProduct('flour').stock,9.8);
+});
+test('structurally corrupt critical data fails closed and preserves bytes',async()=>{
+ for(const [key,value] of [['products',[null]],['orders',[{id:'x',total:10}]],['shifts',[{id:'x'},{id:'x'}]],['currentOrderSession',{items:[],splitPayments:[{paid:true,amount:5,method:'cash'}]}]]){
+  const f=fixture();checkpoint(f);f.data.set('prilavok_'+key,JSON.stringify(value));const n=await restart(f);
+  assert.equal(n.data.get('prilavok_'+key),JSON.stringify(value));assert.equal(n.writes.includes('prilavok_orders'),false);assert.equal(vm.runInContext('financialBlocked',n.c),true);
+ }
+});
+test('frozen discount persists through partial payment, discount edit and restart',async()=>{
+ const f=fixture();f.cart();f.state.discounts=[{id:'d',name:'Скидка',type:'percent',value:10}];f.state.cart[0].discountId='d';f.state._splitPayments=[{method:'cash',amount:4,paid:false},{method:'card',amount:5,paid:false}];f.c.renderSplitPayment=()=>{};checkpoint(f);
+ f.c.completeSplitPayment(0);f.state.discounts=[];near(f.c.cartTotal(),9);const n=await restart(f);near(n.c.cartTotal(),9);n.c.renderSplitPayment=()=>{};n.c.completeSplitPayment(1);near(n.c.receiptItemTotal(n.state.orders[0].items[0]),9);assert.equal(n.state.orders[0].total,9);
+});
+test('printing exception after commit cannot delete sale or repeat charging',()=>{
+ const f=fixture();f.c.showReceipt=()=>{throw Error('UI unavailable');};f.sale();assert.equal(f.state.orders.length,1);assert.equal(JSON.parse(f.data.get('prilavok_orders')).length,1);assert.equal(f.state.cart.length,0);assert.match(f.messages.at(-1),/Данные сохранены/);
+});
+test('async transaction locks duplicate finalization until publication',async()=>{
+ const f=fixture();f.cart();let done;const original=f.c.PrilavokCore.Storage;
+ f.c.PrilavokCore.Storage={...original,transaction:()=>new Promise(r=>done=r)};
+ const saving=f.c.finalizePayment([{method:'cash',amount:10}]);assert.equal(f.state.orders.length,0);assert.equal(f.c.finalizePayment([{method:'cash',amount:10}]),false);
+ done();await saving;assert.equal(f.state.orders.length,1);near(f.c.getProduct('flour').stock,9.8);
+});
+test('network print failure does not alter durable receipt',()=>{
+ const f=printerFixture();const o=f.sale();f.c.webkit.messageHandlers.printer.postMessage=()=>{throw Error('bridge unavailable');};const before=JSON.stringify(f.state);f.c.printReceipt(o.id);assert.equal(JSON.stringify(f.state),before);assert.equal(JSON.parse(f.data.get('prilavok_orders')).length,1);
+});
+test('receipt printing uses captured kitchen flag, not the following cart flag',()=>{
+ const f=printerFixture(),o={items:[{category:'Пицца',name:'Пицца',qty:1}],total:10};f.c.__currentOrderKitchenPrinted=true;f.c.printCompletedOrder(o,false);assert.equal(f.sent.length,3);
+ f.sent.length=0;f.c.__currentOrderKitchenPrinted=false;f.c.printCompletedOrder(o,true);assert.equal(f.sent.length,2);
+});
+test('cash/card revenue and return metrics belong to the shift of the actual event',()=>{
+ const f=fixture(),o=f.sale([{method:'cash',amount:4},{method:'card',amount:6}]);f.state.shifts[0].status='closed';f.state.shifts.push({id:'next',status:'open',openingCash:104});f.c.processFullReturn(o.id);
+ const old=f.c.shiftTotals('shift'),current=f.c.shiftTotals('next');assert.equal(old.cash,4);assert.equal(old.card,6);assert.equal(old.refunds,0);assert.equal(old.count,1);
+ assert.equal(current.cash,-4);assert.equal(current.card,-6);assert.equal(current.refunds,10);assert.equal(current.total,-10);
+ assert.equal(f.c.buildShiftReportPayload(f.state.shifts[0]).expectedCash,104);assert.equal(f.c.buildShiftReportPayload(f.state.shifts[1]).expectedCash,100);
+});
+test('recovery export preserves corrupt bytes and the journal without exporting credentials',async()=>{
+ const f=fixture();checkpoint(f);f.data.set('prilavok_orders','{broken');f.data.set('prilavok_operationJournalV1','{pending');f.data.set('prilavok_network','{"deviceKey":"not-for-export"}');let exported;
+ f.c.Blob=class{constructor(parts){exported=JSON.parse(parts.join(''));}};f.c.URL={createObjectURL:()=>'',revokeObjectURL:()=>{}};f.c.document.createElement=()=>({click(){}});
+ const before=[...f.data];await f.c.exportRecoveryData();assert.equal(exported.raw.orders,'{broken');assert.equal(exported.raw.operationJournalV1,'{pending');assert.equal(exported.raw.network,undefined);assert.deepEqual([...f.data],before);
+ assert.throws(()=>f.c.restoreBackupData(exported),/Некорректная резервная копия/);
+});
+test('automatic legacy return cannot fabricate stock using today recipe',()=>{
+ const f=fixture();f.state.orders=[{id:'legacy',shiftId:'shift',total:10,method:'cash',items:[{productId:'pizza',qty:1}]}];const before=JSON.stringify(f.state);assert.equal(f.c.processFullReturn('legacy'),false);assert.equal(JSON.stringify(f.state),before);assert.equal(f.writes.length,0);assert.match(f.messages.at(-1),/сверка состава/);
+});
+test('missing catalog alongside existing history never seeds replacement products',async()=>{
+ const f=fixture();f.sale();checkpoint(f);f.data.delete('prilavok_products');const n=await restart(f);assert.equal(n.data.has('prilavok_products'),false);assert.equal(vm.runInContext('financialBlocked',n.c),true);assert.equal(JSON.parse(n.data.get('prilavok_orders')).length,1);
+});
+test('invalid or excessive copy count cannot create an unbounded native print queue',()=>{
+ for(const [copies,expected] of [['Infinity',1],[-3,1],[2.8,2],[10000,10]]){
+  const f=printerFixture();f.data.set('printers',JSON.stringify([{id:'p',ip:'192.168.1.10',copies}]));f.c.printCompletedOrder({items:[],total:0});assert.equal(f.sent.length,expected);
+ }
+});
+
+// Exercise the actual access UI module with a fake native authority, never a real Keychain/network.
+function accessFixture(options={}) {
+ const f=fixture();let snapshot={configured:true,ownerId:'owner',telegramName:'Owner TG',actorId:'owner',actorName:'Owner',isOwner:true,expiresAt:Date.now()+900000,permissions:['pos','settings.view','products.edit'],accounts:[{id:'owner',name:'Owner',roleId:'owner'},{id:'other',name:'Other',roleId:'employee'}],roles:[{id:'employee',name:'Кассир',permissions:['pos']}],pending:false,...options};
+ const calls=[];f.state.employees=[{id:'owner',name:'Owner',role:'admin'},{id:'other',name:'Other',role:'employee'}];f.state.shifts[0].employeeId='owner';
+ f.c.webkit={messageHandlers:{ownerAccess:{postMessage:message=>{
+   calls.push(message);
+   let error;
+   if(message.action==='deleteAccount'){
+     if(!snapshot.isOwner||message.id===snapshot.ownerId)error='Недостаточно прав';
+     else snapshot={...snapshot,accounts:snapshot.accounts.filter(a=>a.id!==message.id)};
+   }
+   if(message.action==='logout')snapshot={...snapshot,actorId:'',isOwner:false,permissions:[],expiresAt:0};
+   queueMicrotask(()=>f.c.POSAccess.reply({requestId:message.requestId,...(error?{error}:{data:snapshot})}));
+ }}}};
+ vm.runInContext(fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/core/access.js'),'utf8'),f.c);
+ f.c.showModal=html=>f.modal=html;
+ return Object.assign(f,{calls,setSnapshot:s=>snapshot={...snapshot,...s}});
+}
+test('real access module rejects employee.role forgery and denies direct restricted mutations',async()=>{
+ const f=accessFixture({actorId:'other',actorName:'Other',isOwner:false,permissions:['pos']});await f.c.POSAccess.initialize();f.state.employees[1].role='admin';
+ assert.equal(f.c.POSAccess.can('products.delete'),false);f.c.confirmDelete('product','flour');assert.ok(f.c.getProduct('flour'));
+ f.state.shifts[0].employeeId='other';await f.c.POSAccess.confirmDeleteEmployee('owner');assert.equal(f.state.employees.length,2);assert.match(f.messages.at(-1),/Недостаточно/);
+});
+test('Owner cannot delete self or employee of open shift; other deletion preserves histories',async()=>{
+ const f=accessFixture();await f.c.POSAccess.initialize();const shifts=JSON.stringify(f.state.shifts),orders=JSON.stringify(f.state.orders);
+ f.c.POSAccess.deleteEmployee('owner');assert.match(f.messages.at(-1),/Нельзя удалить/);assert.equal(f.calls.length,1);
+ f.state.shifts[0].employeeId='other';await f.c.POSAccess.confirmDeleteEmployee('other');assert.equal(f.calls.length,1);f.state.shifts[0].employeeId='owner';
+ f.c.POSAccess.deleteEmployee('other');assert.match(f.modal,/confirmDeleteEmployee/);assert.equal(f.state.employees.length,2);
+ await f.c.POSAccess.confirmDeleteEmployee('other');assert.equal(f.state.employees.length,1);assert.deepEqual(f.writes,['prilavok_employees']);assert.equal(JSON.stringify(f.state.shifts),shifts);assert.equal(JSON.stringify(f.state.orders),orders);
+});
+test('failed display write after access revocation keeps employee history and reports error',async()=>{
+ const f=accessFixture();await f.c.POSAccess.initialize();f.c.localStorage.setItem=()=>{throw Error('quota');};await f.c.POSAccess.confirmDeleteEmployee('other');assert.equal(f.state.employees.length,2);assert.match(f.messages.at(-1),/quota/);assert.equal(f.c.POSAccess.roleLabel('other'),'Доступ не назначен');
+});
+test('backup labels cannot erase Keychain owner; reconcile retains unrelated employees and data',async()=>{
+ const f=accessFixture();await f.c.POSAccess.initialize();f.state.employees=[{id:'legacy',name:'Legacy',role:'admin'}];const products=JSON.stringify(f.state.products);await f.c.POSAccess.reconcile();assert.equal(f.state.employees.length,3);assert.equal(f.c.POSAccess.roleLabel('owner'),'Owner');assert.equal(f.c.POSAccess.roleLabel('legacy'),'Доступ не назначен');assert.equal(JSON.stringify(f.state.products),products);
+});
+test('session expiry and app background deny actions without clearing cart or receipt data',async()=>{
+ const f=accessFixture();await f.c.POSAccess.initialize();f.cart();const data=JSON.stringify(f.state);f.c.POSAccess.didLock();assert.equal(f.c.POSAccess.can('pos'),false);assert.equal(JSON.stringify(f.state),data);
+ f.setSnapshot({expiresAt:Date.now()-1});await f.c.POSAccess.initialize();assert.equal(f.c.POSAccess.can('owner.manage'),false);
+});
+test('stock edit is checked at save even after privileged editor was opened',async()=>{
+ const f=fixture();Object.assign(f.fields,{'pf-name':{value:'Мука'},'pf-category':{value:'Сырьё'},'pf-price':{value:'2'},'pf-cost':{value:'2'},'pf-stock':{value:'500'}});f.c._pmType='simple';f.c._pmStockUnlocked=true;f.c.POSAccess.can=p=>p!=='stock.edit';const before=JSON.stringify(f.state.products);await f.c.saveProduct('flour');assert.equal(JSON.stringify(f.state.products),before);assert.match(f.messages.at(-1),/права на склад/);
+});
+test('unconfigured POS retains offline cashier access but cannot self-assign administration',async()=>{
+ const f=accessFixture({configured:false,ownerId:'',actorId:'',isOwner:false,permissions:['pos','settings.view']});await f.c.POSAccess.initialize();assert.equal(f.c.POSAccess.can('pos'),true);assert.equal(f.c.POSAccess.can('owner.manage'),false);assert.equal(f.c.POSAccess.can('stock.edit'),false);
 });

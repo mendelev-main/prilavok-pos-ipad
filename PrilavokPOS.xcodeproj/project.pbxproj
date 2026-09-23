@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		ACCE55000000000000000001 /* OwnerAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACCE55000000000000000002 /* OwnerAccess.swift */; };
 		B13017000000000000000001 /* Web in Resources */ = {isa = PBXBuildFile; fileRef = B13017000000000000000002 /* Web */; };
 		027D13269429464C93FEC487 /* BluetoothPrinterManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC1540EF9CFF4C8BAFE4020A /* BluetoothPrinterManager.swift */; };
 		3C36AC675644423788C097B1 /* pos.html in Resources */ = {isa = PBXBuildFile; fileRef = ACB1313C6C90492FAAEB667E /* pos.html */; };
@@ -18,6 +19,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		ACCE55000000000000000002 /* OwnerAccess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwnerAccess.swift; sourceTree = "<group>"; };
 		B13017000000000000000002 /* Web */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Web; sourceTree = "<group>"; };
 		2B1EEC527F85450888BA48C5 /* PrilavokPOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrilavokPOSApp.swift; sourceTree = "<group>"; };
 		2D98DA3BD7084D81ABE2FE4F /* PrilavokPOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PrilavokPOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -42,6 +44,7 @@
 		97C4E6E4589E4C09BC44E314 /* PrilavokPOS */ = {
 			isa = PBXGroup;
 			children = (
+				ACCE55000000000000000002 /* OwnerAccess.swift */,
 				2B1EEC527F85450888BA48C5 /* PrilavokPOSApp.swift */,
 				AC1540EF9CFF4C8BAFE4020A /* BluetoothPrinterManager.swift */,
 				9F4A7C2D8B84C1582A06B6D /* NativeNotificationSound.swift */,
@@ -151,6 +154,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				ACCE55000000000000000001 /* OwnerAccess.swift in Sources */,
 				8A3609BED8B84C1582A06B6C /* PrilavokPOSApp.swift in Sources */,
 				027D13269429464C93FEC487 /* BluetoothPrinterManager.swift in Sources */,
 				9F4A7C2D8B84C1582A06B6C /* NativeNotificationSound.swift in Sources */,

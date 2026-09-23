@@ -802,6 +802,7 @@
   @media(max-width:1000px){.warehouse-page .analytics-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}}
   @media(max-width:800px){.warehouse-page>header{flex-wrap:wrap;padding:14px;}.warehouse-page main{padding:14px;}.warehouse-page h1{min-width:160px;}.warehouse-page .analytics-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}.warehouse-page .k-value{font-size:19px;}}
 
+.access-card{border:1px solid var(--border,#ddd);border-radius:18px;padding:18px;margin-top:18px}.access-card h3{margin:0 0 12px}.access-permission{width:22px;height:22px;accent-color:#111}
 </style>
 </head>
 <body>
@@ -866,7 +867,7 @@ let state = {
   bookingDuration: 120,
   selectedHallTableId: null,
   hallEditMode: false,
-  telegram: {enabled:false, botToken:'', chatId:'', threadId:'', notifyShiftOpened:true, notifyShiftClosed:true},
+  telegram: {enabled:false, notifyShiftOpened:true, notifyShiftClosed:true},
   network: {backendUrl:'https://prilavok-backend-production.up.railway.app', deviceKey:'', deviceName:'M POS iPad', lastSyncAt:null, lastSyncStatus:''}
 };
 
@@ -887,6 +888,7 @@ let storageCheckedOnce = false;
 function markStorageBroken(reason){
   storageBroken = true;
   console.error('Хранилище недоступно:', reason);
+  showRecoveryScreen('Ошибка локального хранилища. '+String(reason?.message||reason));
 }
 
 // Проверяем прямо при загрузке, реально ли доступен localStorage
@@ -914,7 +916,77 @@ async function saveKey(key, value){
   }
   catch(e){ markStorageBroken(e); }
 }
+let financialBusy=false,financialBlocked=false;
+function setFinancialInteraction(locked){
+  for(const id of ['app','modal-root']){const el=document.getElementById(id);if(el)el.inert=locked;}
+}
+function showRecoveryScreen(message){
+  financialBlocked=true;
+  try{
+    const app=document.getElementById('app');if(app)app.inert=true;
+    showModal(`<div class="modal-title">Требуется восстановление данных</div><p>${escapeHtml(String(message||'Ошибка локального сохранения'))}</p><p>Не повторяйте оплату на терминале. Сохранённые данные не удалены. Продолжение кассовых операций остановлено до восстановления.</p><div class="modal-actions"><button class="btn btn-primary" onclick="retryLocalRecovery()">Повторить восстановление</button><button class="btn btn-secondary" onclick="exportRecoveryData()">Сохранить данные для восстановления</button></div>`);
+  }catch(_){}
+}
+async function exportRecoveryData(){
+  // Read original bytes, including malformed JSON and an unfinished journal.
+  // This diagnostic file is deliberately not accepted by ordinary backup import.
+  try{
+    const raw={};
+    for(const key of ['products','orders','shifts','parked','currentOrderSession','operationJournalV1','receivings','purchaseOrders','webOrderAcceptances']){
+      if(hasCloudStorage){const value=await window.storage.get(key,false);raw[key]=value?value.value:null;}
+      else raw[key]=localStorage.getItem(LS_PREFIX+key);
+    }
+    const blob=new Blob([JSON.stringify({format:'mpos-recovery-raw-v1',exportedAt:Date.now(),raw},null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download='mpos-recovery-'+Date.now()+'.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }catch(error){flash('Не удалось прочитать данные: '+error.message);}
+}
+async function retryLocalRecovery(){
+  if(financialBusy)return;
+  await loadAll();
+  if(!financialBlocked){const app=document.getElementById('app');if(app)app.inert=false;closeModal();render();flash('Данные восстановлены. Проверьте последний чек и текущую оплату перед повторным действием.');}
+}
+function validateCurrentOrderSession(session){
+  if(session===null||session===undefined)return;
+  if(!session||!Array.isArray(session.items)||session.items.some(i=>!i||!i.productId||!Number.isFinite(Number(i.qty))||Number(i.qty)<=0||!Number.isFinite(Number(i.price))||Number(i.price)<0))throw new Error('Повреждён текущий заказ');
+  const payments=session.splitPayments||[];
+  if(!Array.isArray(payments)||payments.some(p=>!p||!['cash','card'].includes(p.method)||!Number.isFinite(p.amount)||p.amount<0||typeof p.paid!=='boolean'))throw new Error('Повреждены части оплаты');
+  const intent=session.cardIntent;
+  if(intent&&(!Number.isFinite(intent.amount)||intent.amount<=0||(intent.splitIndex!==null&&(!Number.isInteger(intent.splitIndex)||!payments[intent.splitIndex]||payments[intent.splitIndex].method!=='card'||payments[intent.splitIndex].amount!==intent.amount))))throw new Error('Повреждено подтверждение терминала');
+  if(!session.items.length&&(payments.some(p=>p.paid)||intent))throw new Error('Оплата без сохранённых позиций');
+}
+function currentOrderSnapshot(){
+  return {items:JSON.parse(JSON.stringify(state.cart||[])),orderLabel:state.orderLabel||'',orderType:state.orderType||'На месте',customer:JSON.parse(JSON.stringify(state.customer||{name:'',phone:'',address:''})),deliveryFee:state.deliveryFee||0,splitPayments:JSON.parse(JSON.stringify(state._splitPayments||[])),cardIntent:state._cardIntent||null,kitchenPrinted:!!state._kitchenPrinted,updatedAt:Date.now()};
+}
+function commitPOSOperation(kind,keys,prepare,onSuccess){
+  if(financialBusy||financialBlocked||storageBroken||window.PrilavokCore.Storage.isBlocked()){flash('Кассовая операция недоступна до восстановления данных');return false;}
+  financialBusy=true;setFinancialInteraction(true);
+  const fields=[...new Set([...keys.filter(k=>!['currentOrderSession','layout'].includes(k)),...(keys.includes('currentOrderSession')?['cart','orderLabel','orderType','deliveryFee','customer','_splitPayments','_splitCount','_cardIntent','_kitchenPrinted']:[]),...(keys.includes('layout')?['categoryOrder','categoryColors','categorySymbols','categoryOnline','layoutTiles']:[])])];
+  const before=Object.fromEntries(fields.map(key=>[key,state[key]]));let after,result,changes;
+  const restore=()=>{for(const key of fields)state[key]=before[key];};
+  try{
+    const draft=Object.fromEntries(fields.map(key=>[key,before[key]===undefined?undefined:JSON.parse(JSON.stringify(before[key]))]));
+    for(const key of fields)state[key]=draft[key];
+    result=prepare();
+    after=Object.fromEntries(fields.map(key=>[key,state[key]]));
+    changes=Object.fromEntries(keys.map(key=>[key,key==='currentOrderSession'?currentOrderSnapshot():key==='layout'?{categoryOrder:state.categoryOrder,categoryColors:state.categoryColors,categorySymbols:state.categorySymbols,categoryOnline:state.categoryOnline,tiles:state.layoutTiles}:state[key]]));
+    restore();
+  }catch(error){restore();financialBusy=false;setFinancialInteraction(false);flash('Операция не выполнена: '+error.message);return false;}
+  const success=()=>{
+    for(const key of fields)state[key]=after[key];financialBusy=false;setFinancialInteraction(false);
+    try{onSuccess?.(result);}catch(error){console.error('После сохранения:',error);flash('Данные сохранены. Повторно откройте чек; не повторяйте оплату.');}
+    return result===undefined?true:result;
+  };
+  const failure=error=>{financialBusy=false;setFinancialInteraction(false);showRecoveryScreen(error.message);return false;};
+  try{const saved=window.PrilavokCore.Storage.transaction(kind,changes);return saved?.then?saved.then(success,failure):success();}
+  catch(error){return failure(error);}
+}
+function assertCartEditable(){
+  if(financialBusy||financialBlocked||storageBroken||splitPaidTotal()>0||state._cardIntent){flash('Сначала завершите или восстановите начатую оплату');return false;}return true;
+}
 async function loadAll(){
+  try{await window.PrilavokCore.Storage.recoverTransaction();}
+  catch(error){showRecoveryScreen(error.message);return;}
+  storageBroken=false;
   if(!hasCloudStorage && !testLocalStorage()){
     markStorageBroken('localStorage test write failed');
   }
@@ -934,7 +1006,7 @@ async function loadAll(){
     loadKey('theme', 'light'),
     loadKey('company', {establishmentName:'', legalName:'', address:'', deliveryAddress:''}),
     loadKey('deliveryRates', []),
-    loadKey('telegram', {enabled:false, botToken:'', chatId:'', threadId:'', notifyShiftOpened:true, notifyShiftClosed:true}),
+    loadKey('telegram', {enabled:false, notifyShiftOpened:true, notifyShiftClosed:true}),
     loadKey('network', {backendUrl:'https://prilavok-backend-production.up.railway.app', deviceKey:'', deviceName:'M POS iPad', lastSyncAt:null, lastSyncStatus:''}),
     loadKey('currentOrderSession', null),
     loadKey('hallTables', []),
@@ -942,6 +1014,23 @@ async function loadAll(){
     loadKey('webEvents', []),
     loadKey('posNavigation', {version:1,categories:[]})
   ]);
+  const collections={products,shifts,employees,orders,parked,receivings,suppliers,purchaseOrders,discounts,hallTables,bookings,webEvents};
+  if(storageBroken||Object.entries(collections).some(([key,value])=>!(key==='products'&&value===null)&&!Array.isArray(value)) || (currentOrderSession!==null&&(!currentOrderSession||!Array.isArray(currentOrderSession.items)))){
+    showRecoveryScreen('Не удалось безопасно прочитать локальные данные. Исходные записи сохранены без замены.');return;
+  }
+  try{
+    if(products===null&&(orders.length||shifts.length||parked.length||receivings.length||currentOrderSession?.items?.length))throw new Error('Нет сохранённого каталога при существующей истории. Создание начальных товаров остановлено.');
+    for(const [key,rows] of Object.entries(collections)){
+      if(rows?.some(row=>!row||typeof row!=='object'||Array.isArray(row)))throw new Error('Повреждён раздел: '+key);
+      if(['products','orders','shifts','parked'].includes(key)&&rows){
+        const ids=rows.map(row=>row.id);if(ids.some(id=>!id)||new Set(ids).size!==ids.length)throw new Error('Некорректные идентификаторы: '+key);
+      }
+    }
+    if(orders.some(o=>!Array.isArray(o.items)||!Number.isFinite(Number(o.total))||Number(o.total)<0))throw new Error('Повреждены чеки');
+    validateCurrentOrderSession(currentOrderSession);
+  }catch(error){showRecoveryScreen(error.message);return;}
+  financialBlocked=false;
+  state.cart=[];state.orderLabel='';state.orderType='На месте';state.deliveryFee=0;state.customer={name:'',phone:'',address:''};state._splitPayments=[];state._splitCount=0;state._cardIntent=null;state._kitchenPrinted=false;
   state.products = products === null ? seedProducts() : products;
   state.shifts = shifts;
   state.employees = Array.isArray(employees) ? employees : [];
@@ -967,7 +1056,9 @@ async function loadAll(){
   state.printer = Object.assign({enabled:false, autoPrint:false, ip:'', port:9100 }, printer || {});
   state.company = Object.assign({establishmentName:'', legalName:'', address:'', deliveryAddress:''}, company || {});
   state.deliveryRates = Array.isArray(deliveryRates) ? deliveryRates : [];
-  state.telegram = Object.assign({enabled:false, botToken:'', chatId:'', threadId:'', notifyShiftOpened:true, notifyShiftClosed:true}, telegram || {});
+  state.telegram = {enabled:!!telegram?.enabled,notifyShiftOpened:telegram?.notifyShiftOpened!==false,notifyShiftClosed:telegram?.notifyShiftClosed!==false};
+  // Retire only obsolete transport credentials; keep existing notification preferences.
+  if(telegram && ['botToken','chatId','threadId'].some(k=>Object.prototype.hasOwnProperty.call(telegram,k)))await saveKey('telegram',state.telegram);
   state.network = Object.assign({backendUrl:'https://prilavok-backend-production.up.railway.app', deviceKey:'', deviceName:'M POS iPad', lastSyncAt:null, lastSyncStatus:''}, network || {});
   if(!state.network.deviceKey){
     state.network.deviceKey = (crypto?.randomUUID ? crypto.randomUUID() : ('dev_'+uid()+'_'+uid()));
@@ -983,6 +1074,10 @@ async function loadAll(){
   // Сохраняются позиции, количество, комментарии/скидки и параметры заказа.
   if(currentOrderSession && Array.isArray(currentOrderSession.items)){
     state.cart = currentOrderSession.items;
+    state._splitPayments=Array.isArray(currentOrderSession.splitPayments)?currentOrderSession.splitPayments:[];
+    state._splitCount=state._splitPayments.length;
+    state._cardIntent=currentOrderSession.cardIntent||null;state._kitchenPrinted=!!currentOrderSession.kitchenPrinted;
+    window.__currentOrderKitchenPrinted=state._kitchenPrinted;
     state.orderLabel = currentOrderSession.orderLabel || '';
     state.orderType = currentOrderSession.orderType || 'На месте';
     state.customer = Object.assign({name:'',phone:'',address:''}, currentOrderSession.customer || {});
@@ -1123,30 +1218,17 @@ window.__prilavokCategories=()=>categories();
 function currentShift(){
   return state.shifts.find(s=>s.status==='open') || null;
 }
-function currentShiftEmployeeIsAdmin(){
-  const shift=currentShift();
-  if(!shift) return false;
-  return state.employees.find(e=>e.id===shift.employeeId)?.role==='admin';
+function currentShiftEmployeeIsAdmin(){ return !!window.POSAccess?.can('network.manage');
 }
 function productTracksStock(p){
   return !!p && p.type==='simple' && !p.noStockTracking;
 }
 function saveCurrentOrderSession(){
-  const session = {
-    items: JSON.parse(JSON.stringify(state.cart || [])),
-    orderLabel: state.orderLabel || '',
-    orderType: state.orderType || 'На месте',
-    customer: JSON.parse(JSON.stringify(state.customer || {name:'',phone:'',address:''})),
-    deliveryFee: Number(state.deliveryFee || 0),
-    updatedAt: Date.now()
-  };
-  // Сохраняем даже пустую корзину: это гарантирует, что после завершённой оплаты
-  // старый заказ не воскреснет из предыдущего состояния.
-  saveKey('currentOrderSession', session);
+  if(financialBusy||financialBlocked)return;
+  return saveKey('currentOrderSession',currentOrderSnapshot());
 }
-
 function clearCurrentOrderSession(){
-  saveKey('currentOrderSession', {items:[],orderLabel:'',orderType:'На месте',customer:{name:'',phone:'',address:''},deliveryFee:0,updatedAt:Date.now()});
+  return saveKey('currentOrderSession',{items:[],orderLabel:'',orderType:'На месте',customer:{name:'',phone:'',address:''},deliveryFee:0,splitPayments:[],kitchenPrinted:false,updatedAt:Date.now()});
 }
 
 function cartTotal(){
@@ -1156,22 +1238,21 @@ function shiftOrders(shiftId){
   return state.orders.filter(o=>o.shiftId===shiftId);
 }
 function shiftTotals(shiftId){
-  const orders = shiftOrders(shiftId);
-  const activeOrders = orders.filter(o=>!o.returnedAt);
-  const cash = activeOrders.reduce((s,o)=>{
-    if(Array.isArray(o.payments)) return s + o.payments.filter(p=>p.method==='cash').reduce((a,p)=>a+Number(p.amount||0),0);
-    return s + (o.method==='cash'?Number(o.total||0):0);
-  },0);
-  const card = activeOrders.reduce((s,o)=>{
-    if(Array.isArray(o.payments)) return s + o.payments.filter(p=>p.method==='card').reduce((a,p)=>a+Number(p.amount||0),0);
-    return s + (o.method==='card'?Number(o.total||0):0);
-  },0);
+  const orders=shiftOrders(shiftId);
+  // Sales stay in their original shift; returns belong to the shift that paid them out.
+  // Legacy receipts without returnedShiftId retain their original shift attribution.
+  const returned=state.orders.filter(o=>o.returnedAt&&(o.returnedShiftId||o.shiftId)===shiftId);
+  const amount=(o,method)=>Array.isArray(o.payments)?o.payments.filter(p=>p.method===method).reduce((sum,p)=>sum+Number(p.amount||0),0):(o.method===method?Number(o.total||0):0);
+  const cashIn=orders.reduce((sum,o)=>sum+amount(o,'cash'),0);
+  const cash=cashIn-returned.reduce((sum,o)=>sum+amount(o,'cash'),0);
+  const card=orders.reduce((sum,o)=>sum+amount(o,'card'),0)-returned.reduce((sum,o)=>sum+amount(o,'card'),0);
+  const activeOrders=orders.filter(o=>!returned.includes(o));
   const shift=state.shifts.find(s=>s.id===shiftId);
   const movements=Array.isArray(shift?.cashMovements)?shift.cashMovements:[];
-  const deposits=movements.filter(m=>m.type==='deposit').reduce((s,m)=>s+Number(m.amount||0),0);
-  const withdrawals=movements.filter(m=>m.type==='withdrawal').reduce((s,m)=>s+Number(m.amount||0),0);
-  const refunds=orders.filter(o=>o.returnedAt).reduce((s,o)=>s+Number(o.returnAmount||o.total||0),0);
-  return {cash, card, count: activeOrders.length, total: cash+card, deposits, withdrawals, refunds, netMovements: deposits-withdrawals, movements, orders, activeOrders};
+  const deposits=movements.filter(m=>m.type==='deposit').reduce((sum,m)=>sum+Number(m.amount||0),0);
+  const withdrawals=movements.filter(m=>m.type==='withdrawal').reduce((sum,m)=>sum+Number(m.amount||0),0);
+  const refunds=returned.reduce((sum,o)=>sum+Number(o.returnAmount??o.total??0),0);
+  return {cash,cashIn,card,count:activeOrders.length,total:cash+card,deposits,withdrawals,refunds,netMovements:deposits-withdrawals,movements,orders,activeOrders};
 }
 
 /* ============================= RENDER ROOT ============================= */
@@ -1240,6 +1321,7 @@ function applyTheme(){
   document.documentElement.dataset.theme = state.theme === 'dark' ? 'dark' : 'light';
 }
 function setTheme(theme){
+  if(!window.POSAccess?.require('settings.edit'))return false;
   state.theme = theme === 'dark' ? 'dark' : 'light';
   saveKey('theme', state.theme);
   applyTheme();
@@ -1356,10 +1438,12 @@ function renderHbars(items, showValues=true){
   return `<div class="hbar-list">${items.map(x=>`<div class="hbar-row"><div class="hbar-name" title="${escapeAttr(x.name)}">${escapeHtml(x.name)}</div><div class="hbar-track"><div class="hbar-fill" style="width:${Math.max(2,x.value/max*100)}%"></div></div>${showValues?`<div class="hbar-value">${money(x.value)}</div>`:'<div class="hbar-value" style="visibility:hidden">0</div>'}</div>`).join('')}</div>`;
 }
 function unlockAnalyticsSensitive(){
+  if(!window.POSAccess?.require('analytics.view'))return false;
   state.analyticsSensitiveUnlocked=true;
   render();
 }
 function checkAnalyticsPassword(){
+  if(!window.POSAccess?.require('analytics.view'))return false;
   state.analyticsSensitiveUnlocked=true;
   closeModal();
   render();
@@ -1468,7 +1552,8 @@ function warehouseExportPayload(report,documentsOnly=false){
   return {title:documentsOnly?'Реестр приёмок':'Складской учёт',period:report.from+' — '+report.to,generatedAt:report.generatedAt,company:state.company?.establishmentName||'',notes:warehouseNotes(report),sections};
 }
 function openWarehousePage(){
-  if(!currentShiftEmployeeIsAdmin()){flash('Складской учёт доступен администратору');return;}
+  if(!window.POSAccess?.require('analytics.view'))return false;
+  if(!window.POSAccess?.can('analytics.view')){flash('Складской учёт доступен администратору');return;}
   if(!window._warehouseFilters){const to=new Date(),from=new Date(to);from.setDate(from.getDate()-6);window._warehouseFilters={from:localDateString(from),to:localDateString(to)};}
   renderWarehousePage();
 }
@@ -1481,7 +1566,7 @@ function renderWarehouseTable(section){
   return `<div class="warehouse-table-scroll"><table><thead><tr>${section.headers.map(h=>`<th>${escapeHtml(h)}</th>`).join('')}</tr></thead><tbody>${section.rows.map(row=>`<tr>${row.map(cell=>`<td>${escapeHtml(String(cell))}</td>`).join('')}</tr>`).join('')||`<tr><td colspan="${section.headers.length}">Нет данных за период</td></tr>`}</tbody></table></div>`;
 }
 function renderWarehousePage(){
-  if(!currentShiftEmployeeIsAdmin()){flash('Доступен администратору');return;}
+  if(!window.POSAccess?.can('analytics.view')){flash('Доступен администратору');return;}
   const f=window._warehouseFilters,report=warehouseReport(f.from,f.to),payload=warehouseExportPayload(report);
   document.getElementById('app').inert=true;
   document.getElementById('warehouse-root').innerHTML=`<section class="warehouse-page"><header><button class="btn btn-outline warehouse-back" onclick="closeWarehousePage()">← Назад</button><h1>Складской учёт</h1><button class="btn btn-primary" onclick="openWarehouseReportModal()">Сформировать отчёт</button></header><main>
@@ -1504,7 +1589,7 @@ function renderWarehousePage(){
   ${payload.sections.slice(1).map(section=>`<section class="card"><h2>${escapeHtml(section.title)}</h2>${renderWarehouseTable(section)}</section>`).join('')}<details class="card warehouse-notes"><summary>Как читать отчёт</summary>${payload.notes.map(note=>`<p class="pe-note">${escapeHtml(note)}</p>`).join('')}</details></main></section>`;
 }
 function openWarehouseReportModal(){
-  if(!currentShiftEmployeeIsAdmin()){flash('Экспорт доступен администратору');return;}
+  if(!window.POSAccess?.can('analytics.export')){flash('Экспорт доступен администратору');return;}
   showModal(`<h2>Формирование отчёта</h2><p class="pe-note">За выбранный на странице период</p><div class="warehouse-report-options">${['Упрощённый учёт','Сводка','Движения и остатки','Поставщики','Реестр приёмок'].map((label,i)=>`<label><input type="checkbox" class="warehouse-report-section" value="${i}" checked><span>${label}</span></label>`).join('')}</div><div class="field"><label for="warehouse-report-format">Формат отчёта</label><select id="warehouse-report-format"><option value="pdf">PDF</option><option value="xlsx">Excel (.xlsx)</option></select></div><p class="pe-note">Пояснения к расчётам включаются всегда.</p><div style="display:flex;gap:12px"><button class="btn btn-outline" onclick="closeModal()">Отмена</button><button class="btn btn-primary" onclick="generateWarehouseReport()">Сформировать</button></div>`);
 }
 function warehouseSelectedPayload(report,selected){
@@ -1521,7 +1606,8 @@ function warehouseSelectedPayload(report,selected){
   return payload;
 }
 function generateWarehouseReport(){
-  if(!currentShiftEmployeeIsAdmin()){flash('Экспорт доступен администратору');return;}
+  if(!window.POSAccess?.require('analytics.export'))return false;
+  if(!window.POSAccess?.can('analytics.export')){flash('Экспорт доступен администратору');return;}
   try{
     const selected=[...document.querySelectorAll('.warehouse-report-section:checked')].map(el=>Number(el.value));
     const format=document.getElementById('warehouse-report-format').value;
@@ -1535,7 +1621,8 @@ function generateWarehouseReport(){
 }
 
 function exportWarehousePDF(documentsOnly=false){
-  if(!currentShiftEmployeeIsAdmin()){flash('Экспорт доступен администратору');return;}
+  if(!window.POSAccess?.require('analytics.export'))return false;
+  if(!window.POSAccess?.can('analytics.export')){flash('Экспорт доступен администратору');return;}
   const from=document.getElementById('warehouse-from')?.value||window._warehouseFilters.from,to=document.getElementById('warehouse-to')?.value||window._warehouseFilters.to;
   try{
     const report=warehouseReport(from,to),payload=warehouseExportPayload(report,documentsOnly);
@@ -1546,12 +1633,13 @@ function exportWarehousePDF(documentsOnly=false){
 }
 
 function renderAnalyticsScreen(){
+  if(!window.POSAccess?.can('analytics.view'))return '<div class="screen"></div>';
   const d=analyticsData();
   const today=localDateString(new Date());
   const from=state.analyticsFrom||today;
   const to=state.analyticsTo||today;
   const topProducts=d.products.slice(0,10);
-  const admin=currentShiftEmployeeIsAdmin();
+  const admin=window.POSAccess?.can('analytics.view');
   const showMoney=admin;
   const moneyOrDash=v=>showMoney?money(v):'—';
   const renderValueBars=items=>renderHbars(items,showMoney);
@@ -1648,6 +1736,7 @@ function openCreateHallTableModal(shape){
     <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal();openHallEditMenu()">Отмена</button><button class="btn btn-primary" onclick="createHallTable('${normalized}')">Добавить стол</button></div>`);
 }
 function createHallTable(shape){
+  if(!window.POSAccess?.require('bookings'))return false;
   const normalized=shape==='rectangle'?'rectangle':'square';
   const n=Math.max(0,...state.hallTables.map(t=>Number(t.number)||0))+1;
   const name=(document.getElementById('new-hall-table-name')?.value||'').trim();
@@ -1662,14 +1751,17 @@ function deleteHallTable(id){
   showModal(`<div class="modal-title">Удалить ${escapeHtml(hallTableLabel(t))}?</div><div class="settings-note">Все бронирования этого стола также будут удалены.</div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button class="btn" style="background:var(--danger-soft);color:var(--danger);border:1px solid var(--danger);" onclick="confirmDeleteHallTable('${id}')">Удалить</button></div>`);
 }
 function confirmDeleteHallTable(id){
+  if(!window.POSAccess?.require('bookings'))return false;
   state.hallTables=state.hallTables.filter(t=>t.id!==id); state.bookings=state.bookings.filter(b=>b.tableId!==id); if(state.selectedHallTableId===id) state.selectedHallTableId=null; saveHall(); saveBookings(); closeModal(); render();
 }
 function rotateHallTable(id,delta){
+  if(!window.POSAccess?.require('bookings'))return false;
   const t=state.hallTables.find(x=>x.id===id); if(!t)return;
   t.rotation=((Number(t.rotation)||0)+delta+360)%360;
   saveHall(); closeModal(); render();
 }
 function saveHallTableEdits(id){
+  if(!window.POSAccess?.require('bookings'))return false;
   const t=state.hallTables.find(x=>x.id===id); if(!t)return;
   const name=(document.getElementById('edit-hall-table-name')?.value||'').trim();
   if(!name){flash('Введите название стола');return;}
@@ -1773,6 +1865,7 @@ function refreshBookingTimeSummary(){
   if(out) out.textContent=`${time}–${w.end.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}`;
 }
 function saveNewBooking(tableId){
+  if(!window.POSAccess?.require('bookings'))return false;
   const name=(document.getElementById('booking-name-input')?.value||'').trim();
   const phone=(document.getElementById('booking-phone-input')?.value||'').trim();
   const guests=Math.max(1,Number(document.getElementById('booking-guests-input')?.value||2));
@@ -1787,6 +1880,7 @@ function saveNewBooking(tableId){
   saveBookings(); closeModal(); render(); flash('Бронирование создано');
 }
 function cancelBooking(id){
+  if(!window.POSAccess?.require('bookings'))return false;
   const b=state.bookings.find(x=>x.id===id); if(!b)return;
   b.status='cancelled'; saveBookings(); render(); flash('Бронирование отменено');
 }
@@ -1813,6 +1907,7 @@ function editBooking(id){
     <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Закрыть</button><button class="btn btn-primary" onclick="saveEditedBooking('${id}')">Сохранить</button></div>`);
 }
 function saveEditedBooking(id){
+  if(!window.POSAccess?.require('bookings'))return false;
   const b=state.bookings.find(x=>x.id===id); if(!b)return;
   const newTime=(document.getElementById('edit-booking-time')?.value||new Date(b.startAt).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}));
   const mins=Math.max(30,Number(document.getElementById('edit-booking-duration')?.value||120));
@@ -1823,6 +1918,7 @@ function saveEditedBooking(id){
   b.guestName=(document.getElementById('edit-booking-name')?.value||'').trim(); b.phone=(document.getElementById('edit-booking-phone')?.value||'').trim(); b.guests=Math.max(1,Number(document.getElementById('edit-booking-guests')?.value||2)); b.note=(document.getElementById('edit-booking-note')?.value||'').trim(); b.date=date; b.startAt=w.start.toISOString(); b.endAt=w.end.toISOString(); if(!b.guestName){flash('Введите имя гостя');return;} saveBookings(); closeModal(); render();
 }
 function hallPointerStart(e,el){
+  if(!window.POSAccess?.require('bookings'))return false;
   if(!state.hallEditMode) return;
   e.preventDefault(); e.stopPropagation(); const t=state.hallTables.find(x=>x.id===el.dataset.id); if(!t)return;
   const map=document.getElementById('bookingsMap'); if(!map)return;
@@ -1840,6 +1936,7 @@ function hallPointerMove(e,el){
   el.style.left=t.x+'%'; el.style.top=t.y+'%';
 }
 function hallPointerEnd(e){
+  if(!window.POSAccess?.require('bookings'))return false;
   const d=state._hallDrag; if(!d)return;
   if(!state.hallEditMode){state._hallDrag=null;return;}
   const id=d.id;
@@ -1860,6 +1957,7 @@ function renderBookingCard(b,t){
   return `<div class="booking-card" onclick="editBooking('${b.id}')"><div class="booking-card-top"><div class="booking-card-name">${escapeHtml(b.guestName)}</div><span class="booking-badge">${escapeHtml(hallTableLabel(t))}</span></div><div class="booking-card-meta">${time} · ${Number(b.guests||1)} ${Number(b.guests||1)===1?'гость':'гостей'}${b.phone?' · '+escapeHtml(b.phone):''}</div>${b.note?`<div class="booking-card-note">${escapeHtml(b.note)}</div>`:''}<div style="display:flex;justify-content:flex-end;margin-top:8px;"><button class="btn booking-danger" style="min-height:34px;padding:7px 10px;font-size:11px;" onclick="event.stopPropagation();cancelBooking('${b.id}')">Отменить</button></div></div>`;
 }
 function renderBookingsScreen(){
+  if(!window.POSAccess?.can('bookings'))return '<div class="screen"></div>';
   ensureBookingDate();
   const selected=state.hallTables.find(t=>t.id===state.selectedHallTableId) || state.hallTables[0] || null;
   const date=state.bookingDate || localDateString(new Date());
@@ -1890,7 +1988,7 @@ function renderBookingsScreen(){
 
 
 function normalizeWebOrder(raw){return {id:raw.id,external_id:raw.external_id,status:raw.status||'new',order_type:raw.order_type||'На месте',customer_name:raw.customer_name||'',phone:raw.phone||'',address:raw.address||'',comment:raw.comment||'',total:Number(raw.total||0),delivery_fee:Number(raw.delivery_fee||0),created_at:raw.created_at||new Date().toISOString(),order_items:Array.isArray(raw.order_items)?raw.order_items:[]};}
-function startWebOrderEvents(){const n=networkConfigFromState();if(!n.deviceKey||!n.backendUrl||!window.EventSource)return;try{state.webEventsSource?.close();}catch(e){}const source=new EventSource(n.backendUrl.replace(/\/+$/,'')+'/api/orders/events?deviceKey='+encodeURIComponent(n.deviceKey));state.webEventsSource=source;source.onmessage=(ev)=>{try{const d=JSON.parse(ev.data||'{}');if(d.type!=='orders')return;const oldList=state.webEvents.slice();const oldIds=new Set(oldList.map(x=>x.id));const incoming=(d.orders||[]).map(normalizeWebOrder);const merged=[...incoming];oldList.forEach(x=>{if(!merged.some(y=>y.id===x.id))merged.push(x);});const next=merged.filter(x=>x.status==='new').sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));const changed=next.length!==oldList.length || next.some((x,i)=>{const y=oldList[i];return !y || y.id!==x.id || y.status!==x.status || x.total!==y.total || x.updated_at!==y.updated_at;});state.webEvents=next;if(changed)saveKey('webEvents',state.webEvents);if(incoming.some(x=>!oldIds.has(x.id))){flash('🔔 Новый заказ с сайта');render();}}catch(e){}};source.onerror=()=>{};}
+function startWebOrderEvents(){const n=networkConfigFromState();if(!n.deviceKey||!n.backendUrl||!window.EventSource)return;try{state.webEventsSource?.close();}catch(e){}const source=new EventSource(n.backendUrl.replace(/\/+$/,'')+'/api/orders/events?deviceKey='+encodeURIComponent(n.deviceKey));state.webEventsSource=source;source.onmessage=(ev)=>{if(financialBusy||financialBlocked||storageBroken)return;try{const d=JSON.parse(ev.data||'{}');if(d.type!=='orders')return;const oldList=state.webEvents.slice();const oldIds=new Set(oldList.map(x=>x.id));const incoming=(d.orders||[]).map(normalizeWebOrder);const merged=[...incoming];oldList.forEach(x=>{if(!merged.some(y=>y.id===x.id))merged.push(x);});const next=merged.filter(x=>x.status==='new').sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));const changed=next.length!==oldList.length || next.some((x,i)=>{const y=oldList[i];return !y || y.id!==x.id || y.status!==x.status || x.total!==y.total || x.updated_at!==y.updated_at;});state.webEvents=next;if(changed)saveKey('webEvents',state.webEvents);if(incoming.some(x=>!oldIds.has(x.id))){flash('🔔 Новый заказ с сайта');render();}}catch(e){}};source.onerror=()=>{};}
 function webOrderDate(o){return fmtDate(new Date(o.created_at).getTime());}
 function openWebEventsModal(){const list=state.webEvents.slice().sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));showModal(`<div class="modal-title">🔔 События</div>${list.length?list.map(o=>`<div class="list-row" style="cursor:pointer;" onclick="openWebOrder('${escapeAttr(o.id)}')"><div style="flex:1;min-width:0;"><div class="list-row-name">Заказ с сайта ${escapeHtml(o.external_id||'')}</div><div class="list-row-sub">${escapeHtml(o.customer_name||'Клиент')} · ${fullMoney(o.total)} · ${webOrderDate(o)}</div></div><div style="font-size:22px;">›</div></div>`).join(''):`<div class="center-note">Новых событий нет</div>`}<div class="modal-actions"><button class="btn btn-secondary" style="width:100%;" onclick="closeModal()">Закрыть</button></div>`);}
 function openWebOrder(id){const o=state.webEvents.find(x=>x.id===id);if(!o)return;showModal(`<div class="modal-title">Заказ с сайта ${escapeHtml(o.external_id||'')}</div><div class="setting-sub" style="margin-bottom:14px;">${escapeHtml(o.customer_name||'Клиент')}${o.phone?' · '+escapeHtml(o.phone):''}</div>${(o.order_items||[]).map(i=>`<div class="receipt-line"><span>${escapeHtml(i.product_name)} × ${Number(i.quantity||0)}</span><span>${fullMoney(Number(i.price||0)*Number(i.quantity||0))}</span></div>`).join('')}${o.delivery_fee?`<div class="receipt-line"><span>Доставка</span><span>${fullMoney(o.delivery_fee)}</span></div>`:''}<div class="receipt-total"><span>Итого</span><span>${fullMoney(o.total)}</span></div><div style="margin-top:14px;font-size:13px;line-height:1.55;color:var(--muted);">${o.address?`<div><b>Адрес:</b> ${escapeHtml(o.address)}</div>`:''}${o.comment?`<div><b>Комментарий:</b> ${escapeHtml(o.comment)}</div>`:''}<div><b>Тип:</b> ${escapeHtml(o.order_type||'На месте')}</div></div><div class="modal-actions"><button class="btn btn-secondary" onclick="openWebEventsModal()">Назад</button><button class="btn btn-primary" onclick="acceptWebOrder('${escapeAttr(o.id)}')">Взять в работу</button></div>`);}
@@ -1919,7 +2017,8 @@ async function recoverWebAcceptanceJournal(){
   }
 }
 async function acceptWebOrder(id){
-  if(webAcceptBusy)return;
+  if(!window.POSAccess?.require('pos'))return false;
+  if(webAcceptBusy||financialBusy||financialBlocked||storageBroken)return;
   const o=state.webEvents.find(x=>x.id===id);if(!o)return;
   webAcceptBusy=true;
   try{
@@ -1957,12 +2056,14 @@ async function acceptWebOrder(id){
   finally{webAcceptBusy=false;}
 }
 
-function testWebOrder(){const n=networkConfigFromState();fetch(n.backendUrl.replace(/\/+$/,'')+'/api/orders/test',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Key':n.deviceKey},body:'{}',cache:'no-store'}).then(async r=>{const d=await r.json().catch(()=>null);if(!r.ok)throw new Error(d?.error||('HTTP '+r.status));flash('Тестовый заказ отправлен');}).catch(()=>flash('Не удалось создать тестовый заказ'));}
+function testWebOrder(){
+  if(!window.POSAccess?.require('network.manage'))return false;const n=networkConfigFromState();fetch(n.backendUrl.replace(/\/+$/,'')+'/api/orders/test',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Key':n.deviceKey},body:'{}',cache:'no-store'}).then(async r=>{const d=await r.json().catch(()=>null);if(!r.ok)throw new Error(d?.error||('HTTP '+r.status));flash('Тестовый заказ отправлен');}).catch(()=>flash('Не удалось создать тестовый заказ'));}
 
 function networkConfigFromState(){
   return state.network || {backendUrl:'https://prilavok-backend-production.up.railway.app',deviceKey:'',deviceName:'M POS iPad',lastSyncAt:null,lastSyncStatus:''};
 }
 function saveNetworkSettings(){
+  if(!window.POSAccess?.require('network.manage'))return false;
   if(!currentShiftEmployeeIsAdmin()){ flash('Сетевые конфигурации доступны только администратору'); return false; }
   const url=(document.getElementById('network-backend-url')?.value||'').trim().replace(/\/+$/,'');
   const deviceName=(document.getElementById('network-device-name')?.value||'').trim() || 'M POS iPad';
@@ -1976,6 +2077,7 @@ function saveNetworkSettings(){
   return true;
 }
 async function testBackendConnection(){
+  if(!window.POSAccess?.require('network.manage'))return false;
   if(!saveNetworkSettings()) return;
   const n=networkConfigFromState();
   try{
@@ -2004,14 +2106,14 @@ function buildAvailabilityItems(products){
   }).sort((a,b)=>a.externalId.localeCompare(b.externalId));
 }
 async function publishAvailability(){
-  if(availabilityBusy||document.hidden||window._availabilityAppActive===false||!state.loaded||storageBroken)return false;
+  if(financialBusy||financialBlocked||window.PrilavokCore.Storage.isBlocked?.()||availabilityBusy||document.hidden||window._availabilityAppActive===false||!state.loaded||storageBroken)return false;
   availabilityBusy=true;
   let timeout;
   try{
     let failed=false;const onError=()=>{failed=true;};const storage=window.PrilavokCore.Storage;
     // Derive from completed storage writes, never from an unsaved editor or state.
     const [products,network,previous]=await Promise.all([storage.get('products',null,onError),storage.get('network',null,onError),storage.get('webAvailabilityRevision',0,onError)]);
-    if(failed||!Array.isArray(products)||!network?.backendUrl||!network.deviceKey)return false;
+    if(financialBusy||financialBlocked||storage.isBlocked?.()||failed||!Array.isArray(products)||!network?.backendUrl||!network.deviceKey)return false;
     if(!Number.isSafeInteger(previous)||previous<0)return false;
     const items=buildAvailabilityItems(products);
     const revision=Math.max(Date.now(),previous+1);
@@ -2067,6 +2169,7 @@ function buildMenuSyncPayload(){
   return {deviceKey:networkConfigFromState().deviceKey,deviceName:networkConfigFromState().deviceName,categories,products};
 }
 async function syncMenuToBackend(){
+  if(!window.POSAccess?.require('network.manage'))return false;
   if(!saveNetworkSettings()) return;
   const n=networkConfigFromState();
   const payload=buildMenuSyncPayload();
@@ -2096,6 +2199,7 @@ async function syncMenuToBackend(){
 }
 
 function renderNetworkScreen(){
+  if(!window.POSAccess?.can('network.manage'))return '<div class="screen"></div>';
   const admin = currentShiftEmployeeIsAdmin();
   if(!admin) return `<div class="screen content-screen"></div>`;
   const t = state.telegram || {};
@@ -2168,17 +2272,7 @@ function renderNetworkScreen(){
       <div class="settings-card">
         <div style="font-size:16px;font-weight:800;margin-bottom:4px;">Telegram</div>
         <div class="setting-sub">Подключение рабочего Telegram-бота для уведомлений в группу.</div>
-        <div class="field" style="margin-top:18px;">
-          <label>Токен бота</label>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <input id="telegram-token" type="password" value="${escapeAttr(t.botToken||'')}" placeholder="Токен от @BotFather" autocomplete="off" style="flex:1;">
-            <button class="btn btn-secondary" style="width:auto;white-space:nowrap;" onclick="toggleTelegramToken()">Показать</button>
-          </div>
-        </div>
-        <div class="grid-2">
-          <div class="field"><label>ID рабочей группы</label><input id="telegram-chat-id" value="${escapeAttr(t.chatId||'')}" placeholder="Например: -1001234567890" inputmode="text"></div>
-          <div class="field"><label>ID темы · необязательно</label><input id="telegram-thread-id" value="${escapeAttr(t.threadId||'')}" placeholder="Например: 123" inputmode="numeric"></div>
-        </div>
+        <p class="setting-sub">Бот и получатель отчётов настраиваются на сервере. Токен бота на iPad не хранится.</p>
         <div class="setting-row">
           <div><div class="setting-title">Включить Telegram</div><div class="setting-sub">Если выключено, приложение не отправляет уведомления.</div></div>
           <label class="switch"><input id="telegram-enabled" type="checkbox" ${t.enabled?'checked':''}><span></span></label>
@@ -2195,24 +2289,17 @@ function renderNetworkScreen(){
           <button class="btn btn-primary" onclick="saveTelegramSettings()">Сохранить</button>
           <button class="btn btn-secondary" onclick="testTelegramConnection()">Проверить подключение</button>
         </div>
-        <div id="telegram-status" class="settings-note" style="margin-top:14px;">${t.enabled && t.botToken && t.chatId ? 'Telegram настроен. Выполните проверку подключения.' : 'Telegram пока не настроен.'}</div>
+        <div id="telegram-status" class="settings-note" style="margin-top:14px;">${t.enabled ? 'Telegram настроен. Выполните проверку подключения.' : 'Telegram пока не настроен.'}</div>
       </div>
     </div>
   </div>`;
 }
-function toggleTelegramToken(){
-  const input=document.getElementById('telegram-token');
-  const btn=event?.currentTarget;
-  if(!input) return;
-  const show=input.type==='password'; input.type=show?'text':'password'; if(btn) btn.textContent=show?'Скрыть':'Показать';
-}
+
 function saveTelegramSettings(){
+  if(!window.POSAccess?.require('network.manage'))return false;
   if(!currentShiftEmployeeIsAdmin()){ flash('Сетевые конфигурации доступны только администратору'); return; }
   state.telegram={
     enabled:!!document.getElementById('telegram-enabled')?.checked,
-    botToken:(document.getElementById('telegram-token')?.value||'').trim(),
-    chatId:(document.getElementById('telegram-chat-id')?.value||'').trim(),
-    threadId:(document.getElementById('telegram-thread-id')?.value||'').trim(),
     notifyShiftOpened:!!document.getElementById('telegram-shift-opened')?.checked,
     notifyShiftClosed:!!document.getElementById('telegram-shift-closed')?.checked
   };
@@ -2220,11 +2307,11 @@ function saveTelegramSettings(){
 }
 function telegramConfigFromState(){
   const t=state.telegram||{};
-  return {enabled:!!t.enabled,botToken:String(t.botToken||''),chatId:String(t.chatId||''),threadId:String(t.threadId||''),notifyShiftOpened:t.notifyShiftOpened!==false,notifyShiftClosed:t.notifyShiftClosed!==false};
+  return {enabled:!!t.enabled,deviceKey:networkConfigFromState().deviceKey,notifyShiftOpened:t.notifyShiftOpened!==false,notifyShiftClosed:t.notifyShiftClosed!==false};
 }
 function telegramNativeRequest(action, extra={}){
   const cfg=telegramConfigFromState();
-  if(!cfg.enabled || !cfg.botToken || !cfg.chatId) return false;
+  if(!cfg.enabled || !cfg.deviceKey) return false;
   if(window.webkit?.messageHandlers?.telegram){
     window.webkit.messageHandlers.telegram.postMessage({...cfg,action,...extra});
     return true;
@@ -2232,15 +2319,12 @@ function telegramNativeRequest(action, extra={}){
   return false;
 }
 function testTelegramConnection(){
+  if(!window.POSAccess?.require('network.manage'))return false;
   if(!currentShiftEmployeeIsAdmin()){flash('Сетевые конфигурации доступны только администратору');return;}
-  const token=(document.getElementById('telegram-token')?.value||'').trim();
-  const chatId=(document.getElementById('telegram-chat-id')?.value||'').trim();
-  const threadId=(document.getElementById('telegram-thread-id')?.value||'').trim();
-  if(!token){flash('Введите токен бота');return;}
-  if(!chatId){flash('Введите ID рабочей группы');return;}
+  const deviceKey=networkConfigFromState().deviceKey;
   const status=document.getElementById('telegram-status'); if(status) status.textContent='Проверяем подключение…';
   if(window.webkit?.messageHandlers?.telegram){
-    window.webkit.messageHandlers.telegram.postMessage({action:'test',botToken:token,chatId,threadId});
+    window.webkit.messageHandlers.telegram.postMessage({action:'test',deviceKey});
   } else {
     if(status) status.textContent='Проверка доступна в установленном приложении на iPad.';
   }
@@ -2251,7 +2335,7 @@ window.onTelegramResult=function(result){
 };
 function sendTelegramShiftOpened(shift){
   const t=telegramConfigFromState();
-  if(!t.enabled || !t.notifyShiftOpened || !t.botToken || !t.chatId) return;
+  if(!t.enabled || !t.notifyShiftOpened || !t.deviceKey) return;
   const date=new Date(shift.openedAt||Date.now()).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
   const text=`🟢 <b>Смена открыта</b>\n👤 Сотрудник: ${escapeHtml(shift.employeeName||'Сотрудник')}\n🕐 Время: ${date}`;
   if(window.webkit?.messageHandlers?.telegram){
@@ -2261,7 +2345,7 @@ function sendTelegramShiftOpened(shift){
 function buildShiftReportPayload(shift){
   const orders=shiftOrders(shift.id).slice().sort((a,b)=>(a.timestamp||0)-(b.timestamp||0));
   const t=shiftTotals(shift.id);
-  const expected=(Number(shift.openingCash)||0)+t.cash+t.netMovements;
+  const expected=(Number(shift.openingCash)||0)+t.cashIn+t.netMovements;
   const counted=Number(shift.countedCash)||0;
   return {
     id:shift.id, employeeName:shift.employeeName||'', employeePhone:shift.employeePhone||'',
@@ -2277,7 +2361,7 @@ function buildShiftReportPayload(shift){
 }
 function sendTelegramShiftClosed(shift){
   const t=telegramConfigFromState();
-  if(!t.enabled || !t.notifyShiftClosed || !t.botToken || !t.chatId) return;
+  if(!t.enabled || !t.notifyShiftClosed || !t.deviceKey) return;
   if(window.webkit?.messageHandlers?.telegram){
     window.webkit.messageHandlers.telegram.postMessage({...t,action:'sendShiftCloseReport',report:buildShiftReportPayload(shift)});
   }
@@ -2297,6 +2381,7 @@ function employeeDisplayName(name){
   return parts[0]+' '+parts.slice(1,3).map(part=>part.split('-').filter(Boolean).map(piece=>Array.from(piece)[0].toLocaleUpperCase('ru')+'.').join('-')).join(' ');
 }
 function renderSettingsScreen(){
+  if(!window.POSAccess?.can('settings.view'))return `<div class="screen content-screen ${state.tab==='settings'?'active':''}"><div class="settings-card"><h2>Владелец и доступ</h2><p>Войдите под своим именем, чтобы продолжить работу.</p><button class="btn btn-primary" onclick="POSAccess.open()">Войти / настроить владельца</button></div></div>`;
   const p = state.printer || {};
   const configured = !!(p.ip || '').trim();
   return `
@@ -2306,10 +2391,11 @@ function renderSettingsScreen(){
       <div style="font-size:15px;font-weight:800;margin-bottom:10px;">Быстрые настройки</div>
       <div class="settings-quick-actions">
         <button class="settings-quick-btn" onclick="setTab('products')">Товары</button>
-        <button class="settings-quick-btn" onclick="currentShiftEmployeeIsAdmin()?setTab('network'):showAdminOnlyInfo('Сетевые настройки')">Сетевые настройки</button>
+        <button class="settings-quick-btn" onclick="setTab('network')">Сетевые настройки</button>
         <button class="settings-quick-btn" onclick="openAppearanceModal()">Внешний вид</button>
       </div>
     </div>
+    <button class="btn btn-secondary" style="width:100%;margin-bottom:16px" onclick="POSAccess.open()">Владелец и доступ</button>
     <div class="settings-grid">
       <div class="settings-card">
         <div class="settings-section-head">
@@ -2334,8 +2420,8 @@ function renderSettingsScreen(){
       </div>
       <div class="settings-card">
         <div class="settings-section-head"><div style="font-size:16px;font-weight:800;">Сотрудники</div><button class="settings-plus-btn" title="Добавить сотрудника" onclick="openEmployeeModal()">+</button></div>
-        <div class="setting-sub">Сотрудники выбираются при открытии кассовой смены. Введите ФИО и номер телефона.</div>
-        <div style="margin-top:14px;">${state.employees.length ? state.employees.slice().sort((a,b)=>a.name.localeCompare(b.name,'ru')).map(e=>`<div class="employee-settings-row"><div class="employee-settings-person"><div class="list-row-name" title="${escapeAttr(e.name)}">${escapeHtml(employeeDisplayName(e.name))}</div><div class="list-row-sub">${escapeHtml(e.phone||'Телефон не указан')}</div></div><div class="employee-settings-role">${e.role==='admin'?'<span class="admin-badge">АДМИНИСТРАТОР</span>':''}</div><button class="btn btn-secondary employee-settings-edit" onclick="openEmployeeModal(${escapeAttr(JSON.stringify(e.id))})">Изменить</button>${e.role==='admin'?`<button class="icon-btn employee-settings-action" aria-label="Информация об администраторе" onclick="showEmployeeAdminInfo(${escapeAttr(JSON.stringify(e.id))})">i</button>`:`<button class="icon-btn danger employee-settings-action" aria-label="Удалить сотрудника" onclick="deleteEmployee(${escapeAttr(JSON.stringify(e.id))})">✕</button>`}</div>`).join('') : '<div class="center-note">Сотрудников пока нет.</div>'}</div>
+        <div class="setting-sub">Владелец назначает сотрудникам личные PIN и права доступа.</div>
+        <div style="margin-top:14px;">${state.employees.length ? state.employees.slice().sort((a,b)=>a.name.localeCompare(b.name,'ru')).map(e=>`<div class="employee-settings-row"><div class="employee-settings-person"><div class="list-row-name" title="${escapeAttr(e.name)}">${escapeHtml(employeeDisplayName(e.name))}</div><div class="list-row-sub">${escapeHtml(e.phone||'Телефон не указан')}</div></div><div class="employee-settings-role"><span class="admin-badge">${escapeHtml(window.POSAccess?.roleLabel(e.id)||'Доступ не назначен')}</span></div><button class="btn btn-secondary employee-settings-edit" onclick="openEmployeeModal(${escapeAttr(JSON.stringify(e.id))})">Изменить</button>${e.role==='admin'?`<button class="icon-btn employee-settings-action" aria-label="Информация об администраторе" onclick="showEmployeeAdminInfo(${escapeAttr(JSON.stringify(e.id))})">i</button>`:`<button class="icon-btn danger employee-settings-action" aria-label="Удалить сотрудника" onclick="deleteEmployee(${escapeAttr(JSON.stringify(e.id))})">✕</button>`}</div>`).join('') : '<div class="center-note">Сотрудников пока нет.</div>'}</div>
       </div>
       <div class="settings-card">
         <div class="settings-section-head"><div style="font-size:16px;font-weight:800;">Поставщики и товары</div><button class="settings-plus-btn" title="Добавить поставщика" onclick="openSupplierModal()">+</button></div>
@@ -2368,6 +2454,7 @@ function openDeliveryRateModal(id){
     <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button class="btn btn-primary" onclick="saveDeliveryRate('${escapeAttr(id||'')}')">Сохранить</button></div>`);
 }
 function saveDeliveryRate(id){
+  if(!window.POSAccess?.require('settings.edit'))return false;
   const name=(document.getElementById('delivery-rate-name')?.value||'').trim();
   const amount=parseFloat(document.getElementById('delivery-rate-amount')?.value);
   if(!name){flash('Введите название');return;}
@@ -2377,6 +2464,7 @@ function saveDeliveryRate(id){
   saveKey('deliveryRates',state.deliveryRates); closeModal(); render();
 }
 function deleteDeliveryRate(id){
+  if(!window.POSAccess?.require('settings.edit'))return false;
   state.deliveryRates=state.deliveryRates.filter(r=>r.id!==id);
   if(state.orderType==='Доставка' && !state.deliveryRates.some(r=>Number(r.amount)===Number(state.deliveryFee))) state.deliveryFee=0;
   saveKey('deliveryRates',state.deliveryRates); render();
@@ -2390,6 +2478,7 @@ function openDiscountModal(){
     <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button class="btn btn-primary" onclick="saveDiscount()">Добавить</button></div>`, true);
 }
 function saveDiscount(){
+  if(!window.POSAccess?.require('settings.edit'))return false;
   const name=(document.getElementById('df-name')?.value||'').trim();
   const type=document.getElementById('df-type')?.value==='fixed'?'fixed':'percent';
   const value=parseFloat(document.getElementById('df-value')?.value);
@@ -2399,15 +2488,12 @@ function saveDiscount(){
   state.discounts.push({id:uid(),name,type,value}); saveKey('discounts',state.discounts); closeModal(); render(); flash('Скидка добавлена');
 }
 function deleteDiscount(id){
+  if(!window.POSAccess?.require('settings.edit'))return false;
   state.discounts=state.discounts.filter(d=>d.id!==id);
   state.cart.forEach(i=>{if(i.discountId===id)i.discountId='';});
   saveKey('discounts',state.discounts); render();
 }
-function canEditCompanySettings(){
-  const shift=currentShift();
-  if(!shift) return false;
-  const employee=state.employees.find(e=>e.id===shift.employeeId);
-  return employee?.role==='admin';
+function canEditCompanySettings(){ return !!window.POSAccess?.can('settings.edit');
 }
 function openCompanyEditModal(){
   if(!canEditCompanySettings()){
@@ -2424,6 +2510,7 @@ function openCompanyEditModal(){
   `);
 }
 function saveCompanySettings(){
+  if(!window.POSAccess?.require('settings.edit'))return false;
   if(!canEditCompanySettings()){
     closeModal();
     flash('Изменять реквизиты может только администратор при открытой им смене');
@@ -2441,6 +2528,7 @@ function saveCompanySettings(){
   flash('Реквизиты сохранены');
 }
 function savePrinterSettings(){
+  if(!window.POSAccess?.require('settings.edit'))return false;
   const ip=(document.getElementById('printer-ip')?.value||'').trim();
   const port=parseInt(document.getElementById('printer-port')?.value,10)||9100;
   state.printer={...state.printer,ip,port,enabled:!!document.getElementById('printer-enabled')?.checked,autoPrint:!!document.getElementById('printer-auto')?.checked};
@@ -2455,7 +2543,12 @@ function testPrinterConnection(){
   flash('Отправляем пробную печать…');
   handler.postMessage({action:'print',order:{__networkPrinterIp:ip,__networkPrinterPort:port,__networkTest:true}});
 }
-function setTab(t){ state.tab = t; render(); }
+function setTab(t){
+  const permissions={pos:'pos',products:'products.view',receiving:'stock.view',purchaseOrders:'stock.view',shift:'shifts.view',receipts:'receipts.view',analytics:'analytics.view',bookings:'bookings',network:'network.manage'};
+  const enter=()=>{state.tab=t;render();};
+  if(t==='settings'||window.POSAccess?.can(permissions[t]))return enter();
+  return window.POSAccess?.authorizeTab(permissions[t]||'settings.view',enter);
+}
 
 /* ============================= POS SCREEN ============================= */
 function productCategoryKey(p){ return (p.category||'').trim() || 'Без категории'; }
@@ -2527,6 +2620,7 @@ function openPosFolderEditor(id=''){
   showModal(`<div class="modal-title">${folder?'Изменить папку':'Новая папка'}</div><div class="field"><label>Название</label><input id="pos-folder-name" maxlength="80" value="${escapeAttr(folder?.name||'')}"></div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button class="btn btn-primary" onclick="savePosFolder(${escapeAttr(JSON.stringify(id))})">Сохранить</button></div>${folder?`<button class="btn btn-danger-outline" style="margin-top:12px;width:100%" onclick="requestRemovePosFolder(${escapeAttr(JSON.stringify(id))})">Удалить папку</button>`:''}`);
 }
 async function savePosFolder(id=''){
+  if(!window.POSAccess?.require('products.edit'))return false;
   if(!state.editMode||!state.posPath)return;
   const name=(document.getElementById('pos-folder-name')?.value||'').trim();
   if(!name||name.length>80){flash('Укажите название до 80 символов');return;}
@@ -2541,6 +2635,7 @@ function requestRemovePosFolder(id){
   showModal(`<div class="modal-title">Удалить папку?</div><p>Товары вернутся в корень категории.</p><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button class="btn btn-danger" onclick="removePosFolder(${escapeAttr(JSON.stringify(id))})">Удалить папку</button></div>`);
 }
 async function removePosFolder(id){
+  if(!window.POSAccess?.require('products.edit'))return false;
   if(!state.editMode||!state.posPath)return;
   const ok=await updatePosNavigation(state.posPath,items=>{const index=items.findIndex(i=>i.type==='folder'&&i.id===id);if(index<0)throw Error('Папка не найдена');items.splice(index,1);for(const i of items)if(i.parentId===id)i.parentId='';});
   if(ok&&state.posFolder===id){state.posFolder='';render();}
@@ -2551,6 +2646,7 @@ function openPosTileMove(id){
   showModal(`<div class="modal-title">Переместить товар</div><p>${escapeHtml(getProduct(id)?.name||'')}</p><div class="field"><label>Папка</label><select id="pos-move-folder"><option value="">Корень категории</option>${items.filter(i=>i.type==='folder').map(f=>`<option value="${escapeAttr(f.id)}" ${item.parentId===f.id?'selected':''}>${escapeHtml(f.name)}</option>`).join('')}</select></div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button class="btn btn-primary" onclick="movePosProduct(${escapeAttr(JSON.stringify(id))},document.getElementById('pos-move-folder').value)">Переместить</button></div>`);
 }
 function movePosProduct(id,folderId){
+  if(!window.POSAccess?.require('products.edit'))return false;
   if(!state.editMode||!state.posPath)return;
   return updatePosNavigation(state.posPath,items=>{
     if(folderId&&!items.some(i=>i.type==='folder'&&i.id===folderId))throw Error('Папка не найдена');
@@ -2559,6 +2655,7 @@ function movePosProduct(id,folderId){
   });
 }
 function reorderPosCategoryTile(type,id,targetIndex){
+  if(!window.POSAccess?.require('products.edit'))return false;
   if(!state.editMode||!state.posPath||state.search)return;
   const parent=window._posFolderModal?.id||state.posFolder||'';
   return updatePosNavigation(state.posPath,items=>{
@@ -2642,7 +2739,7 @@ function renderPosScreen(shift){
     </div>`;
   }).join('');
 
-  const parkCount=state.parked.length;
+  const parkCount=state.parked.filter(o=>!o.cancelledAt).length;
   const folderName=posCategoryItems(currentCategory).find(i=>i.type==='folder'&&i.id===state.posFolder)?.name;
   const title=currentCategory ? escapeHtml(currentCategory+(folderName?' / '+folderName:'')) : 'Рабочая зона';
   return `<div class="screen ${state.tab==='pos'?'active':''}" id="screen-pos">
@@ -2670,6 +2767,7 @@ function renderPosScreen(shift){
 }
 function onSearch(v){ state.search=v; render(); const el=document.querySelector('.search-box'); if(el){ el.focus(); el.setSelectionRange(v.length,v.length); } }
 function toggleEditMode(){
+  if(!window.POSAccess?.require('products.edit'))return false;
   state.editMode=!state.editMode;
   state.search='';
   render();
@@ -2721,6 +2819,7 @@ function openLayoutEditor(){
   document.getElementById('layout-editor-done')?.addEventListener('click',()=>{ closeModal(); render(); setTimeout(setupLayoutGridDrag,50); });
 }
 function addLayoutTile(type,id){
+  if(!window.POSAccess?.require('products.edit'))return false;
   if(!type || !id) return;
   if(state.layoutTiles.length>=20){ flash('В рабочей зоне можно разместить максимум 20 плиток'); return; }
   state.layoutTiles.push({type,id});
@@ -2730,6 +2829,7 @@ function addLayoutTile(type,id){
   openLayoutEditor();
 }
 function removeLayoutTile(index){
+  if(!window.POSAccess?.require('products.edit'))return false;
   state.layoutTiles.splice(Number(index),1);
   saveKey('layout',{categoryOrder:state.categoryOrder,categoryColors:state.categoryColors,categorySymbols:state.categorySymbols,categoryOnline:state.categoryOnline,tiles:state.layoutTiles});
   render();
@@ -2776,6 +2876,7 @@ function nearestFreeCell(grid,col,row,exceptIndex){
   return {col:Math.min(m.cols-1,col),row:row+1};
 }
 function onLayoutPointerDown(e){
+  if(!window.POSAccess?.require('products.edit'))return false;
   if(!state.editMode) return;
   if(e.target.closest('button')) return;
   const tile=e.target.closest('.layout-tile');
@@ -2813,6 +2914,7 @@ function onLayoutPointerMove(e){
   h.style.width=m.cellW+'px'; h.style.height=m.rowH+'px'; d.grid.appendChild(h);
 }
 function onLayoutPointerUp(e){
+  if(!window.POSAccess?.require('products.edit'))return false;
   const d=layoutDragState;
   if(!d || d.pointerId!==e.pointerId) return;
   if(d.dragging){
@@ -2887,6 +2989,7 @@ function renderCartPanel(shift){
 }
 
 function discountValue(item){
+  if(item && Number.isFinite(item.paymentDiscount))return item.paymentDiscount;
   if(!item || !item.discountId) return 0;
   const d=state.discounts.find(x=>x.id===item.discountId);
   if(!d) return 0;
@@ -2915,11 +3018,9 @@ function selectCartDiscount(id){
   document.querySelectorAll('.discount-choice').forEach(b=>b.classList.toggle('selected',(b.dataset.discountId||'')===(id||'')));
 }
 function saveCartItemOptions(id){
-  const item=state.cart.find(i=>i.productId===id); if(!item) return;
-  item.comment=(document.getElementById('ci-comment')?.value||'').trim();
-  item.discountId=document.getElementById('ci-discount')?.value||'';
-  saveCurrentOrderSession();
-  closeModal(); render();
+  if(!window.POSAccess?.require('pos'))return false;
+  if(!assertCartEditable())return;
+  return commitPOSOperation('cart-options',['currentOrderSession'],()=>{const item=state.cart.find(i=>i.productId===id);if(!item)throw new Error('Товар не найден');item.comment=(document.getElementById('ci-comment')?.value||'').trim();item.discountId=document.getElementById('ci-discount')?.value||'';},()=>{closeModal();render();});
 }
 
 
@@ -2939,39 +3040,42 @@ function openOrderSettings(){
       <div class="field" style="margin-top:12px;"><label>Итого заказа</label><div style="font-size:24px;font-weight:800;">${fullMoney(cartTotal())}</div></div>`:''}
     <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button class="btn btn-primary" onclick="saveOrderSettings()">Сохранить</button></div>`);
 }
-function setOrderType(t){ state.orderType=t; if(t!=='Доставка') state.deliveryFee=0; saveCurrentOrderSession(); render(); openOrderSettings(); }
-function selectDeliveryFee(amount){ state.deliveryFee=Number(amount)||0; saveCurrentOrderSession(); render(); openOrderSettings(); }
+function setOrderType(t){
+  if(!window.POSAccess?.require('pos'))return false;
+  if(!assertCartEditable()||!['На месте','С собой','Доставка'].includes(t))return;
+  return commitPOSOperation('cart-type',['currentOrderSession'],()=>{state.orderType=t;if(t!=='Доставка')state.deliveryFee=0;},()=>{render();openOrderSettings();});
+}
+function selectDeliveryFee(amount){
+  if(!window.POSAccess?.require('pos'))return false;
+  if(!assertCartEditable()||!Number.isFinite(amount)||amount<0)return;
+  return commitPOSOperation('cart-delivery',['currentOrderSession'],()=>{state.deliveryFee=amount;},()=>{render();openOrderSettings();});
+}
 function saveOrderSettings(){
-  state.orderLabel=(document.getElementById('order-label')?.value||'').trim();
-  state.customer.name=(document.getElementById('customer-name')?.value||'').trim();
-  state.customer.phone=(document.getElementById('customer-phone')?.value||'').trim();
-  state.customer.address=(document.getElementById('customer-address')?.value||'').trim();
-  saveCurrentOrderSession();
-  closeModal(); render();
+  if(!window.POSAccess?.require('pos'))return false;
+  if(!assertCartEditable())return;
+  return commitPOSOperation('cart-customer',['currentOrderSession'],()=>{
+    state.orderLabel=(document.getElementById('order-label')?.value||'').trim();
+    state.customer={name:(document.getElementById('customer-name')?.value||'').trim(),phone:(document.getElementById('customer-phone')?.value||'').trim(),address:(document.getElementById('customer-address')?.value||'').trim()};
+  },()=>{closeModal();render();});
+}
+function addToCart(id){
+  if(!window.POSAccess?.require('pos'))return false;
+  if(!assertCartEditable())return;
+  const p=getProduct(id);if(!p)return;
+  const proposed=state.cart.map(i=>({...i,qty:Number(i.qty)+(i.productId===id?1:0)}));
+  if(!proposed.some(i=>i.productId===id))proposed.push({productId:id,name:p.name,price:p.price,qty:1});
+  if(!canFulfillCart(proposed))return;
+  return commitPOSOperation('cart-add',['currentOrderSession'],()=>{state.cart=proposed;state._splitPayments=[];},render);
+}
+function changeQty(id,delta){
+  if(!window.POSAccess?.require('pos'))return false;
+  if(!assertCartEditable()||!Number.isFinite(delta))return;
+  if(!state.cart.some(i=>i.productId===id))return;
+  const proposed=state.cart.map(i=>({...i,qty:Number(i.qty)+(i.productId===id?delta:0)})).filter(i=>i.qty>0);
+  if(!canFulfillCart(proposed))return;
+  return commitPOSOperation('cart-quantity',['currentOrderSession'],()=>{state.cart=proposed;state._splitPayments=[];},render);
 }
 
-function addToCart(id){
-  const p = getProduct(id);
-  if(!p) return;
-  const existing = state.cart.find(i=>i.productId===id);
-  const proposed=state.cart.map(i=>({...i,qty:i.qty+(i.productId===id?1:0)}));
-  if(!existing) proposed.push({productId:id,qty:1});
-  if(!canFulfillCart(proposed)) return;
-  if(existing){ existing.qty += 1; }
-  else{ state.cart.push({productId:id, name:p.name, price:p.price, qty:1}); }
-  saveCurrentOrderSession();
-  render();
-}
-function changeQty(id, delta){
-  const item = state.cart.find(i=>i.productId===id);
-  if(!item) return;
-  const newQty = item.qty + delta;
-  if(newQty <= 0){ state.cart = state.cart.filter(i=>i.productId!==id); saveCurrentOrderSession(); render(); return; }
-  if(!canFulfillCart(state.cart.map(i=>({...i,qty:i.productId===id?newQty:i.qty})))) return;
-  item.qty = newQty;
-  saveCurrentOrderSession();
-  render();
-}
 let cartSwipeState = null;
 function handleCartRowClick(e,id){
   if(e.target.closest('button,.qty-stepper')) return;
@@ -3030,7 +3134,9 @@ function cartRowTouchCancel(e,row){
   row.querySelector('.cart-row-content').style.transform='';
   cartSwipeState=null;
 }
-function removeFromCart(id){ state.cart = state.cart.filter(i=>i.productId!==id); saveCurrentOrderSession(); render(); }
+function removeFromCart(id){
+  if(!window.POSAccess?.require('pos'))return false;
+  if(!assertCartEditable())return;return commitPOSOperation('cart-remove',['currentOrderSession'],()=>{state.cart=state.cart.filter(i=>i.productId!==id);state._splitPayments=[];},render);}
 
 function flash(msg){
   const el = document.createElement('div');
@@ -3042,25 +3148,23 @@ function flash(msg){
 
 /* ---- Park (save receipt for later) ---- */
 function parkOrder(){
-  if(!state.cart.length) return;
+  if(!window.POSAccess?.require('pos'))return false;
+  if(!state.cart.length||!assertCartEditable()) return;
   const shift=currentShift(), employee=state.employees.find(e=>e.id===shift?.employeeId);
   const parked = {id:uid(), receiptDisplayNumber:'#'+(state.parked.length+1), items: state.cart.map(i=>{const product=getProduct(i.productId);return {...JSON.parse(JSON.stringify(i)),category:product?.category||i.category||''}}), total: cartTotal(), subtotal: cartSubtotal(), deliveryFee: state.orderType==='Доставка'?Number(state.deliveryFee||0):0, orderLabel: state.orderLabel, orderType: state.orderType, customer: JSON.parse(JSON.stringify(state.customer)), employeeName:employee?.name||employee?.fullName||'Сотрудник',registerName:'POS 1',timestamp:Date.now(),createdAt: Date.now(),kitchenPrinted:true};
-  if(typeof window.printKitchenOrderNow==='function')window.printKitchenOrderNow(parked);
-  window.__currentOrderKitchenPrinted=false;
+  return commitPOSOperation('park',['parked','currentOrderSession'],()=>{
   state.parked.push(parked);
-  saveKey('parked', state.parked);
-  state.cart = [];
-  clearCurrentOrderSession();
+  state.cart = [];state._kitchenPrinted=false;
+
   // New order must always start with clean order metadata.
   state.orderLabel = '';
   state.orderType = 'На месте';
   state.deliveryFee = 0;
   state.customer = {name:'', phone:'', address:''};
-  render();
-  flash('Чек отложен');
+  },()=>{window.__currentOrderKitchenPrinted=false;render();flash('Чек отложен');if(typeof window.printKitchenOrderNow==='function')window.printKitchenOrderNow(parked);});
 }
 function openParkedModal(){
-  const list = state.parked.slice().sort((a,b)=>b.createdAt-a.createdAt);
+  const list = state.parked.filter(o=>!o.cancelledAt).slice().sort((a,b)=>b.createdAt-a.createdAt);
   showModal(`
     <div class="modal-title">Отложенные чеки</div>
     ${list.length ? list.map(o=>`
@@ -3077,25 +3181,20 @@ function openParkedModal(){
   `);
 }
 function resumeParked(id){
-  if(state.cart.length){ flash('Сначала завершите текущий заказ'); return; }
-  const o = state.parked.find(x=>x.id===id);
-  if(!o) return;
-  state.cart = JSON.parse(JSON.stringify(o.items));
-  state.orderLabel = o.orderLabel || '';
-  state.orderType = o.orderType || 'На месте';
-  state.customer = o.customer || {name:'',phone:'',address:''};
-  state.deliveryFee = Number(o.deliveryFee||0);
-  window.__currentOrderKitchenPrinted=!!o.kitchenPrinted;
-  saveCurrentOrderSession();
-  state.parked = state.parked.filter(x=>x.id!==id);
-  saveKey('parked', state.parked);
-  closeModal();
-  render();
+  if(!window.POSAccess?.require('pos'))return false;
+  if(state.cart.length||!assertCartEditable()){flash('Сначала завершите текущий заказ');return;}
+  const original=state.parked.find(x=>x.id===id&&!x.cancelledAt);if(!original)return;
+  return commitPOSOperation('resume-parked',['parked','currentOrderSession'],()=>{
+    const o=state.parked.find(x=>x.id===id);
+    state.cart=JSON.parse(JSON.stringify(o.items));state.orderLabel=o.orderLabel||'';state.orderType=o.orderType||'На месте';state.customer=o.customer||{name:'',phone:'',address:''};state.deliveryFee=Number(o.deliveryFee||0);state._splitPayments=[];
+    state._kitchenPrinted=!!o.kitchenPrinted;state.parked=state.parked.filter(x=>x.id!==id);
+  },()=>{window.__currentOrderKitchenPrinted=!!original.kitchenPrinted;closeModal();render();});
 }
 function deleteParked(id){
-  state.parked = state.parked.filter(x=>x.id!==id);
-  saveKey('parked', state.parked);
-  openParkedModal();
+  if(!window.POSAccess?.require('pos'))return false;
+  if(!assertCartEditable())return;
+  if(!state.parked.some(x=>x.id===id&&!x.cancelledAt))return;
+  return commitPOSOperation('cancel-parked',['parked'],()=>{const o=state.parked.find(x=>x.id===id);o.cancelledAt=Date.now();o.cancelledBy=currentShift()?.employeeId||'';},()=>openParkedModal());
 }
 
 /* ---- Payment ---- */
@@ -3119,12 +3218,18 @@ function cashQuickValues(total){
   return [...new Set(vals)];
 }
 function openPaymentModal(){
+  if(!window.POSAccess?.require('pos'))return false;
+  if(financialBusy||financialBlocked||storageBroken)return;
+  if(state._cardIntent){showCardConfirmation();return;}
+  if(splitPaidTotal()>0){renderSplitPayment();return;}
   if(!state.cart.length){flash('Заказ пуст');return;}
   if(!currentShift()){flash('Смена не открыта');return;}
   if(!canFulfillCart()) return;
   renderPaymentScreen();
 }
 function renderPaymentScreen(){
+  if(state._cardIntent){showCardConfirmation();return;}
+  if(splitPaidTotal()>0){renderSplitPayment();return;}
   const total=cartTotal();
   showModal(`<div class="modal-title">Оплата</div>
     <div class="payment-layout">
@@ -3191,6 +3296,8 @@ function paymentKeyPress(key,total){
 function setPaymentCash(v,total){state._paymentCashGiven=Number(v)||0;renderPaymentAmount(total);}
 function updatePaymentChange(total){const out=document.getElementById('paymentChange');if(!out)return;const given=paymentGivenValue();out.textContent=fullMoney(Math.max(0,given-total));}
 function openSplitPayment(){
+  if(financialBusy||financialBlocked)return;
+  if(state._cardIntent){showCardConfirmation();return;}
   const total=cartTotal();
   if(!Array.isArray(state._splitPayments)||!state._splitPayments.length){
     state._splitPayments=buildSplitPayments(2,total);
@@ -3226,6 +3333,8 @@ function normalizeSplitPayments(total){
   state._splitCount=ps.length;
 }
 function adjustSplitCount(delta){
+  if(!window.POSAccess?.require('pos'))return false;
+  if(financialBusy||financialBlocked||state._cardIntent)return;
   const total=cartTotal();
   let ps=Array.isArray(state._splitPayments)?state._splitPayments:buildSplitPayments(2,total);
   const next=Math.max(2,Math.min(10,ps.length+delta));
@@ -3256,9 +3365,10 @@ function parsePaymentNumber(value){
   if(normalized==='' || normalized==='.' || normalized==='-') return null;
   if(!/^\d+(?:\.\d{0,2})?$/.test(normalized)) return null;
   const n=Number(normalized);
-  return Number.isFinite(n) ? n : null;
+  return Number.isFinite(n)&&Number.isSafeInteger(Math.round(n*100)) ? n : null;
 }
 function updateSplitAmountLive(index,value){
+  if(financialBusy||financialBlocked||state._cardIntent)return;
   const ps=state._splitPayments||[];
   const p=ps[index];
   if(!p||p.paid)return;
@@ -3373,11 +3483,13 @@ function renderSplitPayment(){
       <div style="max-height:58vh;overflow:auto;">${rows}</div>
       <div class="split-summary"><span>Оплачено</span><span class="split-summary-value">${fullMoney(paidTotal)}</span></div>
       <div class="split-summary" style="border-top:none;padding-top:0;margin-top:0;"><span>Осталось</span><span class="split-summary-value">${fullMoney(remaining)}</span></div>
-      <div class="modal-actions"><button class="btn btn-secondary" onclick="renderPaymentScreen()">Назад</button></div>
+      <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Назад</button>${ps.length&&ps.every(p=>p.paid)?`<button class="btn btn-primary" onclick="finalizePayment(state._splitPayments)">Завершить чек</button>`:''}</div>
     </div></div>`,true);
   const modal=document.querySelector('#modal-root .modal'); if(modal) modal.classList.add('payment-modal');
 }
 function setSplitMethod(index,method){
+  if(!window.POSAccess?.require('pos'))return false;
+  if(financialBusy||financialBlocked||state._cardIntent||!['cash','card'].includes(method))return;
   const p=state._splitPayments?.[index];
   if(!p||p.paid)return;
   p.method=method;
@@ -3385,6 +3497,7 @@ function setSplitMethod(index,method){
   renderSplitPayment();
 }
 function paySplitPart(index){
+  if(!window.POSAccess?.require('pos'))return false;
   if(!canFulfillCart()) return;
   const p=state._splitPayments?.[index];
   if(!p || p.paid) return;
@@ -3397,7 +3510,7 @@ function paySplitPart(index){
     return;
   }
   if(p.method==='card'){
-    openCardPartConfirmation(amount, ()=>completeSplitPayment(index));
+    openCardPartConfirmation(amount, ()=>completeSplitPayment(index),index);
     return;
   }
 }
@@ -3447,31 +3560,56 @@ function updateSplitCashChange(total){
   out.textContent=fullMoney(Math.max(0,given-total));
 }
 function confirmSplitCashPayment(index,total){
+  if(!window.POSAccess?.require('pos'))return false;
   const p=state._splitPayments?.[index]; if(!p||p.paid)return;
-  const given=Math.round((Number(document.getElementById('splitCashGiven')?.value)||0)*100)/100;
-  if(given<total){flash('Недостаточно внесённой суммы');return;}
+  const given=parsePaymentNumber(document.getElementById('splitCashGiven')?.value);
+  if(given===null||!Number.isFinite(total)||total!==p.amount||given<total){flash('Недостаточно внесённой суммы');return;}
   p.cashGiven=given;
   p.change=Math.round((given-total)*100)/100;
   closeModal();
   completeSplitPayment(index);
 }
 function completeSplitPayment(index){
-  const p=state._splitPayments?.[index]; if(!p||p.paid)return;
-  p.paid=true;
-  renderSplitPayment();
-  if(state._splitPayments.every(x=>x.paid)) setTimeout(()=>finalizePayment(state._splitPayments),80);
+  if(!window.POSAccess?.require('pos'))return false;
+  const p=state._splitPayments?.[index];if(!p||p.paid)return;
+  if(!['cash','card'].includes(p.method)||!Number.isFinite(p.amount)||p.amount<=0||Math.abs((state._splitPayments||[]).reduce((sum,x)=>sum+Number(x.amount),0)-cartTotal())>.001){flash('Проверьте суммы частей оплаты');return false;}
+  return commitPOSOperation('split-payment',['currentOrderSession'],()=>{for(const item of state.cart)item.paymentDiscount=discountValue(item);state._splitPayments[index].paid=true;for(const part of state._splitPayments)if(part.amount===0)part.paid=true;state._cardIntent=null;},()=>{
+    renderSplitPayment();if(state._splitPayments.every(x=>x.paid))finalizePayment(state._splitPayments);
+  });
 }
-function openCardPartConfirmation(amount,onSuccess){
-  showModal(`<div class="modal-title">Оплата картой</div>
-    <div class="center-note" style="padding:18px 0 12px;">Проведите оплату на терминале</div>
-    <div style="font-size:30px;font-weight:850;text-align:center;margin-bottom:16px;">${fullMoney(amount)}</div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeModal();renderSplitPayment();">Отмена</button>
-      <button class="btn btn-card" onclick="window.__cardPaymentConfirm&&window.__cardPaymentConfirm()">Оплата прошла</button>
-    </div>`);
-  window.__cardPaymentConfirm=()=>{window.__cardPaymentConfirm=null;onSuccess();};
+
+function showCardConfirmation(){
+  const intent=state._cardIntent;if(!intent)return;
+  showModal(`<div class="modal-title">Оплата картой</div><p>Проверьте результат на терминале. Если платёж уже прошёл, не проводите его повторно.</p><div style="font-size:30px;font-weight:850;text-align:center;margin:16px 0">${fullMoney(intent.amount)}</div><div class="modal-actions"><button class="btn btn-secondary" onclick="cancelCardIntent()">Платёж не прошёл</button><button class="btn btn-card" onclick="confirmCardIntent()">Оплата прошла</button></div>`);
 }
+function openCardPartConfirmation(amount,onSuccess,splitIndex=null){
+  if(!window.POSAccess?.require('pos'))return false;
+  if(state._cardIntent){showCardConfirmation();return;}
+  if(!Number.isFinite(amount)||amount<=0){flash('Некорректная сумма');return;}
+  return commitPOSOperation('card-intent',['currentOrderSession'],()=>{
+    for(const item of state.cart)item.paymentDiscount=discountValue(item);
+    state._cardIntent={amount,splitIndex,createdAt:Date.now(),confirmed:false};
+  },showCardConfirmation);
+}
+function cancelCardIntent(){
+  if(!window.POSAccess?.require('pos'))return false;
+  if(!state._cardIntent)return;
+  return commitPOSOperation('cancel-card-intent',['currentOrderSession'],()=>{state._cardIntent=null;if(!splitPaidTotal())for(const item of state.cart)delete item.paymentDiscount;},()=>openPaymentModal());
+}
+function confirmCardIntent(){
+  if(!window.POSAccess?.require('pos'))return false;
+  const intent=state._cardIntent;if(!intent||financialBusy||financialBlocked)return;
+  if(intent.splitIndex!==null){
+    if(!state._splitPayments?.[intent.splitIndex]||state._splitPayments[intent.splitIndex].amount!==intent.amount){flash('Состав оплаты изменился. Требуется проверка');return;}
+    return completeSplitPayment(intent.splitIndex);
+  }
+  return commitPOSOperation('confirm-card-intent',['currentOrderSession'],()=>{state._cardIntent.confirmed=true;},()=>finalizePayment([{method:'card',amount:intent.amount,paid:true}]));
+}
+
 function confirmPaymentScreen(method){
+  if(!window.POSAccess?.require('pos'))return false;
+  if(!['cash','card'].includes(method)||financialBusy||financialBlocked)return;
+  if(splitPaidTotal()>0){openSplitPayment();return;}
   if(!canFulfillCart()) return;
   const total=cartTotal();
   if(method==='cash'){
@@ -3484,39 +3622,55 @@ function confirmPaymentScreen(method){
   }
 }
 function finalizePayment(payments){
+  if(!window.POSAccess?.require('pos'))return false;
+  if(financialBusy||financialBlocked||storageBroken)return false;
   const shift=currentShift(); if(!shift){flash('Смена не открыта');return;}
-  const total=cartTotal();
-  const clean=payments.map(p=>({method:p.method,amount:Math.round(Number(p.amount||0)*100)/100,cashGiven:p.cashGiven!=null?Number(p.cashGiven):null,change:p.change!=null?Number(p.change):null}));
+  const total=Math.round(cartTotal()*100)/100;
+  if(!Array.isArray(payments)||!payments.length||!Number.isFinite(total)||total<0||!Number.isSafeInteger(Math.round(total*100))||state.cart.some(i=>!Number.isFinite(Number(i.price))||Number(i.price)<0||!Number.isFinite(Number(i.qty))||Number(i.qty)<=0)){
+    flash('Некорректные данные оплаты');return false;
+  }
+  if(payments.some(p=>!p||!['cash','card'].includes(p.method)||!Number.isFinite(Number(p.amount))||Number(p.amount)<0||!Number.isSafeInteger(Math.round(Number(p.amount)*100)))){flash('Некорректный платёж');return false;}
+  if(splitPaidTotal()>0 && (JSON.stringify(payments)!==JSON.stringify(state._splitPayments)||!state._splitPayments.every(p=>p.paid))){flash('Завершите уже начатую разделённую оплату');return false;}
+
+  if(state._cardIntent && (state._cardIntent.splitIndex!==null||!state._cardIntent.confirmed||payments.length!==1||payments[0].method!=='card'||state._cardIntent.amount!==Number(payments[0]?.amount))){flash('Сначала подтвердите результат на банковском терминале');return false;}
+  const clean=payments.map(p=>({method:p.method,amount:Math.round(Number(p.amount||0)*100)/100,cashGiven:p.method==='cash'&&p.cashGiven!=null?Number(p.cashGiven):null,change:null}));
   const paidTotal=Math.round(clean.reduce((s,p)=>s+p.amount,0)*100)/100;
   if(Math.abs(paidTotal-total)>0.001){flash('Сумма платежей не совпадает с суммой чека');return;}
+  for(const payment of clean){
+    if(payment.method==='cash'&&payment.cashGiven!==null){
+      if(!Number.isFinite(payment.cashGiven)||payment.cashGiven<payment.amount){flash('Недостаточно внесённой суммы');return false;}
+      payment.change=Math.round((payment.cashGiven-payment.amount)*100)/100;
+    }
+  }
   const cashAmount=clean.filter(p=>p.method==='cash').reduce((s,p)=>s+p.amount,0);
   const deliveryFee=state.orderType==='Доставка'?Number(state.deliveryFee||0):0;
-  if(deliveryFee>0){const t=shiftTotals(shift.id);const available=Number(shift.openingCash||0)+Number(t.cash||0)+Number(t.netMovements||0)+cashAmount;if(deliveryFee>available+0.0001){flash('Недостаточно наличных в кассе для списания доставки');return;}}
+  if(deliveryFee>0){const t=shiftTotals(shift.id);const available=Number(shift.openingCash||0)+Number(t.cashIn||0)+Number(t.netMovements||0)+cashAmount;if(deliveryFee>available+0.0001){flash('Недостаточно наличных в кассе для списания доставки');return;}}
   if(!state.cart.length){flash('Заказ пуст');return;}
   let stockConsumption;
   try{ stockConsumption=checkedStockConsumption(state.cart); }
   catch(e){ flash(e.message); return; }
   const method=clean.length===1?clean[0].method:'split';
-  const receiptSequence=(state.orders.filter(o=>o.shiftId===shift.id).length+1);
+  const receiptSequence=Math.max(0,state.orders.filter(o=>o.shiftId===shift.id).length,...state.orders.filter(o=>o.shiftId===shift.id).map(o=>Number(o.receiptNumber)||0))+1;
   const shiftEmployee=state.employees.find(e=>e.id===shift.employeeId);
-  const order={id:uid(),shiftId:shift.id,receiptNumber:receiptSequence,receiptDisplayNumber:`#${receiptSequence}`,employeeId:shift.employeeId||'',employeeName:shiftEmployee?.name||shiftEmployee?.fullName||'Сотрудник',registerName:'POS 1',method,total,payments:clean,cashGiven:method==='cash'?clean[0].cashGiven:null,change:method==='cash'?clean[0].change:null,orderLabel:state.orderLabel||'',orderType:state.orderType,deliveryFee:deliveryFee,customer:JSON.parse(JSON.stringify(state.customer)),items:state.cart.map(i=>{const d=state.discounts.find(x=>x.id===i.discountId),product=getProduct(i.productId);return {...i,category:product?.category||i.category||'',discountName:d?.name||'',discountType:d?.type||'',discountValue:Number(d?.value)||0,cost:product?(product.type==='simple'?product.cost:compositeCost(product)):0};}),timestamp:Date.now()};
+  const order={id:uid(),shiftId:shift.id,receiptNumber:receiptSequence,receiptDisplayNumber:`#${receiptSequence}`,employeeId:shift.employeeId||'',employeeName:shiftEmployee?.name||shiftEmployee?.fullName||'Сотрудник',registerName:'POS 1',method,total,payments:clean,cashGiven:method==='cash'?clean[0].cashGiven:null,change:method==='cash'?clean[0].change:null,orderLabel:state.orderLabel||'',orderType:state.orderType,deliveryFee:deliveryFee,customer:JSON.parse(JSON.stringify(state.customer)),items:state.cart.map(i=>{const d=state.discounts.find(x=>x.id===i.discountId),product=getProduct(i.productId);return {...i,paymentDiscount:discountValue(i),category:product?.category||i.category||'',discountName:d?.name||'',discountType:d?.type||'',discountValue:Number(d?.value)||0,cost:product?(product.type==='simple'?product.cost:compositeCost(product)):0};}),timestamp:Date.now()};
   order.stockConsumption=stockConsumption;
-  for(const item of stockConsumption.items){
-    const p=getProduct(item.productId);
-    p.stock=Math.max(0,Number(p.stock)-item.qty);
-  }
-  state.orders.push(order);
-  if(deliveryFee>0){if(!Array.isArray(shift.cashMovements))shift.cashMovements=[];shift.cashMovements.push({id:uid(),type:'withdrawal',subtype:'delivery',amount:deliveryFee,timestamp:Date.now(),note:'🚗 Доставка'});}
-  saveKey('products',state.products);saveKey('orders',state.orders);saveKey('shifts',state.shifts);
-  state.cart=[];state.orderLabel='';state.orderType='На месте';state.deliveryFee=0;state.customer={name:'',phone:'',address:''};state._splitPayments=[];state._splitCount=0;
-  clearCurrentOrderSession();
-  render();showReceipt(order);setTimeout(()=>{if(typeof window.printCompletedOrder==='function')window.printCompletedOrder(order);else if(state.printer?.autoPrint)sendOrderToPrint(order);window.__currentOrderKitchenPrinted=false},250);
+  const kitchenAlreadyPrinted=!!state._kitchenPrinted;
+  return commitPOSOperation('payment',['products','orders','shifts','currentOrderSession'],()=>{
+    for(const item of stockConsumption.items){const p=getProduct(item.productId);p.stock=Math.max(0,Number(p.stock)-item.qty);}
+    state.orders.push(order);
+    const targetShift=state.shifts.find(s=>s.id===shift.id);
+    if(deliveryFee>0){if(!Array.isArray(targetShift.cashMovements))targetShift.cashMovements=[];targetShift.cashMovements.push({id:uid(),type:'withdrawal',subtype:'delivery',orderId:order.id,amount:deliveryFee,timestamp:Date.now(),note:'🚗 Доставка'});}
+    state.cart=[];state.orderLabel='';state.orderType='На месте';state.deliveryFee=0;state.customer={name:'',phone:'',address:''};state._splitPayments=[];state._splitCount=0;state._cardIntent=null;state._kitchenPrinted=false;
+    return order;
+  },()=>{
+  window.__currentOrderKitchenPrinted=false;render();showReceipt(order);setTimeout(()=>{if(typeof window.printCompletedOrder==='function')window.printCompletedOrder(order,kitchenAlreadyPrinted);else if(state.printer?.autoPrint)sendOrderToPrint(order)},250);  });
 }
 function openCashModal(){openPaymentModal();}
 function openCardModal(){openPaymentModal();}
 function confirmPayment(method,total){if(method==='cash'||method==='card')confirmPaymentScreen(method);}
 
 function receiptItemDiscount(i){
+  if(i&&Number.isFinite(i.paymentDiscount))return i.paymentDiscount;
   if(!i || !i.discountName) return 0;
   const base=Number(i.price||0)*Number(i.qty||0);
   return i.discountType==='percent' ? base*Math.max(0,Math.min(100,Number(i.discountValue)||0))/100 : Math.min(base,Math.max(0,Number(i.discountValue)||0)*Number(i.qty||0));
@@ -3572,6 +3726,7 @@ function showReceipt(order){
   `);
 }
 function viewReceiptModal(orderId){
+  if(!window.POSAccess?.require('receipts.view'))return false;
   const order = state.orders.find(o=>o.id===orderId);
   if(!order) return;
   showModal(`
@@ -3618,6 +3773,7 @@ function restoreOrderStock(order){
   }
 }
 function openReturnConfirm(orderId){
+  if(!window.POSAccess?.require('receipts.return'))return false;
   const order=state.orders.find(o=>o.id===orderId);
   if(!order) return;
   if(order.returnedAt){ flash('Этот чек уже возвращён'); return; }
@@ -3635,20 +3791,27 @@ function openReturnConfirm(orderId){
     </div>`);
 }
 function processFullReturn(orderId){
+  if(!window.POSAccess?.require('receipts.return'))return false;
   try{
     const order=state.orders.find(o=>String(o.id)===String(orderId));
     const shift=currentShift();
     if(!order){flash('Чек не найден');return;}
     if(order.returnedAt){flash('Этот чек уже возвращён');return;}
+    if(!Object.prototype.hasOwnProperty.call(order,'stockConsumption')){flash('В старом чеке нет снимка списания. Автоматический возврат остановлен: сначала нужна сверка состава и остатков.');return false;}
     if(!shift){flash('Для возврата откройте кассовую смену');return;}
     const total=Math.round(Number(order.total||0)*100)/100;
-    if(!(total>=0)){flash('Некорректная сумма возврата');return;}
+    if(!Number.isFinite(total)||!(total>=0)){flash('Некорректная сумма возврата');return;}
+    if(Array.isArray(order.payments)&&order.payments.some(p=>!p||!['cash','card'].includes(p.method)||!Number.isFinite(Number(p.amount))||Number(p.amount)<0))throw new Error('Некорректные данные оплаты чека');
+    if(Array.isArray(order.payments)&&Math.abs(order.payments.reduce((sum,p)=>sum+Number(p.amount),0)-total)>.001)throw new Error('Суммы платежей не совпадают с чеком');
     const refundCash=Array.isArray(order.payments)?order.payments.filter(p=>p.method==='cash').reduce((s,p)=>s+Number(p.amount||0),0):(order.method==='cash'?total:0);
+    if(!Number.isFinite(refundCash)||refundCash>total+.001)throw new Error('Некорректная сумма возврата');
     if(refundCash>0){
       const t=shiftTotals(shift.id);
-      const available=Number(shift.openingCash||0)+Number(t.cash||0)+Number(t.netMovements||0);
+      const available=Number(shift.openingCash||0)+Number(t.cashIn||0)+Number(t.netMovements||0);
       if(refundCash>available+0.0001){flash('Недостаточно наличных в кассе для возврата');return;}
     }
+    return commitPOSOperation('return',['products','orders','shifts'],()=>{
+    const order=state.orders.find(o=>String(o.id)===String(orderId));const shift=currentShift();
     restoreOrderStock(order);
     const now=Date.now();
     order.returnedAt=now;
@@ -3656,11 +3819,9 @@ function processFullReturn(orderId){
     order.returnAmount=total;
     if(!Array.isArray(shift.cashMovements)) shift.cashMovements=[];
     if(refundCash>0){
-      shift.cashMovements.push({id:uid(),type:'withdrawal',subtype:'refund',amount:refundCash,timestamp:now,note:'Возврат чека'});
+      shift.cashMovements.push({id:uid(),type:'withdrawal',subtype:'refund',orderId:order.id,amount:refundCash,timestamp:now,note:'Возврат чека'});
     }
-    saveKey('products',state.products);
-    saveKey('orders',state.orders);
-    saveKey('shifts',state.shifts);
+    },()=>{
     closeModal();
     render();
     setTimeout(()=>showModal(`
@@ -3668,6 +3829,7 @@ function processFullReturn(orderId){
       <div class="settings-note">Товары возвращены на остатки. ${refundCash>0?'Наличная часть списана из текущей кассовой смены как «Возврат чека».':''}${(order.method==='card'||order.method==='split')?' Карточная часть возвращается через банковский терминал.':''}</div>
       <div class="field"><label>Сумма возврата</label><div style="font-size:26px;font-weight:800;">${fullMoney(total)}</div></div>
       <div class="modal-actions"><button type="button" class="btn btn-secondary" onclick="viewReceiptModal('${escapeAttr(order.id)}')">Открыть чек</button><button type="button" class="btn btn-primary" onclick="closeModal()">Готово</button></div>`),50);
+    });
   }catch(e){
     console.error('processFullReturn error',e);
     flash('Не удалось выполнить возврат: '+(e.message||'неизвестная ошибка'));
@@ -3677,6 +3839,7 @@ window.processFullReturn = processFullReturn;
 window.openReturnConfirm = openReturnConfirm;
 
 function printReceipt(orderId){
+  if(!window.POSAccess?.require('receipts.print'))return false;
   const order = state.orders.find(o=>o.id===orderId);
   if(!order) return;
   if(typeof window.sendOrderToPrint==='function'){
@@ -3688,6 +3851,7 @@ function printReceipt(orderId){
 
 /* ============================= RECEIPTS SCREEN (история чеков) ============================= */
 function renderReceiptsScreen(){
+  if(!window.POSAccess?.can('receipts.view'))return '<div class="screen"></div>';
   const list = state.orders.slice().sort((a,b)=>b.timestamp-a.timestamp).slice(0,300);
   return `
   <div class="screen content-screen ${state.tab==='receipts'?'active':''}">
@@ -3770,6 +3934,7 @@ function previewProductImport(){
   showModal(`<h2>Проверка импорта</h2><p>Добавить: <b>${plan.add.length}</b> · Уже есть или повторяются: <b>${plan.skipped.length}</b></p><p class="pe-note">Цены берутся из файла. Пустая или изменяемая цена — 0 до ручного заполнения. Себестоимость и остаток — 0; публикация в WEB выключена. Единицы и состав не назначены.</p><div style="max-height:45vh;overflow:auto">${plan.add.map(p=>`<div style="padding:12px 0;border-bottom:1px solid var(--border)"><b>${escapeHtml(p.name)}</b><div class="pe-note">${escapeHtml(p.category||'Без категории')} · ${p.price===null?'Цена не задана — заполните вручную':money(p.price)}</div></div>`).join('')}${plan.skipped.length?`<details><summary>Пропущенные товары</summary>${plan.skipped.map(n=>`<p>${escapeHtml(n)}</p>`).join('')}</details>`:''}</div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button id="product-import-confirm" class="btn btn-primary" ${plan.add.length?'':'disabled'} onclick="confirmProductImport()">Добавить товары</button></div>`,true);
 }
 async function confirmProductImport(){
+  if(!window.POSAccess?.require('products.edit'))return false;
   if(window._productImportBusy)return;
   const plan=planProductImport(window._productImportEntries||[]);
   if(JSON.stringify(plan.add)!==window._productImportPreview){previewProductImport();flash('Список обновился — проверьте импорт ещё раз');return;}
@@ -3819,6 +3984,7 @@ function productSortHeader(key,label){
 }
 
 function renderProductsScreen(){
+  if(!window.POSAccess?.can('products.view'))return '<div class="screen"></div>';
   syncCategoryOrder();
   const cats = state.categoryOrder.slice();
   const query = productSearchText(state.productsSearch);
@@ -3977,6 +4143,7 @@ function selectCategoryColor(color){
   document.querySelectorAll('.category-color-option').forEach(b=>b.classList.toggle('selected',b.dataset.color===color));
 }
 function saveCategory(oldName){
+  if(!window.POSAccess?.require('products.edit'))return false;
   const input=document.getElementById('cf-name');
   const name=(input?.value||'').trim();
   if(!name){ flash('Введите название категории'); return; }
@@ -4005,6 +4172,7 @@ function saveCategory(oldName){
   closeModal(); render(); flash(oldName===null||oldName===undefined?'Категория добавлена':'Категория изменена');
 }
 function toggleCategoryOnline(name){
+  if(!window.POSAccess?.require('products.edit'))return false;
   state.categoryOnline[name]=state.categoryOnline[name]===false;
   saveKey('layout',{categoryOrder:state.categoryOrder,categoryColors:state.categoryColors,categorySymbols:state.categorySymbols,categoryOnline:state.categoryOnline,tiles:state.layoutTiles});
   const rows=document.querySelectorAll('#modal-root .category-row');
@@ -4026,25 +4194,15 @@ function deleteCategory(name){
   if(!state.categoryOrder.includes(name)) return;
   requestDelete('category', name);
 }
-function requestDelete(type, id){
+function requestDelete(type,id){
+  if(!window.POSAccess?.require('products.delete'))return false;
   if(!['product','category'].includes(type))return;
-  const passwordRequired=type!=='product'||!currentShiftEmployeeIsAdmin();
-  const title = type==='category' ? 'Удаление категории' : 'Удаление товара';
-  const label = type==='category' ? id : (getProduct(id)?.name || 'товар');
-  showModal(`
-    <div class="modal-title">${title}</div>
-    <div class="center-note" style="padding:0 0 12px;text-align:left;">${passwordRequired?'Для удаления «'+escapeHtml(label)+'» введите пароль.':'Удалить товар «'+escapeHtml(label)+'»?'}</div>
-    ${passwordRequired?'<div class="field"><label>Пароль</label><input type="password" id="delete-password" autocomplete="off" placeholder="Введите пароль"></div>':''}
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeModal()">Отмена</button>
-      <button class="btn btn-danger" onclick="confirmDelete('${type}','${escapeAttr(id)}')">Удалить</button>
-    </div>`);
-  if(passwordRequired)setTimeout(()=>document.getElementById('delete-password')?.focus(),50);
+  showModal(`<div class="modal-title">Удаление ${type==='product'?'товара':'категории'}</div><p>Удалить «${escapeHtml(type==='product'?getProduct(id)?.name||'Товар':id)}»?</p><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button class="btn btn-danger" onclick="confirmDelete('${type}','${escapeAttr(id)}')">Удалить</button></div>`);
 }
 function confirmDelete(type,id){
+  if(!window.POSAccess?.require('products.delete'))return false;
+  if(type==='product'&&(splitPaidTotal()>0||state._cardIntent)){flash('Сначала завершите начатую оплату');return;}
   if(!['product','category'].includes(type))return;
-  const pass=document.getElementById('delete-password')?.value||'';
-  if(!(type==='product'&&currentShiftEmployeeIsAdmin()) && pass!=='Rom23061998'){ flash('Неверный пароль'); return; }
   if(type==='category'){
     if(state.products.some(p=>productCategoryKey(p)===id)){ flash('Нельзя удалить категорию: в ней есть товары'); return; }
     state.posNavigation.categories=state.posNavigation.categories.filter(e=>e.category!==id);saveKey('posNavigation',state.posNavigation);
@@ -4130,13 +4288,14 @@ function saveProductConfiguration(p){
 }
 
 function openProductModal(id){
+  if(!window.POSAccess?.require('products.edit'))return false;
   const editing=id?getProduct(id):null;
   if(id && !editing){flash('Товар не найден');return;}
   window._pmReturnScroll=document.querySelector('.screen.active')?.scrollTop||0;
   window._pmReturnFocus=document.activeElement;
   window._pmComponents=JSON.parse(JSON.stringify(editing?.components||[]));
   window._pmComponentCategory='Все';window._pmSearch='';
-  window._pmStockUnlocked=currentShiftEmployeeIsAdmin();
+  window._pmStockUnlocked=!!window.POSAccess?.can('stock.edit');
   window._pmNoStockUnlocked=window._pmStockUnlocked;
   window._pmBaseUnit=editing?.stockUnit||'';window._pmUnit=editing?.stockDisplayUnit||window._pmBaseUnit;
   const factor=convertProductQty(1,window._pmBaseUnit,window._pmUnit);
@@ -4173,6 +4332,7 @@ function requestCloseProductEditor(nextId=null){
   showModal(`<div class="modal-title">Сохранить изменения?</div><div class="pe-note">В карточке есть несохранённые изменения.</div><div class="pe-exit-actions"><button class="btn btn-primary" onclick="saveProductEditor(true)">Сохранить и продолжить</button><button class="btn btn-secondary" onclick="const action=window._pmExitAction;closeModal();action&&action()">Не сохранять</button><button class="btn btn-outline" onclick="closeModal()">Остаться в карточке</button></div>`);
 }
 async function saveProductEditor(continueNavigation=false){
+  if(!window.POSAccess?.require('products.edit'))return false;
   if(window._pmSaving)return;
   window._pmSaving=true;
   const button=document.getElementById('pe-save');button.disabled=true;button.textContent='Сохранение…';
@@ -4411,23 +4571,10 @@ function toggleNoStockFields(){
   if(stock) stock.disabled=noStock || (window._pmEditingId && !window._pmStockUnlocked);
 }
 
-function requestNoStockUnlock(){
-  showModal(`
-    <div class="modal-title">Доступ администратора</div>
-    <div class="modal-sub">Только администратор может включить или отключить учет остатков для товара.</div>
-    <div class="field"><label>Пароль администратора</label>
-      <input type="password" id="no-stock-password" inputmode="text" autocomplete="off" placeholder="Введите пароль">
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeModal();renderProductModal(getProduct(window._pmEditingId),window._pmType,window._pmSimpleProducts,state.categoryOrder.slice())">Отмена</button>
-      <button class="btn btn-primary" onclick="confirmNoStockUnlock()">Разрешить</button>
-    </div>
-  `);
-  setTimeout(()=>document.getElementById('no-stock-password')?.focus(),50);
+function requestNoStockUnlock(){ return confirmNoStockUnlock();
 }
 function confirmNoStockUnlock(){
-  const value=document.getElementById('no-stock-password')?.value||'';
-  if(value!=='Rom23061998'){ flash('Неверный пароль'); return; }
+  if(!window.POSAccess?.require('stock.edit'))return false;
   window._pmNoStockUnlocked=true;
   closeModal();
   const editing=getProduct(window._pmEditingId);
@@ -4435,23 +4582,10 @@ function confirmNoStockUnlock(){
   flash('Доступ администратора разрешен');
 }
 
-function requestStockUnlock(){
-  if(!window._pmEditingId) return;
-  showModal(`
-    <div class="modal-title">Изменение остатка</div>
-    <div class="field"><label>Пароль</label>
-      <input type="password" id="stock-password" inputmode="text" autocomplete="off" placeholder="Введите пароль">
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeModal(); renderProductModal(getProduct(window._pmEditingId),window._pmType,window._pmSimpleProducts,state.categoryOrder.slice())">Отмена</button>
-      <button class="btn btn-primary" onclick="confirmStockUnlock()">Разрешить</button>
-    </div>
-  `);
-  setTimeout(()=>document.getElementById('stock-password')?.focus(),50);
+function requestStockUnlock(){ return confirmStockUnlock();
 }
 function confirmStockUnlock(){
-  const value=document.getElementById('stock-password')?.value||'';
-  if(value!=='Rom23061998'){ flash('Неверный пароль'); return; }
+  if(!window.POSAccess?.require('stock.edit'))return false;
   window._pmStockUnlocked=true;
   closeModal();
   const editing=getProduct(window._pmEditingId);
@@ -4469,6 +4603,9 @@ function productDependsOn(productId, targetId, seen=new Set()){
 }
 
 async function saveProduct(editingId){
+  if(!window.POSAccess?.require('products.edit'))return false;
+  if(splitPaidTotal()>0||state._cardIntent){flash('Сначала завершите начатую оплату');return;}
+  if(financialBusy||financialBlocked||storageBroken){flash('Сначала завершите восстановление кассовой операции');return;}
   const name = document.getElementById('pf-name').value.trim();
   const category = document.getElementById('pf-category').value.trim();
   const price = parseFloat(document.getElementById('pf-price').value) || 0;
@@ -4519,6 +4656,7 @@ async function saveProduct(editingId){
       }
     }
     saveProductConfiguration(p);
+    if(!window.POSAccess?.can('stock.edit') && (p.noStockTracking!==!!existing?.noStockTracking || (p.type==='simple' && Number(p.stock||0)!==Number(existing?.stock||0))))throw new Error('Изменение остатков требует права на склад');
     if(editingId && p.type==='simple')p.cost=Number(getProduct(editingId)?.type==='simple'?getProduct(editingId).cost:compositeCost(getProduct(editingId)))||0;
     if(p.type==='simple'){
       const purchaseUnit=document.getElementById('pf-purchase-unit'),packSize=document.getElementById('pf-pack-size');
@@ -4532,6 +4670,8 @@ async function saveProduct(editingId){
       if(!r.ok) throw new Error(r.status===413?'Фото слишком большое для сервера. Выберите фото заново, чтобы уменьшить размер.':(d?.error||('HTTP '+r.status)));
       p.imageUrl=d.url||'';
     }
+    if(financialBusy||financialBlocked)throw new Error('Сначала завершите кассовую операцию');
+    if(!window.POSAccess?.can('products.edit'))throw new Error('Срок входа истёк или нет права на изменение товаров');
     if(editingId && JSON.stringify(getProduct(editingId))!==originalProduct)throw new Error('Товар изменился во время сохранения. Откройте карточку заново');
     if(editingId)state.products[state.products.findIndex(x=>x.id===editingId)]=p;
     else state.products.push(p);
@@ -4546,6 +4686,7 @@ async function saveProduct(editingId){
 }
 
 function toggleProductOnline(id){
+  if(!window.POSAccess?.require('products.edit'))return false;
   const p=getProduct(id); if(!p) return;
   p.availableOnline = p.availableOnline===false;
   saveKey('products',state.products); render();
@@ -4612,11 +4753,7 @@ function removeProductImage(){
 function deleteProduct(id){ requestDelete('product', id); }
 
 /* ============================= RECEIVING SCREEN ============================= */
-function canAdminDeletePurchaseOrder(){
-  const shift=currentShift();
-  if(!shift) return false;
-  const employee=state.employees.find(e=>e.id===shift.employeeId);
-  return employee?.role==='admin';
+function canAdminDeletePurchaseOrder(){ return !!window.POSAccess?.can('stock.edit');
 }
 function openDeletePurchaseOrderModal(orderId){
   if(!canAdminDeletePurchaseOrder()){
@@ -4638,6 +4775,7 @@ function openDeletePurchaseOrderModal(orderId){
     </div>`, false);
 }
 function deletePurchaseOrderAsAdmin(orderId){
+  if(!window.POSAccess?.require('stock.edit'))return false;
   if(!canAdminDeletePurchaseOrder()){
     closeModal();
     flash('Удалять приёмки может только администратор при открытой им смене');
@@ -4708,6 +4846,7 @@ function removeReceivingLine(index){
   render();
 }
 function viewReceivingModal(receivingId){
+  if(!window.POSAccess?.require('stock.view'))return false;
   const r=state.receivings.find(x=>x.id===receivingId);
   if(!r) return;
   const items=Array.isArray(r.items) ? r.items : [{
@@ -4769,6 +4908,7 @@ function updatePurchaseRequest(productId){
   const button=document.getElementById('po-create');if(button)button.disabled=!state.purchaseOrderCart.length;
 }
 function finalizePurchaseOrder(){
+  if(!window.POSAccess?.require('stock.edit'))return false;
   const supplier=getPurchaseOrderSupplier();if(!supplier){flash('Выберите поставщика');return;}
   try{
     const items=state.purchaseOrderCart.map(x=>{
@@ -4830,6 +4970,7 @@ function applyPurchaseQuantity(){
 }
 
 function renderPurchaseOrdersScreen(){
+  if(!window.POSAccess?.can('stock.view'))return '<div class="screen"></div>';
   const supplier=getPurchaseOrderSupplier(),products=supplier?state.products.filter(p=>p.type==='simple'&&(supplier.productIds||[]).includes(p.id)).slice().sort((a,b)=>a.name.localeCompare(b.name,'ru')):[];
   return `<div class="screen content-screen ${state.tab==='purchaseOrders'?'active':''}"><div class="supply-stack"><div class="supply-stack-actions"><button class="btn btn-outline supply-history-button" id="purchase-history-button" aria-controls="purchase-history-panel" aria-expanded="${!!window._purchaseHistoryExpanded}" onclick="togglePurchaseHistory()"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>История</button><div id="purchase-history-panel" class="purchase-history-panel" ${window._purchaseHistoryExpanded?'':'hidden'}>${purchaseHistoryMarkup()}</div><button class="btn btn-primary supply-expand-button" aria-expanded="${!!window._purchaseExpanded}" onclick="togglePurchasePanel(this)">Новый заказ</button></div>
   <div id="purchase-expand-panel" class="supply-layout supply-focused" ${window._purchaseExpanded?'':'hidden'}><div class="card"><div class="field"><label for="po-supplier">Поставщик</label><select id="po-supplier" onchange="selectPurchaseOrderSupplier(this.value)"><option value="">Выберите поставщика</option>${state.suppliers.map(s=>`<option value="${escapeAttr(s.id)}" ${s.id===supplier?.id?'selected':''}>${escapeHtml(s.name)}</option>`).join('')}</select></div>
@@ -4848,12 +4989,14 @@ function toggleReceivingHistory(){
   document.getElementById('receiving-history-button').setAttribute('aria-expanded',String(window._receivingHistoryExpanded));
 }
 function renderReceivingScreen(){
+  if(!window.POSAccess?.can('stock.view'))return '<div class="screen"></div>';
   const pending=state.purchaseOrders.filter(o=>!['received','deleted'].includes(o.status)).slice().sort((a,b)=>b.timestamp-a.timestamp);
   return `<div class="screen content-screen ${state.tab==='receiving'?'active':''}"><div class="supply-stack"><div class="supply-stack-actions"><button class="btn btn-outline supply-history-button" id="receiving-history-button" aria-controls="receiving-history-panel" aria-expanded="${!!window._receivingHistoryExpanded}" onclick="toggleReceivingHistory()"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>История</button><div id="receiving-history-panel" class="purchase-history-panel" ${window._receivingHistoryExpanded?'':'hidden'}>${receivingHistoryMarkup()}</div><button class="btn btn-primary" aria-expanded="${!!window._receivingExpanded}" id="receiving-expand-button" onclick="toggleReceivingPanel()">Новая приёмка</button></div><div id="receiving-inline-panel" class="supply-document supply-inline" ${window._receivingExpanded?'':'hidden'}>${window._receivingDraft&&!window._receivingDraft.orderId?receivingDocumentMarkup():''}</div>
   <div class="supply-layout supply-focused"><div class="card supply-pending"><h2>К приёмке <span class="badge">${pending.length}</span></h2><div class="supply-pending-grid">${pending.map(o=>`<div class="supply-request"><strong>${escapeHtml(o.supplierName||'Поставщик')}</strong><p class="pe-note">${fmtDate(o.timestamp)} · ${(o.items||[]).length} позиций</p><div class="supply-preview">${(o.items||[]).slice(0,5).map(i=>`<div>${escapeHtml(i.productName)} <b>${escapeHtml(requestedQuantityText(i))}</b></div>`).join('')}</div><div class="supply-actions"><button class="btn btn-primary ${o.receivingDraftV2||o.receivingIncomplete?'receiving-resume':''}" onclick="openReceivingDocument(${escapeAttr(JSON.stringify(o.id))})">${o.receivingDraftV2||o.receivingIncomplete?'Продолжить приёмку':'Принять'}</button>${canAdminDeletePurchaseOrder()?`<button class="btn btn-outline" onclick="openDeletePurchaseOrderModal(${escapeAttr(JSON.stringify(o.id))})">Удалить</button>`:''}</div></div>`).join('')||'<p class="pe-note">Нет ожидающих заказов.</p>'}</div></div>
 </div></div></div>`;
 }
 async function openReceivingDocument(orderId=null){
+  if(!window.POSAccess?.require('stock.edit'))return false;
   const order=orderId?state.purchaseOrders.find(o=>o.id===orderId):null;
   if(orderId&&(!order||['received','deleted'].includes(order.status))){flash('Заказ недоступен для приёмки');return;}
   const saved=order?.receivingDraftV2||(!order?await loadKey('receivingDraft',null):null);
@@ -4939,6 +5082,7 @@ function renderReceivingDocument(){
   }
 }
 async function saveReceivingDraft(){
+  if(!window.POSAccess?.require('stock.edit'))return false;
   receivingDocumentInput();const d=window._receivingDraft;
   try{
     if(d.orderId){const order=state.purchaseOrders.find(o=>o.id===d.orderId);if(!order||['received','deleted'].includes(order.status))throw new Error('Заказ недоступен');order.receivingDraftV2=JSON.parse(JSON.stringify(d));order.receivingIncomplete=true;await window.PrilavokCore.Storage.set('purchaseOrders',state.purchaseOrders);}
@@ -4993,6 +5137,7 @@ function confirmReceivingDocument(){
   }catch(e){flash(e.message);}
 }
 function applyReceivingDocument(){
+  if(!window.POSAccess?.require('stock.edit'))return false;
   const pending=window._receivingPending;if(!pending||window._receivingSaving)return;
   const order=pending.orderId?state.purchaseOrders.find(o=>o.id===pending.orderId):null;
   if(pending.orderId&&(!order||['received','deleted'].includes(order.status))){flash('Заказ уже принят или удалён');return;}
@@ -5073,6 +5218,7 @@ function updatePurchaseQty(productId,value){
   if(btn && btn.textContent.includes('Сформировать')) btn.disabled=!state.purchaseOrderCart.length;
 }
 function viewPurchaseOrder(id){
+  if(!window.POSAccess?.require('stock.view'))return false;
   const order=state.purchaseOrders.find(o=>o.id===id); if(!order) return;
   const deletedLabel=order.status==='deleted' ? `<div class=\"badge deleted-admin\" style=\"display:inline-block;margin-bottom:12px;\">Удалено администратором</div>` : '';
   const text=purchaseOrderText(order);
@@ -5087,6 +5233,7 @@ function viewPurchaseOrder(id){
     </div>` , true);
 }
 async function copyPurchaseOrder(id){
+  if(!window.POSAccess?.require('stock.view'))return false;
   const order=state.purchaseOrders.find(o=>o.id===id); if(!order) return;
   const text=purchaseOrderText(order);
   try{
@@ -5097,6 +5244,7 @@ async function copyPurchaseOrder(id){
   flash('Текст заказа скопирован');
 }
 function sharePurchaseOrder(id){
+  if(!window.POSAccess?.require('stock.view'))return false;
   const order=state.purchaseOrders.find(o=>o.id===id); if(!order) return;
   const payload={
     id: order.id,
@@ -5124,11 +5272,12 @@ function sharePurchaseOrder(id){
 
 /* ============================= SHIFT SCREEN ============================= */
 function renderShiftScreen(shift){
+  if(!window.POSAccess?.can('shifts.view'))return '<div class="screen"></div>';
   const history = state.shifts.filter(s=>s.status==='closed').slice().sort((a,b)=>b.closedAt-a.closedAt).slice(0,20);
   let openBlock;
   if(shift){
     const t = shiftTotals(shift.id);
-    const expected = Number(shift.openingCash||0) + t.cash + t.netMovements;
+    const expected = Number(shift.openingCash||0) + t.cashIn + t.netMovements;
     openBlock = `
       <div class="card">
         <div class="content-head" style="margin-bottom:14px;">
@@ -5175,7 +5324,7 @@ function renderShiftScreen(shift){
     <div class="card">
       ${history.length ? history.map(s=>{
         const t = shiftTotals(s.id);
-        const diff = (s.countedCash||0) - (Number(s.openingCash||0) + t.cash + t.netMovements);
+        const diff = (s.countedCash||0) - (Number(s.openingCash||0) + t.cashIn + t.netMovements);
         return `
         <div class="list-row" style="cursor:pointer;" onclick="viewShiftModal('${escapeAttr(s.id)}')">
           <div style="flex:1;">
@@ -5195,13 +5344,9 @@ function openShiftModal(){
   showModal(`
     <div class="modal-title">Открыть смену</div>
     <div class="field"><label>Сотрудник</label>
-      ${employees.length ? `<select id="sf-employee" onchange="toggleShiftAdminPassword()"><option value="">Выберите сотрудника</option>${employees.map(e=>`<option value="${escapeAttr(e.id)}">${escapeHtml(employeeShortName(e.name))}${e.role==='admin'?' · АДМИНИСТРАТОР':''}</option>`).join('')}</select>` : `<div class="settings-note">Сначала добавьте сотрудников в Настройки → Сотрудники.</div>`}
+      ${employees.length ? `<select id="sf-employee" onchange="toggleShiftAdminPassword()"><option value="">Выберите сотрудника</option>${employees.map(e=>`<option value="${escapeAttr(e.id)}">${escapeHtml(employeeShortName(e.name))} · ${escapeHtml(window.POSAccess?.roleLabel(e.id)||'Доступ не назначен')}</option>`).join('')}</select>` : `<div class="settings-note">Сначала добавьте сотрудников в Настройки → Сотрудники.</div>`}
     </div>
-    <div id="sf-admin-password-wrap" class="field" style="margin-top:12px;display:none;">
-      <label>Пароль администратора</label>
-      <input id="sf-admin-password" type="password" autocomplete="off" placeholder="Введите пароль">
-      <div class="settings-note" style="margin-top:6px;">Для открытия смены администратором требуется пароль.</div>
-    </div>
+
     <div class="field">
       <label>Наличные при открытии смены</label>
       <div style="font-size:26px;font-weight:800;">${fullMoney(previousCash)}</div>
@@ -5213,33 +5358,25 @@ function openShiftModal(){
     </div>
   `);
 }
-function toggleShiftAdminPassword(){
-  const select=document.getElementById('sf-employee');
-  const wrap=document.getElementById('sf-admin-password-wrap');
-  const password=document.getElementById('sf-admin-password');
-  if(!select || !wrap) return;
-  const employee=state.employees.find(e=>e.id===select.value);
-  const isAdmin=employee?.role==='admin';
-  wrap.style.display=isAdmin?'block':'none';
-  if(!isAdmin && password) password.value='';
-  if(isAdmin) setTimeout(()=>password?.focus(),50);
+function toggleShiftAdminPassword(){ /* Each employee confirms their own native PIN on opening. */
 }
-function submitOpenShift(){
+function submitOpenShift(){ return window.POSAccess?.authorizeShift(performOpenShift); }
+function performOpenShift(){
+  if(!window.POSAccess?.require('shifts.manage'))return false;
+  if(currentShift()){flash('Смена уже открыта');return;}
   const employeeId=document.getElementById('sf-employee')?.value||'';
   const employee=state.employees.find(e=>e.id===employeeId);
+  if(!window.POSAccess?.matchesActor(employeeId)){flash('Войдите под выбранным сотрудником');return false;}
   if(!employee){ flash('Выберите сотрудника'); return; }
-  if(employee.role==='admin'){
-    const password=document.getElementById('sf-admin-password')?.value||'';
-    if(password!=='Rom23061998'){ flash('Для открытия смены администратором введите верный пароль'); return; }
-  }
+
   const previousClosed = state.shifts.filter(s=>s.status==='closed').slice().sort((a,b)=>(b.closedAt||0)-(a.closedAt||0))[0] || null;
   const openingCash = previousClosed ? Number(previousClosed.countedCash||0) : 0;
   const newShift={id:uid(), status:'open', openedAt:Date.now(), openingCash, employeeId:employee.id, employeeName:employee.name, employeePhone:employee.phone||'', openingSourceShiftId:previousClosed?.id||''};
-  state.shifts.push(newShift);
-  saveKey('shifts', state.shifts);
+  return commitPOSOperation('open-shift',['shifts'],()=>{state.shifts.push(newShift);},()=>{
   closeModal();
   render();
   sendTelegramShiftOpened(newShift);
+  });
 }
 
 function openCashMovementModal(type){
@@ -5255,26 +5392,30 @@ function openCashMovementModal(type){
   setTimeout(()=>document.getElementById('cash-movement-amount')?.focus(),50);
 }
 function submitCashMovement(type){
+  if(!window.POSAccess?.require('cash.manage'))return false;
   const shift=currentShift();
   if(!shift){flash('Смена не открыта');closeModal();return;}
-  const amount=parseFloat((document.getElementById('cash-movement-amount')?.value||'').replace(',','.'))||0;
-  if(amount<=0){flash('Введите сумму');return;}
+  const amount=parsePaymentNumber(document.getElementById('cash-movement-amount')?.value);
+  if(!Number.isFinite(amount)||!['deposit','withdrawal'].includes(type)||amount<=0){flash('Введите сумму');return;}
   if(type==='withdrawal'){
     const t=shiftTotals(shift.id);
-    const available=Number(shift.openingCash||0)+t.cash+t.netMovements;
+    const available=Number(shift.openingCash||0)+t.cashIn+t.netMovements;
     if(amount>available+0.0001){flash('Недостаточно наличных в кассе');return;}
   }
+  return commitPOSOperation('cash-movement',['shifts'],()=>{
+  const shift=currentShift();
   if(!Array.isArray(shift.cashMovements)) shift.cashMovements=[];
   shift.cashMovements.push({id:uid(),type,amount,timestamp:Date.now(),note:(document.getElementById('cash-movement-note')?.value||'').trim()});
-  saveKey('shifts',state.shifts);
+  },()=>{
   closeModal();render();
   flash(type==='deposit'?'Наличные внесены в кассу':'Наличные изъяты из кассы');
+  });
 }
 
 function openCloseShiftModal(){
   const shift = currentShift();
   const t = shiftTotals(shift.id);
-  const expected = Number(shift.openingCash||0) + t.cash + t.netMovements;
+  const expected = Number(shift.openingCash||0) + t.cashIn + t.netMovements;
   showModal(`
     <div class="modal-title">Закрыть смену</div>
     <div class="field"><label>Ожидается в кассе (наличные)</label>
@@ -5290,97 +5431,34 @@ function openCloseShiftModal(){
   `);
 }
 function submitCloseShift(){
-  const shift = currentShift();
-  const countedCash = parseFloat(document.getElementById('sf-counted').value) || 0;
-  shift.status = 'closed';
-  shift.closedAt = Date.now();
-  shift.countedCash = countedCash;
-  saveKey('shifts', state.shifts);
-  sendTelegramShiftClosed(shift);
-  closeModal();
-  render();
+  if(!window.POSAccess?.require('shifts.manage'))return false;
+  if(state.cart.length||splitPaidTotal()>0||state._cardIntent){flash('Перед закрытием смены завершите или отложите текущий заказ');return;}
+  if(!currentShift())return;
+  const countedCash=parsePaymentNumber(document.getElementById('sf-counted')?.value);
+  if(countedCash===null){flash('Введите корректную сумму наличных');return;}
+  return commitPOSOperation('close-shift',['shifts'],()=>{const shift=currentShift();shift.status='closed';shift.closedAt=Date.now();shift.countedCash=countedCash;return shift;},shift=>{sendTelegramShiftClosed(shift);closeModal();render();});
 }
 
-function openEmployeeModal(id=''){
-  const employee=state.employees.find(e=>e.id===id);
-  const editing=!!employee;
-  const isAdmin=employee?.role==='admin';
-  showModal(`
-    <div class="modal-title">${editing?'Сотрудник':'Новый сотрудник'}</div>
-    <div class="field"><label>ФИО</label><input id="ef-name" value="${escapeAttr(employee?.name||'')}" placeholder="Иванов Иван Иванович"></div>
-    <div class="field"><label>Номер телефона</label><input id="ef-phone" type="tel" value="${escapeAttr(employee?.phone||'')}" inputmode="tel" placeholder="+375 XX XXX-XX-XX"></div>
-    <div class="setting-row" style="margin-top:10px;">
-      <div><div class="setting-title">Администратор</div><div class="setting-sub">${isAdmin?'Для снятия прав администратора потребуется пароль.':'Выдать сотруднику расширенные права приложения.'}</div></div>
-      <label class="switch"><input id="ef-admin" type="checkbox" ${isAdmin?'checked':''} onchange="toggleEmployeeAdminPassword()"><span></span></label>
-    </div>
-    <div id="ef-admin-password-wrap" class="field" data-original-admin="${isAdmin?'true':'false'}" style="margin-top:12px;display:none;">
-      <label>${isAdmin?'Пароль для снятия прав администратора':'Пароль для выдачи прав администратора'}</label>
-      <input id="ef-admin-password" type="password" autocomplete="off" placeholder="Введите пароль">
-    </div>
-    <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button class="btn btn-primary" onclick="saveEmployee('${escapeAttr(id)}')">${editing?'Сохранить':'Добавить'}</button></div>
-  `);
+function openEmployeeModal(id=''){ return window.POSAccess?.employee(id);
 }
-function toggleEmployeeAdminPassword(){
-  const checkbox=document.getElementById('ef-admin');
-  const wrap=document.getElementById('ef-admin-password-wrap');
-  if(!checkbox || !wrap) return;
-  const originalAdmin=wrap.dataset.originalAdmin==='true';
-  const changed=checkbox.checked!==originalAdmin;
-  wrap.style.display=changed?'block':'none';
-  const label=wrap.querySelector('label');
-  if(label) label.textContent=checkbox.checked?'Пароль для выдачи прав администратора':'Пароль для снятия прав администратора';
-  if(changed) setTimeout(()=>document.getElementById('ef-admin-password')?.focus(),50);
+function toggleEmployeeAdminPassword(){ return;
 }
-function saveEmployee(id=''){
-  const name=(document.getElementById('ef-name')?.value||'').trim();
-  const phone=(document.getElementById('ef-phone')?.value||'').trim();
-  const wantsAdmin=!!document.getElementById('ef-admin')?.checked;
-  const adminPassword=(document.getElementById('ef-admin-password')?.value||'');
-  if(!name){flash('Введите ФИО сотрудника');return;}
-  const employee=id ? state.employees.find(x=>x.id===id) : null;
-  if(id && !employee){flash('Сотрудник не найден');return;}
-  const wasAdmin=employee?.role==='admin';
-  if(wantsAdmin!==wasAdmin && adminPassword!=='Rom23061998'){
-    flash(wantsAdmin?'Для выдачи прав администратора введите верный пароль':'Для снятия прав администратора введите верный пароль');return;
-  }
-  if(id){ employee.name=name; employee.phone=phone; employee.role=wantsAdmin?'admin':'employee'; }
-  else { state.employees.push({id:uid(),name,phone,role:wantsAdmin?'admin':'employee'}); }
-  saveKey('employees',state.employees);closeModal();render();flash(id?'Сотрудник сохранён':'Сотрудник добавлен');
+function saveEmployee(id=''){ return window.POSAccess?.saveEmployee(id);
 }
-function showEmployeeAdminInfo(id){
-  const employee=state.employees.find(e=>e.id===id);if(!employee)return;
-  showModal(`<div class="modal-title">Администратор</div><p>Сотрудник «${escapeHtml(employee.name)}» имеет права администратора. Удаление этой записи недоступно.</p><div class="modal-actions"><button class="btn btn-primary" onclick="closeModal()">Понятно</button></div>`);
+function showEmployeeAdminInfo(id){ return window.POSAccess?.open();
 }
-function employeeDeletionAllowed(id){
-  if(currentShift()?.employeeId===id){flash('Нельзя удалить самого себя');return false;}
-  if(state.employees.find(e=>e.id===id)?.role==='admin'){flash('Нельзя удалить администратора');return false;}
-  if(!currentShift()){flash('Для удаления сотрудника откройте смену');return false;}
-  return true;
+function employeeDeletionAllowed(id){ return !!window.POSAccess?.can('owner.manage') && id!==currentShift()?.employeeId;
 }
-function deleteEmployee(id){
-  if(!employeeDeletionAllowed(id))return;
-  const employee=state.employees.find(e=>e.id===id);if(!employee)return;
-  showModal(`<div class="modal-title">Удаление сотрудника</div><p>Удалить сотрудника «${escapeHtml(employee.name)}»?</p><p class="pe-note">История смен и чеков сохранится. Для удаления требуется пароль.</p><div class="field"><label for="employee-delete-password">Пароль</label><input id="employee-delete-password" type="password" autocomplete="off"></div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button id="employee-delete-confirm" class="btn btn-danger" onclick="confirmDeleteEmployee(${escapeAttr(JSON.stringify(id))})">Удалить</button></div>`);
+function deleteEmployee(id){ return window.POSAccess?.deleteEmployee(id);
 }
-async function confirmDeleteEmployee(id){
-  if(window._employeeDeleteBusy||!employeeDeletionAllowed(id))return;
-  if(!state.employees.some(e=>e.id===id))return;
-  if((document.getElementById('employee-delete-password')?.value||'')!=="Rom23061998"){flash('Неверный пароль');return;}
-  window._employeeDeleteBusy=true;
-  const button=document.getElementById('employee-delete-confirm');if(button)button.disabled=true;
-  const next=state.employees.filter(e=>e.id!==id);
-  try{
-    await window.PrilavokCore.Storage.set('employees',next);
-    state.employees=next;
-    closeModal();render();flash('Сотрудник удалён');
-  }catch(e){markStorageBroken(e);flash('Не удалось удалить сотрудника: '+(e.message||'ошибка сохранения'));if(button)button.disabled=false;}
-  finally{window._employeeDeleteBusy=false;}
+function confirmDeleteEmployee(id){ return window.POSAccess?.confirmDeleteEmployee(id);
 }
 function viewShiftModal(shiftId){
+  if(!window.POSAccess?.require('shifts.view'))return false;
   const shift=state.shifts.find(s=>s.id===shiftId); if(!shift) return;
   const orders=shiftOrders(shift.id).slice().sort((a,b)=>(a.timestamp||0)-(b.timestamp||0));
   const t=shiftTotals(shift.id);
-  const expected=(Number(shift.openingCash)||0)+t.cash+t.netMovements;
+  const expected=(Number(shift.openingCash)||0)+t.cashIn+t.netMovements;
   const counted=Number(shift.countedCash)||0;
   const diff=counted-expected;
   const report=buildShiftReportPayload(shift);
@@ -5408,6 +5486,7 @@ function viewShiftModal(shiftId){
   `, true);
 }
 function printShiftReport(shiftId){
+  if(!window.POSAccess?.require('analytics.export'))return false;
   const shift=state.shifts.find(s=>s.id===shiftId); if(!shift) return;
   const payload=buildShiftReportPayload(shift);
   if(window.webkit?.messageHandlers?.printer){window.webkit.messageHandlers.printer.postMessage({action:'printShiftReport',report:payload});return;}
@@ -5457,6 +5536,7 @@ function deleteSupplier(id){
     </div>`, true);
 }
 function confirmDeleteSupplier(id){
+  if(!window.POSAccess?.require('stock.edit'))return false;
   if(!canEditCompanySettings()){ closeModal(); flash('Удалять поставщиков может только администратор при открытой им смене'); return; }
   state.suppliers=state.suppliers.filter(s=>s.id!==id);
   saveKey('suppliers',state.suppliers);
@@ -5466,6 +5546,7 @@ function confirmDeleteSupplier(id){
 }
 
 function saveSupplier(id=''){
+  if(!window.POSAccess?.require('stock.edit'))return false;
   const name=(document.getElementById('sf-name')?.value||'').trim();
   if(!name){ flash('Введите название поставщика'); return; }
   const productIds=[...document.querySelectorAll('.supplier-product-check:checked')].map(x=>x.value);
@@ -5491,28 +5572,55 @@ function showModal(html, wide){
       <div class="modal ${wide?'wide':''}">${html}</div>
     </div>`;
 }
-function closeModal(){ window._posFolderModal=null;document.getElementById('modal-root').innerHTML = ''; }
+function closeModal(){ if(financialBlocked)return;window._posFolderModal=null;document.getElementById('modal-root').innerHTML = ''; }
 
 /* ============================= BACKUP ============================= */
 function exportBackup(){
-  const data={version:10,posNavigation:state.posNavigation,exportedAt:Date.now(),company:state.company,deliveryRates:state.deliveryRates,products:state.products,employees:state.employees,shifts:state.shifts,orders:state.orders,parked:state.parked,receivings:state.receivings,suppliers:state.suppliers,purchaseOrders:state.purchaseOrders,discounts:state.discounts,layout:{categoryOrder:state.categoryOrder,categoryColors:state.categoryColors,categorySymbols:state.categorySymbols,categoryOnline:state.categoryOnline,tiles:state.layoutTiles}};
+  if(!window.POSAccess?.require('backup.export'))return false;
+  if(financialBusy||financialBlocked||storageBroken||window.PrilavokCore.Storage.isBlocked()){flash('Сначала восстановите локальную операцию');return;}
+  const data={version:11,currentOrderSession:currentOrderSnapshot(),posNavigation:state.posNavigation,exportedAt:Date.now(),company:state.company,deliveryRates:state.deliveryRates,products:state.products,employees:state.employees,shifts:state.shifts,orders:state.orders,parked:state.parked,receivings:state.receivings,suppliers:state.suppliers,purchaseOrders:state.purchaseOrders,discounts:state.discounts,layout:{categoryOrder:state.categoryOrder,categoryColors:state.categoryColors,categorySymbols:state.categorySymbols,categoryOnline:state.categoryOnline,tiles:state.layoutTiles}};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='prilavok-backup-'+new Date().toISOString().slice(0,10)+'.json'; a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),1000);
   flash('Резервная копия сохранена');
 }
+function restoreBackupData(d){
+  if(!window.POSAccess?.require('backup.import'))return false;
+  if(state.cart.length||state._cardIntent||splitPaidTotal()>0){flash('Сначала завершите текущий заказ');return false;}
+  if(!d||!Array.isArray(d.products))throw new Error('Некорректная резервная копия');
+  for(const key of ['orders','shifts','parked','receivings','purchaseOrders']){
+    if(d[key]!==undefined&&!Array.isArray(d[key]))throw new Error('Некорректный раздел: '+key);
+    const incoming=new Map((d[key]||[]).map(x=>[x?.id,x]));
+    if(incoming.size!==(d[key]||[]).length||(d[key]||[]).some(x=>!x||typeof x.id!=='string'))throw new Error('Повреждённые или повторяющиеся записи: '+key);
+    for(const existing of state[key]||[]){if(!incoming.has(existing.id)||JSON.stringify(incoming.get(existing.id))!==JSON.stringify(existing))throw new Error('Копия удалит или изменит существующую историю: '+key+'. Восстановление остановлено.');}
+  }
+  if(d.products.some(p=>!p||typeof p.id!=='string')||(d.orders||[]).some(o=>!o||typeof o.id!=='string'||!Array.isArray(o.items)))throw new Error('Повреждены товары или чеки');
+  validateCurrentOrderSession(d.currentOrderSession);
+  const keys=['products','employees','shifts','orders','parked','receivings','suppliers','purchaseOrders','company','deliveryRates','discounts','posNavigation','layout','currentOrderSession'];
+  return commitPOSOperation('restore-backup',keys,()=>{
+    for(const key of ['products','employees','shifts','orders','parked','receivings','suppliers','purchaseOrders','discounts','deliveryRates']){if(d[key]!==undefined&&!Array.isArray(d[key]))throw new Error('Некорректный раздел: '+key);state[key]=d[key]||[];}
+    state.employees=window.POSAccess?.employeeLabels(state.employees)||state.employees;
+    const session=d.currentOrderSession||{items:[]};state.cart=session.items;state.orderLabel=session.orderLabel||'';state.orderType=session.orderType||'На месте';state.customer=session.customer||{name:'',phone:'',address:''};state.deliveryFee=session.deliveryFee||0;state._splitPayments=session.splitPayments||[];state._splitCount=state._splitPayments.length;state._cardIntent=session.cardIntent||null;state._kitchenPrinted=!!session.kitchenPrinted;
+    state.company=Object.assign({establishmentName:'',legalName:'',address:'',deliveryAddress:''},d.company||{});
+    state.posNavigation=normalizePosNavigation(d.posNavigation);state.categoryOrder=d.layout?.categoryOrder||[];state.categoryColors=d.layout?.categoryColors||{};state.categorySymbols=d.layout?.categorySymbols||{};state.categoryOnline=d.layout?.categoryOnline||{};state.layoutTiles=d.layout?.tiles||state.products.map(p=>({type:'product',id:p.id}));
+  },()=>{window.__currentOrderKitchenPrinted=state._kitchenPrinted;state.posFolder='';state.posPath=null;render();flash('Данные восстановлены');});
+}
 function importBackup(){
-  const input=document.createElement('input'); input.type='file'; input.accept='.json,application/json';
-  input.onchange=()=>{ const file=input.files?.[0]; if(!file) return; const r=new FileReader(); r.onload=()=>{ try{ const d=JSON.parse(r.result); if(!d||!Array.isArray(d.products)) throw new Error(); state.products=d.products; state.employees=Array.isArray(d.employees)?d.employees:[]; state.shifts=d.shifts||[]; state.orders=d.orders||[]; state.parked=d.parked||[]; state.receivings=d.receivings||[]; state.suppliers=d.suppliers||[]; state.purchaseOrders=Array.isArray(d.purchaseOrders)?d.purchaseOrders:[]; state.company=Object.assign({establishmentName:'',legalName:'',address:'',deliveryAddress:''},d.company||{}); state.deliveryRates=Array.isArray(d.deliveryRates)?d.deliveryRates:[]; saveKey('deliveryRates',state.deliveryRates); state.discounts=Array.isArray(d.discounts)?d.discounts:[]; state.posNavigation=normalizePosNavigation(d.posNavigation);state.posFolder='';state.posPath=null;saveKey('posNavigation',state.posNavigation);state.categoryOrder=d.layout?.categoryOrder||[]; state.categoryColors=d.layout?.categoryColors||{}; state.categorySymbols=d.layout?.categorySymbols||{}; state.categoryOnline=d.layout?.categoryOnline||{}; state.categoryOrder.forEach(c=>{if(typeof state.categoryOnline[c]!=='boolean')state.categoryOnline[c]=true;}); state.layoutTiles=Array.isArray(d.layout?.tiles)?d.layout.tiles:state.products.map(p=>({type:'product',id:p.id})); saveKey('products',state.products); saveKey('employees',state.employees); saveKey('shifts',state.shifts); saveKey('orders',state.orders); saveKey('parked',state.parked); saveKey('receivings',state.receivings); saveKey('suppliers',state.suppliers); saveKey('purchaseOrders',state.purchaseOrders); saveKey('company',state.company); saveKey('discounts',state.discounts); saveKey('layout',{categoryOrder:state.categoryOrder,categoryColors:state.categoryColors,categorySymbols:state.categorySymbols,categoryOnline:state.categoryOnline,tiles:state.layoutTiles}); render(); flash('Данные восстановлены'); }catch(e){ flash('Не удалось прочитать резервную копию'); } }; r.readAsText(file); }; input.click();
+  if(!window.POSAccess?.require('backup.import'))return false;
+  const input=document.createElement('input');input.type='file';input.accept='.json,application/json';
+  input.onchange=()=>{const file=input.files?.[0];if(!file)return;const reader=new FileReader();reader.onload=()=>{try{restoreBackupData(JSON.parse(reader.result));}catch(error){flash('Восстановление не выполнено: '+error.message);}};reader.readAsText(file);};input.click();
 }
 
-/* ============================= UTIL ============================= */
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 function escapeAttr(s){ return escapeHtml(s); }
 
 /* ============================= INIT ============================= */
-loadAll();
 </script>
 <script src="network-printer.js"></script>
+<script src="notification-native.js"></script>
+<script src="Web/js/core/access.js"></script>
+<script>
+(async()=>{await POSAccess.initialize();await loadAll();await POSAccess.reconcile();render();})();
+</script>
 </body>
 </html>
