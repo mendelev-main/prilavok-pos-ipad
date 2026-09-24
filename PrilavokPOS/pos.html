@@ -4152,7 +4152,7 @@ function changeProductDisplayUnit(unit){
   }catch(e){document.getElementById('pf-unit').value=old;flash(e.message);}
 }
 function captureSimpleProductDraft(){
-  window._pmSimpleDraft={purchaseUnit:document.getElementById('pf-purchase-unit')?.value,packSize:document.getElementById('pf-pack-size')?.value,cost:document.getElementById('pf-cost')?.value??'',stock:document.getElementById('pf-stock')?.value??'',minimum:document.getElementById('pf-min-stock')?.value??'',noStock:!!document.getElementById('pf-no-stock')?.checked};
+  window._pmSimpleDraft={purchaseUnit:document.getElementById('pf-purchase-unit')?.value,packSize:document.getElementById('pf-pack-size')?.value,contentUnit:document.getElementById('pf-purchase-content-unit')?.value,cost:document.getElementById('pf-cost')?.value??'',stock:document.getElementById('pf-stock')?.value??'',minimum:document.getElementById('pf-min-stock')?.value??'',noStock:!!document.getElementById('pf-no-stock')?.checked};
 }
 function componentDisplayUnit(c){const base=stockUnit(getProduct(c.productId));return c.displayUnit||base;}
 function componentDisplayQty(c){return convertProductQty(c.qty,stockUnit(getProduct(c.productId)),componentDisplayUnit(c));}
@@ -4191,7 +4191,7 @@ function openProductModal(id){
   window._pmNoStockUnlocked=window._pmStockUnlocked;
   window._pmBaseUnit=editing?.stockUnit||'';window._pmUnit=editing?.stockDisplayUnit||window._pmBaseUnit;
   const factor=convertProductQty(1,window._pmBaseUnit,window._pmUnit);
-  window._pmSimpleDraft={cost:editing?.cost==null?'':editing.cost/factor,stock:editing?.stock==null?'':convertProductQty(editing.stock,window._pmBaseUnit,window._pmUnit),minimum:editing?.minStock==null?'':convertProductQty(editing.minStock,window._pmBaseUnit,window._pmUnit),noStock:!!editing?.noStockTracking};
+  window._pmSimpleDraft={purchaseUnit:editing?.purchaseUnit??window._pmBaseUnit,packSize:editing?.purchasePackSize??'',contentUnit:editing?.purchaseContentUnit??window._pmBaseUnit,cost:editing?.cost==null?'':editing.cost/factor,stock:editing?.stock==null?'':convertProductQty(editing.stock,window._pmBaseUnit,window._pmUnit),minimum:editing?.minStock==null?'':convertProductQty(editing.minStock,window._pmBaseUnit,window._pmUnit),noStock:!!editing?.noStockTracking};
   window._pmType=editing?.type||'simple';window._pmEditingId=editing?.id||null;
   window._pmImageData=null;window._pmRemoveImage=false;window._pmOnline=editing?.availableOnline!==false;
   window._pmSaving=false;window._pmSession=(window._pmSession||0)+1;
@@ -4202,7 +4202,7 @@ function openProductModal(id){
 }
 function productEditorSnapshot(){
   const value=id=>document.getElementById(id)?.value??'';
-  return JSON.stringify({purchaseUnit:value('pf-purchase-unit'),packSize:value('pf-pack-size'),sku:value('pf-sku'),note:value('pf-note'),unit:window._pmUnit,minimum:value('pf-min-stock'),name:value('pf-name'),category:value('pf-category'),symbol:value('pf-symbol'),price:value('pf-price'),type:window._pmType,
+  return JSON.stringify({purchaseUnit:value('pf-purchase-unit'),packSize:value('pf-pack-size'),purchaseContentUnit:value('pf-purchase-content-unit'),sku:value('pf-sku'),note:value('pf-note'),unit:window._pmUnit,minimum:value('pf-min-stock'),name:value('pf-name'),category:value('pf-category'),symbol:value('pf-symbol'),price:value('pf-price'),type:window._pmType,
     cost:window._pmType==='simple'?value('pf-cost'):null,stock:window._pmType==='simple'?value('pf-stock'):null,
     noStock:window._pmType==='simple'?!!document.getElementById('pf-no-stock')?.checked:false,
     components:window._pmType==='composite'?window._pmComponents:[],online:window._pmOnline,image:window._pmImageData,removeImage:window._pmRemoveImage});
@@ -4325,7 +4325,7 @@ function renderTypeFields(){
         </div>
       </div>
       <p class="pe-note">${editing?'Себестоимость изменяется только при приёмке по средневзвешенной стоимости.':'Укажите начальную себестоимость. После создания её будут изменять приёмки.'}</p>
-      <div class="pe-two-fields"><div class="field"><label for="pf-purchase-unit">Обычно заказываем</label><select id="pf-purchase-unit">${purchaseUnitOptions({...editing,type:'simple',stockUnit:window._pmBaseUnit},window._pmSimpleDraft?.purchaseUnit??editing?.purchaseUnit??window._pmBaseUnit)}</select></div><div class="field"><label for="pf-pack-size">В упаковке/коробке, ${unitLabel(window._pmBaseUnit)}</label><input id="pf-pack-size" type="number" min="0" step="any" inputmode="decimal" value="${escapeAttr(String(window._pmSimpleDraft?.packSize??editing?.purchasePackSize??''))}" placeholder="Неизвестно — пусто"></div></div>
+      <div class="pe-card" style="padding:14px;margin:4px 0 14px;"><strong>Как обычно закупаем</strong><p class="pe-note">Эти значения автоматически подставятся в следующий заказ, но их всегда можно изменить.</p><div class="pe-two-fields"><div class="field"><label for="pf-purchase-unit">Единица закупки</label><select id="pf-purchase-unit" onchange="captureSimpleProductDraft();renderTypeFields()">${purchaseUnitOptions({...editing,type:'simple',stockUnit:window._pmBaseUnit},window._pmSimpleDraft?.purchaseUnit??editing?.purchaseUnit??window._pmBaseUnit)}</select></div><div class="field"><label for="pf-pack-size">Количество внутри</label><input id="pf-pack-size" type="number" min="0" step="any" inputmode="decimal" value="${escapeAttr(String(window._pmSimpleDraft?.packSize??editing?.purchasePackSize??''))}" placeholder="Например, 12"></div></div><div class="field"><label for="pf-purchase-content-unit">Единица внутри</label><select id="pf-purchase-content-unit">${productUnitOptions(window._pmBaseUnit,window._pmSimpleDraft?.contentUnit??editing?.purchaseContentUnit??window._pmBaseUnit)}</select></div></div>
       <div class="field"><label for="pf-min-stock">Минимальный остаток, ${unitLabel(window._pmUnit)}</label><input id="pf-min-stock" type="number" min="0" step="any" inputmode="decimal" value="${escapeAttr(String(window._pmSimpleDraft?.minimum??''))}" placeholder="Не задан"><p class="pe-note">Подсказка в карточке; не блокирует продажи и не создаёт заказ поставщику.</p></div>
       <div class="field" style="margin-top:4px;">
         <label style="display:flex;align-items:center;gap:10px;cursor:${window._pmNoStockUnlocked?'pointer':'default'};">
@@ -4572,8 +4572,8 @@ async function saveProduct(editingId){
     saveProductConfiguration(p);
     if(editingId && p.type==='simple')p.cost=Number(getProduct(editingId)?.type==='simple'?getProduct(editingId).cost:compositeCost(getProduct(editingId)))||0;
     if(p.type==='simple'){
-      const purchaseUnit=document.getElementById('pf-purchase-unit'),packSize=document.getElementById('pf-pack-size');
-      if(purchaseUnit){p.purchaseUnit=purchaseUnit.value;const raw=packSize?.value||'';if(raw!==''){if(!Number.isFinite(Number(raw))||Number(raw)<=0)throw new Error('Объём упаковки должен быть больше нуля');p.purchasePackSize=Number(raw);}else delete p.purchasePackSize;}
+      const purchaseUnit=document.getElementById('pf-purchase-unit'),packSize=document.getElementById('pf-pack-size'),contentUnit=document.getElementById('pf-purchase-content-unit');
+      if(purchaseUnit){p.purchaseUnit=purchaseUnit.value;p.purchaseContentUnit=contentUnit?.value||p.stockUnit;const raw=packSize?.value||'';if(raw!==''){if(!Number.isFinite(Number(raw))||Number(raw)<=0)throw new Error('Объём упаковки должен быть больше нуля');p.purchasePackSize=Number(raw);}else delete p.purchasePackSize;}
     }
     if(window._pmImageData){
       const n=networkConfigFromState();
@@ -4804,31 +4804,35 @@ function viewReceivingModal(receivingId){
 }
 
 /* Supplier requests and invoice quantities are deliberately separate. */
-function purchaseUnitLabel(unit){return unit==='pack'?'упак.':unit==='box'?'кор.':unitLabel(unit);}
-function requestedQuantityText(item){return `${item.requestedQty??item.qty} ${purchaseUnitLabel(item.requestedUnit??item.stockUnit??stockUnit(getProduct(item.productId)))}`;}
+function purchaseUnitLabel(unit){return unit==='pack'?'упаковка':unit==='box'?'коробка':unit==='bottle'?'бутылка':unitLabel(unit);}
+function requestedQuantityText(item){const unit=item.requestedUnit??item.stockUnit??stockUnit(getProduct(item.productId));const base=`${item.requestedQty??item.qty} ${purchaseUnitLabel(unit)}`;return ['bottle','pack','box'].includes(unit)&&item.packSize?`${base} × ${item.packSize} ${unitLabel(item.contentUnit||item.stockUnit||stockUnit(getProduct(item.productId)))}`:base;}
 function purchaseUnitOptions(p,selected){
-  const base=stockUnit(p),units=[...Object.keys(PRODUCT_UNITS).filter(u=>base && PRODUCT_UNITS[u].kind===PRODUCT_UNITS[base]?.kind),'pack','box'];
+  const base=stockUnit(p),units=[...Object.keys(PRODUCT_UNITS).filter(u=>base && PRODUCT_UNITS[u].kind===PRODUCT_UNITS[base]?.kind),'bottle','pack','box'];
   if(!base)units.unshift('');
   return units.map(u=>`<option value="${u}" ${u===selected?'selected':''}>${purchaseUnitLabel(u)}</option>`).join('');
 }
-function makePurchaseLine(p,qty,unit,packSize){
+function makePurchaseLine(p,qty,unit,packSize,contentUnit){
   qty=Number(qty);if(!Number.isFinite(qty)||qty<=0)throw new Error('Количество заказа должно быть больше нуля');
-  const base=stockUnit(p),pack=unit==='pack'||unit==='box';
+  const base=stockUnit(p),pack=['bottle','pack','box'].includes(unit),inside=contentUnit||base;
   let expected=null;
-  if(pack){if(packSize!=='' && packSize!=null){const size=Number(packSize);if(!Number.isFinite(size)||size<=0)throw new Error('Объём упаковки должен быть больше нуля');expected=qty*size;}}
-  else expected=convertProductQty(qty,unit,base);
+  if(pack){
+    if(packSize!=='' && packSize!=null){
+      const size=Number(packSize);if(!Number.isFinite(size)||size<=0)throw new Error('Количество в единице закупки должно быть больше нуля');
+      expected=convertProductQty(qty*size,inside,base);
+    }
+  } else expected=convertProductQty(qty,unit,base);
   if(expected!==null && (!Number.isFinite(expected)||expected<=0))throw new Error('Некорректное количество заказа');
-  return {productId:p.id,productName:p.name,qty:expected??0,requestedQty:qty,requestedUnit:unit,stockUnit:base,expectedQty:expected,packSize:pack&&packSize!==''&&packSize!=null?Number(packSize):null,timestamp:Date.now()};
+  return {productId:p.id,productName:p.name,qty:expected??0,requestedQty:qty,requestedUnit:unit,stockUnit:base,contentUnit:inside,expectedQty:expected,packSize:pack&&packSize!==''&&packSize!=null?Number(packSize):null,timestamp:Date.now()};
 }
 function updatePurchaseRequest(productId){
   const row=[...document.querySelectorAll('[data-purchase-row]')].find(r=>r.dataset.purchaseRow===productId);if(!row)return;
-  const qty=row.querySelector('[data-request-qty]').value,unit=row.querySelector('[data-request-unit]').value,size=row.querySelector('[data-request-size]').value;
+  const qty=row.querySelector('[data-request-qty]').value,unit=row.querySelector('[data-request-unit]').value,size=row.querySelector('[data-request-size]').value,contentUnit=row.querySelector('[data-content-unit]')?.value||stockUnit(getProduct(productId));
   const idx=state.purchaseOrderCart.findIndex(x=>x.productId===productId);
-  const draft={productId,requestedQty:qty,requestedUnit:unit,packSize:size};
+  const draft={productId,requestedQty:qty,requestedUnit:unit,packSize:size,contentUnit};
   if(qty!==''){if(idx<0)state.purchaseOrderCart.push(draft);else state.purchaseOrderCart[idx]=draft;}else if(idx>=0)state.purchaseOrderCart.splice(idx,1);
-  row.querySelector('[data-pack-field]').hidden=!['pack','box'].includes(unit);
+  row.querySelector('[data-pack-field]').hidden=!['bottle','pack','box'].includes(unit);
   const note=row.querySelector('[data-request-note]');
-  try{const line=makePurchaseLine(getProduct(productId),qty,unit,size);note.textContent=line.expectedQty===null?'Вес/объём уточняется при приёмке':`Ориентир: ${line.expectedQty} ${unitLabel(line.stockUnit)}`;}catch(e){note.textContent=qty===''?'Укажите количество':e.message;}
+  try{const line=makePurchaseLine(getProduct(productId),qty,unit,size,contentUnit);note.textContent=line.expectedQty===null?'Количество внутри уточняется при приёмке':`На склад поступит: ${line.expectedQty} ${unitLabel(line.stockUnit)}`;}catch(e){note.textContent=qty===''?'Укажите количество':e.message;}
   const button=document.getElementById('po-create');if(button)button.disabled=!state.purchaseOrderCart.length;
 }
 function finalizePurchaseOrder(){
@@ -4836,11 +4840,11 @@ function finalizePurchaseOrder(){
   try{
     const items=state.purchaseOrderCart.map(x=>{
       const p=getProduct(x.productId);if(!p||p.type!=='simple'||!(supplier.productIds||[]).includes(p.id))throw new Error('Проверьте товары поставщика');
-      return makePurchaseLine(p,x.requestedQty??x.qty,x.requestedUnit??stockUnit(p),x.packSize??'');
+      const line=makePurchaseLine(p,x.requestedQty??x.qty,x.requestedUnit??stockUnit(p),x.packSize??'',x.contentUnit??p.purchaseContentUnit??stockUnit(p)); p.purchaseUnit=line.requestedUnit; p.purchasePackSize=line.packSize??undefined; p.purchaseContentUnit=line.contentUnit; return line;
     });
     if(!items.length)throw new Error('Добавьте хотя бы один товар');
     const order={id:uid(),requestVersion:1,supplierId:supplier.id,supplierName:supplier.name,items,status:'pending',timestamp:Date.now()};
-    state.purchaseOrders.push(order);saveKey('purchaseOrders',state.purchaseOrders);state.purchaseOrderCart=[];render();viewPurchaseOrder(order.id);
+    state.purchaseOrders.push(order);saveKey('products',state.products);saveKey('purchaseOrders',state.purchaseOrders);state.purchaseOrderCart=[];render();viewPurchaseOrder(order.id);
   }catch(e){flash(e.message);}
 }
 function openSupplyHistory(kind){
@@ -4896,7 +4900,7 @@ function renderPurchaseOrdersScreen(){
   const supplier=getPurchaseOrderSupplier(),products=supplier?state.products.filter(p=>p.type==='simple'&&(supplier.productIds||[]).includes(p.id)).slice().sort((a,b)=>a.name.localeCompare(b.name,'ru')):[];
   return `<div class="screen content-screen ${state.tab==='purchaseOrders'?'active':''}"><div class="supply-stack"><div class="supply-stack-actions"><button class="btn btn-outline supply-history-button" id="purchase-history-button" aria-controls="purchase-history-panel" aria-expanded="${!!window._purchaseHistoryExpanded}" onclick="togglePurchaseHistory()"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>История</button><div id="purchase-history-panel" class="purchase-history-panel" ${window._purchaseHistoryExpanded?'':'hidden'}>${purchaseHistoryMarkup()}</div><button class="btn btn-primary supply-expand-button" aria-expanded="${!!window._purchaseExpanded}" onclick="togglePurchasePanel(this)">Новый заказ</button></div>
   <div id="purchase-expand-panel" class="supply-layout supply-focused" ${window._purchaseExpanded?'':'hidden'}><div class="card"><div class="field"><label for="po-supplier">Поставщик</label><select id="po-supplier" onchange="selectPurchaseOrderSupplier(this.value)"><option value="">Выберите поставщика</option>${state.suppliers.map(s=>`<option value="${escapeAttr(s.id)}" ${s.id===supplier?.id?'selected':''}>${escapeHtml(s.name)}</option>`).join('')}</select></div>
-  ${products.map(p=>{const d=state.purchaseOrderCart.find(x=>x.productId===p.id)||{},u=d.requestedUnit??p.purchaseUnit??stockUnit(p),size=d.packSize??p.purchasePackSize??'';return `<div class="supply-request" data-purchase-row="${escapeAttr(p.id)}" oninput="updatePurchaseRequest(${escapeAttr(JSON.stringify(p.id))})" onchange="updatePurchaseRequest(${escapeAttr(JSON.stringify(p.id))})"><div class="supply-product"><strong>${escapeHtml(p.name)}</strong><small>Остаток: ${p.stock||0} ${unitLabel(stockUnit(p))}${p.minStock!=null?' · Минимум: '+p.minStock:''}</small></div><div class="supply-request-fields"><div class="field"><label>Заказать</label><input data-request-qty type="text" readonly inputmode="none" role="button" aria-label="Количество заказа" onclick="openPurchaseQuantity(${escapeAttr(JSON.stringify(p.id))})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openPurchaseQuantity(${escapeAttr(JSON.stringify(p.id))})}" value="${escapeAttr(String(d.requestedQty??d.qty??''))}" placeholder="0"></div><div class="field"><label>Единица</label><select data-request-unit>${purchaseUnitOptions(p,u)}</select></div><div class="field" data-pack-field ${['pack','box'].includes(u)?'':'hidden'}><label>В упаковке, ${unitLabel(stockUnit(p))}</label><input data-request-size type="text" readonly inputmode="none" role="button" aria-label="Количество в упаковке" onclick="openPurchaseQuantity(${escapeAttr(JSON.stringify(p.id))},'size')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openPurchaseQuantity(${escapeAttr(JSON.stringify(p.id))},'size')}" value="${escapeAttr(String(size))}" placeholder="Не задано"></div></div><small data-request-note class="pe-note"></small></div>`;}).join('')}
+  ${products.map(p=>{const d=state.purchaseOrderCart.find(x=>x.productId===p.id)||{},u=d.requestedUnit??p.purchaseUnit??stockUnit(p),size=d.packSize??p.purchasePackSize??'',content=d.contentUnit??p.purchaseContentUnit??stockUnit(p);return `<div class="supply-request" data-purchase-row="${escapeAttr(p.id)}" oninput="updatePurchaseRequest(${escapeAttr(JSON.stringify(p.id))})" onchange="updatePurchaseRequest(${escapeAttr(JSON.stringify(p.id))})"><div class="supply-product"><strong>${escapeHtml(p.name)}</strong><small>Остаток: ${p.stock||0} ${unitLabel(stockUnit(p))}${p.minStock!=null?' · Минимум: '+p.minStock:''}</small></div><div class="supply-request-fields"><div class="field"><label>Количество</label><input data-request-qty type="text" readonly inputmode="none" role="button" onclick="openPurchaseQuantity(${escapeAttr(JSON.stringify(p.id))})" value="${escapeAttr(String(d.requestedQty??d.qty??''))}" placeholder="0"></div><div class="field"><label>Единица заказа</label><select data-request-unit>${purchaseUnitOptions(p,u)}</select></div><div class="field" data-pack-field ${['bottle','pack','box'].includes(u)?'':'hidden'}><label>В единице</label><input data-request-size type="text" readonly inputmode="none" role="button" onclick="openPurchaseQuantity(${escapeAttr(JSON.stringify(p.id))},'size')" value="${escapeAttr(String(size))}" placeholder="0"></div><div class="field" data-pack-field ${['bottle','pack','box'].includes(u)?'':'hidden'}><label>Единица внутри</label><select data-content-unit>${productUnitOptions(stockUnit(p),content)}</select></div></div><small data-request-note class="pe-note"></small></div>`;}).join('')}
   ${supplier&&!products.length?'<p class="pe-note">Закрепите товары за поставщиком во вкладке «Поставщики».</p>':''}
   <div class="supply-order-footer"><button id="po-create" class="btn btn-primary" onclick="finalizePurchaseOrder()" ${state.purchaseOrderCart.length?'':'disabled'}>Сформировать заказ</button></div></div>
 </div></div></div>`;
@@ -4920,7 +4924,7 @@ async function openReceivingDocument(orderId=null){
   const order=orderId?state.purchaseOrders.find(o=>o.id===orderId):null;
   if(orderId&&(!order||['received','deleted'].includes(order.status))){flash('Заказ недоступен для приёмки');return;}
   const saved=order?.receivingDraftV2||(!order?await loadKey('receivingDraft',null):null);
-  window._receivingDraft=saved?JSON.parse(JSON.stringify(saved)):{version:1,orderId:orderId||null,supplierId:order?.supplierId||'',invoiceNumber:'',invoiceDate:'',lines:(order?.items||state.receivingCart||[]).map(i=>({productId:i.productId,qtyInput:order?.receivingDraft?.[i.productId]?.qty??(!order?i.qty:(i.expectedQty===null?'':(i.expectedQty??i.qty??''))),unit:i.stockUnit??stockUnit(getProduct(i.productId)),priceInput:'',totalInput:order?.receivingDraft?.[i.productId]?.totalCost??(!order?i.totalCost:''),priceMode:'total'}))};
+  window._receivingDraft=saved?JSON.parse(JSON.stringify(saved)):{version:1,orderId:orderId||null,supplierId:order?.supplierId||'',invoiceNumber:'',invoiceDate:'',lines:(order?.items||state.receivingCart||[]).map(i=>({productId:i.productId,qtyInput:order?.receivingDraft?.[i.productId]?.qty??(!order?i.qty:(i.requestedQty??'')),unit:order?(i.requestedUnit??i.stockUnit??stockUnit(getProduct(i.productId))):(i.stockUnit??stockUnit(getProduct(i.productId))),packSize:order?(i.packSize??''):'',contentUnit:order?(i.contentUnit??i.stockUnit??stockUnit(getProduct(i.productId))):stockUnit(getProduct(i.productId)),priceInput:'',totalInput:order?.receivingDraft?.[i.productId]?.totalCost??(!order?i.totalCost:''),priceMode:'total'}))};
   window._receivingDraft.orderId=orderId||null;
   if(order){
     window._receivingPageScroll=document.querySelector('.screen.active')?.scrollTop||0;
@@ -4936,10 +4940,11 @@ function receivingDocumentInput(){
 }
 function updateInvoiceLine(index,field,value){
   const line=window._receivingDraft.lines[index];if(!line)return;
-  if(field==='unit'){
+  if(field==='unit' && !['bottle','pack','box'].includes(line.unit) && !['bottle','pack','box'].includes(value)){
     try{const factor=convertProductQty(1,line.unit,value);if(line.qtyInput!=='')line.qtyInput=convertProductQty(line.qtyInput,line.unit,value);if(line.priceInput!=='')line.priceInput=Number(line.priceInput)/factor;}catch(e){flash(e.message);return;}
   }
   line[field]=value;
+  if(field==='unit' && ['bottle','pack','box'].includes(value)){const p=getProduct(line.productId);line.packSize=line.packSize||p?.purchasePackSize||'';line.contentUnit=line.contentUnit||p?.purchaseContentUnit||stockUnit(p);}
   if(field==='totalInput')line.priceMode='total';if(field==='priceInput')line.priceMode='price';
   const q=Number(line.qtyInput);
   if(line.priceMode==='price' && line.priceInput!=='' && line.qtyInput!=='')line.totalInput=Number((q*Number(line.priceInput)).toFixed(2));
@@ -4960,7 +4965,7 @@ function receivingDocumentMarkup(){
   const d=window._receivingDraft,order=state.purchaseOrders.find(o=>o.id===d.orderId);
   return `<div class="supply-doc-header"><div><div class="modal-title">${order?'Приёмка заказа':'Приёмка без заказа'}</div><p class="pe-note">Не поставлено — укажите 0.</p></div>${order?'<div class="receiving-page-actions"><button class="btn btn-outline" onclick="saveReceivingDraft()">← Назад</button><button class="btn btn-outline" onclick="saveReceivingDraft()">Завершить приёмку позже</button></div>':'<button class="btn btn-outline" onclick="saveReceivingDraft()">Сохранить и выйти</button>'}</div>
   <div class="supply-document-meta" oninput="receivingDocumentInput()"><div class="field"><label for="ttn-supplier">Поставщик</label><select id="ttn-supplier" ${order?'disabled':''}><option value="">Не указан</option>${state.suppliers.map(s=>`<option value="${escapeAttr(s.id)}" ${s.id===d.supplierId?'selected':''}>${escapeHtml(s.name)}</option>`).join('')}${order&&!state.suppliers.some(s=>s.id===d.supplierId)?`<option selected value="${escapeAttr(d.supplierId)}">${escapeHtml(order.supplierName)}</option>`:''}</select></div><div class="field"><label for="ttn-number">Номер</label><input id="ttn-number" maxlength="100" value="${escapeAttr(d.invoiceNumber||'')}" placeholder="Номер"></div><div class="field"><label for="ttn-date">Дата</label><input id="ttn-date" type="date" value="${escapeAttr(d.invoiceDate||'')}"></div></div>
-  <div class="supply-invoice-table">${d.lines.map((line,index)=>{const p=getProduct(line.productId),ordered=order?.items.find(i=>i.productId===line.productId);return `<div class="supply-invoice-row" data-invoice-line="${index}"><div class="supply-product"><strong>${escapeHtml(p?.name||'Товар не найден')}</strong><small>${ordered?'Заказано: '+escapeHtml(requestedQuantityText(ordered)):'Дополнительная позиция'} · Склад: ${unitLabel(stockUnit(p))}</small></div><div class="field"><label>Количество</label><input type="number" min="0" step="any" inputmode="decimal" data-invoice-field="qtyInput" value="${escapeAttr(String(line.qtyInput))}" oninput="updateInvoiceLine(${index},'qtyInput',this.value)"></div><div class="field"><label>Ед.</label><select onchange="updateInvoiceLine(${index},'unit',this.value)">${stockUnit(p)?productUnitOptions(stockUnit(p),line.unit):'<option value="">Ед. не задана</option>'}</select></div><div class="field"><label>Цена</label><input type="number" min="0" step="any" inputmode="decimal" data-invoice-field="priceInput" value="${escapeAttr(String(line.priceInput))}" oninput="updateInvoiceLine(${index},'priceInput',this.value)"></div><div class="field"><label>Сумма</label><input type="number" min="0" step="0.01" inputmode="decimal" data-invoice-field="totalInput" value="${escapeAttr(String(line.totalInput))}" oninput="updateInvoiceLine(${index},'totalInput',this.value)"></div>${!order?`<button class="icon-btn danger" onclick="removeInvoiceLine(${index})" aria-label="Убрать строку">✕</button>`:''}</div>`;}).join('')}</div>
+  <div class="supply-invoice-table">${d.lines.map((line,index)=>{const p=getProduct(line.productId),ordered=order?.items.find(i=>i.productId===line.productId),isPack=['bottle','pack','box'].includes(line.unit);return `<div class="supply-invoice-row" data-invoice-line="${index}"><div class="supply-product"><strong>${escapeHtml(p?.name||'Товар не найден')}</strong><small>${ordered?'Заказано: '+escapeHtml(requestedQuantityText(ordered)):'Дополнительная позиция'} · Склад: ${unitLabel(stockUnit(p))}</small></div><div class="field"><label>Принято</label><input type="number" min="0" step="any" inputmode="decimal" data-invoice-field="qtyInput" value="${escapeAttr(String(line.qtyInput))}" oninput="updateInvoiceLine(${index},'qtyInput',this.value)"></div><div class="field"><label>Единица</label><select onchange="updateInvoiceLine(${index},'unit',this.value);renderReceivingDocument()">${purchaseUnitOptions(p,line.unit)}</select></div>${isPack?`<div class="field"><label>В единице</label><input type="number" min="0" step="any" inputmode="decimal" value="${escapeAttr(String(line.packSize??''))}" oninput="updateInvoiceLine(${index},'packSize',this.value)"></div><div class="field"><label>Единица внутри</label><select onchange="updateInvoiceLine(${index},'contentUnit',this.value)">${productUnitOptions(stockUnit(p),line.contentUnit||stockUnit(p))}</select></div>`:''}<div class="field"><label>Сумма строки</label><input type="number" min="0" step="0.01" inputmode="decimal" data-invoice-field="totalInput" value="${escapeAttr(String(line.totalInput))}" oninput="updateInvoiceLine(${index},'totalInput',this.value)"></div>${!order?`<button class="icon-btn danger" onclick="removeInvoiceLine(${index})" aria-label="Убрать строку">✕</button>`:''}</div>`;}).join('')}</div>
   ${!order?`<div class="supply-actions"><select id="ttn-add-product"><option value="">Добавить товар</option>${state.products.filter(p=>p.type==='simple').map(p=>`<option value="${escapeAttr(p.id)}">${escapeHtml(p.name)}</option>`).join('')}</select><button class="btn btn-outline" onclick="addInvoiceProduct()">Добавить</button></div>`:''}
   <div class="supply-doc-footer"><div><span>Итого</span><strong id="ttn-total">${money(d.lines.reduce((s,l)=>s+(Number(l.totalInput)||0),0))}</strong></div><button id="ttn-confirm" class="btn btn-primary" onclick="confirmReceivingDocument()">Далее</button></div>`;
 }
@@ -5016,8 +5021,11 @@ function invoiceReceivingItems(d){
     if(line.qtyInput===''||line.totalInput==='')throw new Error('Заполните количество и сумму каждой строки');
     const invoiceQty=Number(line.qtyInput),total=Number(line.totalInput);
     if(!Number.isFinite(invoiceQty)||invoiceQty<0||!Number.isFinite(total)||total<0||(invoiceQty===0&&total!==0))throw new Error('Проверьте количество и сумму: '+p.name);
-    const qty=convertProductQty(invoiceQty,line.unit,stockUnit(p));
-    return {productId:p.id,productName:p.name,qty,unitCost:qty>0?total/qty:0,totalCost:total,stockUnit:stockUnit(p),invoiceQty,invoiceUnit:line.unit,invoiceUnitPrice:invoiceQty>0?total/invoiceQty:0};
+    const isPack=['bottle','pack','box'].includes(line.unit);
+    let qty;
+    if(isPack){const size=Number(line.packSize);if(!Number.isFinite(size)||size<=0)throw new Error('Укажите количество внутри: '+p.name);qty=convertProductQty(invoiceQty*size,line.contentUnit||stockUnit(p),stockUnit(p));}
+    else qty=convertProductQty(invoiceQty,line.unit,stockUnit(p));
+    return {productId:p.id,productName:p.name,qty,unitCost:qty>0?total/qty:0,totalCost:total,stockUnit:stockUnit(p),invoiceQty,invoiceUnit:line.unit,packSize:isPack?Number(line.packSize):null,contentUnit:line.contentUnit||stockUnit(p),invoiceUnitPrice:invoiceQty>0?total/invoiceQty:0};
   });
 }
 function receivingStockUpdates(items){
