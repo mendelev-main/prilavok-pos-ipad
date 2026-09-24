@@ -987,6 +987,10 @@ async function loadAll(){
     state.orderType = currentOrderSession.orderType || 'На месте';
     state.customer = Object.assign({name:'',phone:'',address:''}, currentOrderSession.customer || {});
     state.deliveryFee = Number(currentOrderSession.deliveryFee || 0);
+    state.orderComment = currentOrderSession.orderComment || '';
+    state.currentOrderSource = currentOrderSession.source || '';
+    state.currentWebOrderId = currentOrderSession.webOrderId || '';
+    state.currentWebOrderStatus = currentOrderSession.webOrderStatus || '';
   }
   state.deliveryFee = Number(state.deliveryFee || 0);
   state.theme = theme === 'dark' ? 'dark' : 'light';
@@ -1138,6 +1142,10 @@ function saveCurrentOrderSession(){
     orderType: state.orderType || 'На месте',
     customer: JSON.parse(JSON.stringify(state.customer || {name:'',phone:'',address:''})),
     deliveryFee: Number(state.deliveryFee || 0),
+    orderComment: state.orderComment || '',
+    source: state.currentOrderSource || '',
+    webOrderId: state.currentWebOrderId || '',
+    webOrderStatus: state.currentWebOrderStatus || '',
     updatedAt: Date.now()
   };
   // Сохраняем даже пустую корзину: это гарантирует, что после завершённой оплаты
@@ -1146,7 +1154,7 @@ function saveCurrentOrderSession(){
 }
 
 function clearCurrentOrderSession(){
-  saveKey('currentOrderSession', {items:[],orderLabel:'',orderType:'На месте',customer:{name:'',phone:'',address:''},deliveryFee:0,updatedAt:Date.now()});
+  saveKey('currentOrderSession', {items:[],orderLabel:'',orderType:'На месте',customer:{name:'',phone:'',address:''},deliveryFee:0,orderComment:'',source:'',webOrderId:'',webOrderStatus:'',updatedAt:Date.now()});
 }
 
 function cartTotal(){
@@ -1931,7 +1939,9 @@ async function acceptWebOrder(id){
     if(!journal[id]){
       const cartItems=webOrderCartItems(o);checkedStockConsumption(cartItems);
       const existing=state.parked.find(p=>p.webOrderId===id);
-      journal[id]={stage:existing?'local':'prepared',parked:existing||{id:uid(),items:cartItems,total:Number(o.total||0),subtotal:Number(o.total||0)-Number(o.delivery_fee||0),deliveryFee:Number(o.delivery_fee||0),orderLabel:'Веб '+(o.external_id||''),orderType:o.order_type||'На месте',customer:{name:o.customer_name||'',phone:o.phone||'',address:o.address||''},comment:o.comment||'',source:'web',webOrderId:o.id,createdAt:Date.now()}};
+      const rawType=String(o.order_type||'').trim().toLocaleLowerCase('ru');
+      const orderType=(rawType==='delivery'||rawType==='доставка')?'Доставка':((rawType==='pickup'||rawType==='самовывоз'||rawType==='с собой')?'С собой':(o.order_type||'На месте'));
+      journal[id]={stage:existing?'local':'prepared',parked:existing||{id:uid(),items:cartItems,total:Number(o.total||0),subtotal:Number(o.total||0)-Number(o.delivery_fee||0),deliveryFee:Number(o.delivery_fee||0),orderLabel:'Веб '+(o.external_id||''),orderType,customer:{name:o.customer_name||'',phone:o.phone||'',address:o.address||''},comment:o.comment||'',source:'web',webOrderId:o.id,webOrderStatus:'accepted',createdAt:Date.now(),kitchenPrinted:true}};
       await window.PrilavokCore.Storage.set('webOrderAcceptances',journal);
     }
     const record=journal[id];
@@ -2906,6 +2916,7 @@ function renderCartPanel(shift){
     <div class="cart-head">Текущий заказ <span>${state.cart.reduce((s,i)=>s+i.qty,0)} поз.</span></div>
     <div class="order-meta">
       <button class="order-type-btn" onclick="openOrderSettings()">${state.orderLabel?'<b>'+escapeHtml(state.orderLabel)+'</b> · ':''}${escapeHtml(state.orderType)}${state.customer.name||state.customer.phone?' · '+escapeHtml(state.customer.name||state.customer.phone):''}</button>
+      ${state.orderComment?`<div class="cart-row-sub" style="color:var(--text);margin-top:6px;">💬 ${escapeHtml(state.orderComment)}</div>`:''}
     </div>
     <div class="cart-items">${rows}</div>
     <div class="cart-foot">
@@ -3079,54 +3090,46 @@ function flash(msg){
 function parkOrder(){
   if(!state.cart.length) return;
   const shift=currentShift(), employee=state.employees.find(e=>e.id===shift?.employeeId);
-  const parked = {id:uid(), receiptDisplayNumber:'#'+(state.parked.length+1), items: state.cart.map(i=>{const product=getProduct(i.productId);return {...JSON.parse(JSON.stringify(i)),category:product?.category||i.category||''}}), total: cartTotal(), subtotal: cartSubtotal(), deliveryFee: state.orderType==='Доставка'?Number(state.deliveryFee||0):0, orderLabel: state.orderLabel, orderType: state.orderType, customer: JSON.parse(JSON.stringify(state.customer)), employeeName:employee?.name||employee?.fullName||'Сотрудник',registerName:'POS 1',timestamp:Date.now(),createdAt: Date.now(),kitchenPrinted:true};
-  if(typeof window.printKitchenOrderNow==='function')window.printKitchenOrderNow(parked);
+  const parked = {
+    id:uid(), receiptDisplayNumber:'#'+(state.parked.length+1),
+    items: state.cart.map(i=>{const product=getProduct(i.productId);return {...JSON.parse(JSON.stringify(i)),category:product?.category||i.category||''}}),
+    total:cartTotal(), subtotal:cartSubtotal(), deliveryFee:state.orderType==='Доставка'?Number(state.deliveryFee||0):0,
+    orderLabel:state.orderLabel, orderType:state.orderType, customer:JSON.parse(JSON.stringify(state.customer)),
+    comment:state.orderComment||'', source:state.currentOrderSource||'', webOrderId:state.currentWebOrderId||'', webOrderStatus:state.currentWebOrderStatus||'',
+    employeeName:employee?.name||employee?.fullName||'Сотрудник',registerName:'POS 1',timestamp:Date.now(),createdAt:Date.now(),kitchenPrinted:!!window.__currentOrderKitchenPrinted
+  };
+  if(!parked.kitchenPrinted && typeof window.printKitchenOrderNow==='function'){window.printKitchenOrderNow(parked);parked.kitchenPrinted=true;}
   window.__currentOrderKitchenPrinted=false;
-  state.parked.push(parked);
-  saveKey('parked', state.parked);
-  state.cart = [];
-  clearCurrentOrderSession();
-  // New order must always start with clean order metadata.
-  state.orderLabel = '';
-  state.orderType = 'На месте';
-  state.deliveryFee = 0;
-  state.customer = {name:'', phone:'', address:''};
-  render();
-  flash('Чек отложен');
+  state.parked.push(parked); saveKey('parked',state.parked);
+  state.cart=[]; clearCurrentOrderSession();
+  state.orderLabel=''; state.orderType='На месте'; state.deliveryFee=0; state.customer={name:'',phone:'',address:''};
+  state.orderComment=''; state.currentOrderSource=''; state.currentWebOrderId=''; state.currentWebOrderStatus='';
+  render(); flash('Чек отложен');
 }
 function openParkedModal(){
-  const list = state.parked.slice().sort((a,b)=>b.createdAt-a.createdAt);
-  showModal(`
-    <div class="modal-title">Отложенные чеки</div>
-    ${list.length ? list.map(o=>`
-      <div class="list-row">
-        <div style="flex:1;">
-          <div class="list-row-name">${escapeHtml(o.orderLabel||'Без подписи')}</div>
-          <div class="list-row-sub">${o.items.reduce((s,i)=>s+i.qty,0)} поз. · ${fullMoney(o.total)} · ${escapeHtml(o.orderType||'На месте')} · ${fmtDate(o.createdAt)}</div>
-        </div>
-        <button class="btn btn-outline" style="flex:none;padding:9px 14px;" onclick="resumeParked('${o.id}')">Открыть</button>
-        <button class="icon-btn danger" onclick="deleteParked('${o.id}')">✕</button>
-      </div>
-    `).join('') : `<div class="center-note">Нет отложенных чеков</div>`}
-    <div class="modal-actions"><button class="btn btn-secondary" style="width:100%;" onclick="closeModal()">Закрыть</button></div>
-  `);
+  const list=state.parked.slice().sort((a,b)=>b.createdAt-a.createdAt);
+  showModal(`<div class="modal-title">Отложенные чеки</div>${list.length?list.map(o=>`
+    <div class="list-row">
+      <div style="flex:1;"><div class="list-row-name">${escapeHtml(o.orderLabel||'Без подписи')}</div>
+      <div class="list-row-sub">${o.items.reduce((sum,i)=>sum+i.qty,0)} поз. · ${fullMoney(o.total)} · ${escapeHtml(o.orderType||'На месте')} · ${fmtDate(o.createdAt)}</div>
+      ${o.comment?`<div class="list-row-sub" style="color:var(--text);margin-top:4px;">💬 ${escapeHtml(o.comment)}</div>`:''}</div>
+      <button class="btn btn-outline" style="flex:none;padding:9px 14px;" onclick="resumeParked('${o.id}')">Открыть</button>
+      <button class="icon-btn danger" onclick="deleteParked('${o.id}')">✕</button>
+    </div>`).join(''):`<div class="center-note">Нет отложенных чеков</div>`}
+    <div class="modal-actions"><button class="btn btn-secondary" style="width:100%;" onclick="closeModal()">Закрыть</button></div>`);
 }
 function resumeParked(id){
-  if(state.cart.length){ flash('Сначала завершите текущий заказ'); return; }
-  const o = state.parked.find(x=>x.id===id);
-  if(!o) return;
-  state.cart = JSON.parse(JSON.stringify(o.items));
-  state.orderLabel = o.orderLabel || '';
-  state.orderType = o.orderType || 'На месте';
-  state.customer = o.customer || {name:'',phone:'',address:''};
-  state.deliveryFee = Number(o.deliveryFee||0);
+  if(state.cart.length){flash('Сначала завершите текущий заказ');return;}
+  const o=state.parked.find(x=>x.id===id); if(!o)return;
+  state.cart=JSON.parse(JSON.stringify(o.items)); state.orderLabel=o.orderLabel||''; state.orderType=o.orderType||'На месте';
+  state.customer=Object.assign({name:'',phone:'',address:''},o.customer||{}); state.deliveryFee=Number(o.deliveryFee||0);
+  state.orderComment=o.comment||''; state.currentOrderSource=o.source||''; state.currentWebOrderId=o.webOrderId||''; state.currentWebOrderStatus=o.webOrderStatus||'';
   window.__currentOrderKitchenPrinted=!!o.kitchenPrinted;
   saveCurrentOrderSession();
-  state.parked = state.parked.filter(x=>x.id!==id);
-  saveKey('parked', state.parked);
-  closeModal();
-  render();
+  state.parked=state.parked.filter(x=>x.id!==id); saveKey('parked',state.parked);
+  closeModal(); render();
 }
+
 function deleteParked(id){
   state.parked = state.parked.filter(x=>x.id!==id);
   saveKey('parked', state.parked);
