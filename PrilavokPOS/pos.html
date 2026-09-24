@@ -1121,10 +1121,13 @@ function availableStock(p, resolve=getProduct){
     return min;
   }catch(e){ return 0; }
 }
+let compositeCostCache=new Map();
+function clearCompositeCostCache(){compositeCostCache.clear();}
 function compositeCost(p){
   if(!p) return 0;
   if(p.type==='simple') return p.cost || 0;
-  try{return [...productIngredients(p)].reduce((sum,[id,qty])=>sum+(Number(getProduct(id).cost)||0)*qty,0);}
+  if(compositeCostCache.has(p.id))return compositeCostCache.get(p.id);
+  try{const value=[...productIngredients(p)].reduce((sum,[id,qty])=>sum+(Number(getProduct(id).cost)||0)*qty,0);compositeCostCache.set(p.id,value);return value;}
   catch(e){return 0;}
 }
 function compositeCostForQuantity(p,qty,unit){
@@ -1197,6 +1200,7 @@ function shiftTotals(shiftId){
 
 /* ============================= RENDER ROOT ============================= */
 function render(){
+  clearCompositeCostCache();
   if(!state.loaded){
     document.getElementById('app').innerHTML = `<div class="center-note" style="margin:auto;">Загрузка…</div>`;
     return;
@@ -4240,7 +4244,7 @@ function openProductModal(id){
   window._pmBaseUnit=editing?.stockUnit||'';window._pmUnit=editing?.stockDisplayUnit||window._pmBaseUnit;
   const factor=convertProductQty(1,window._pmBaseUnit,window._pmUnit);
   window._pmSimpleDraft={purchaseUnit:editing?.purchaseUnit??window._pmBaseUnit,packSize:editing?.purchasePackSize??'',contentUnit:editing?.purchaseContentUnit??window._pmBaseUnit,cost:editing?.cost==null?'':editing.cost/factor,stock:editing?.stock==null?'':convertProductQty(editing.stock,window._pmBaseUnit,window._pmUnit),minimum:editing?.minStock==null?'':convertProductQty(editing.minStock,window._pmBaseUnit,window._pmUnit),noStock:!!editing?.noStockTracking};
-  window._pmType=editing?.type||'simple';window._pmEditingId=editing?.id||null;window._pmRecipeYield=editing?.recipeYield??1;window._pmRecipeUnit=editing?.recipeUnit||'piece';window._pmRecipeYieldManual=editing?.recipeYield!=null;
+  window._pmType=editing?.type||'simple';window._pmEditingId=editing?.id||null;window._pmRecipeYield=editing?.recipeYield??1;window._pmRecipeUnit=editing?.recipeUnit||'piece';window._pmRecipeYieldManual=editing?.recipeYieldManual===true;
   window._pmImageData=null;window._pmRemoveImage=false;window._pmOnline=editing?.availableOnline!==false;
   window._pmSaving=false;window._pmSession=(window._pmSession||0)+1;
   renderProductModal(editing,window._pmType,[],state.categoryOrder.slice());
@@ -4401,9 +4405,9 @@ function renderTypeFields(){
           <div class="component-card-name">${escapeHtml(p.name)}</div>
           <div class="component-card-meta">${escapeHtml(p.category||'Без категории')} · ${p.type==='composite'?money(unitCost)+' за '+compositeRecipeYield(p)+' '+unitLabel(p.recipeUnit||'piece'):money(unitCost)+' за 1 '+unitLabel(stockUnit(p))}</div>
         </div>
-        <div class="component-cost" style="font-size:12px;font-weight:800;white-space:nowrap;">${money(lineCost)}</div>
+        <div id="component-cost-${idx}" class="component-cost" style="font-size:12px;font-weight:800;white-space:nowrap;">${money(lineCost)}</div>
         <div class="component-qty">
-          <input type="number" inputmode="decimal" aria-label="Количество: ${escapeAttr(p.name)}" min="0.001" step="0.001" value="${displayQty}" onchange="setComponentQty(${idx},this.value)">
+          <input type="number" inputmode="decimal" aria-label="Количество: ${escapeAttr(p.name)}" min="0.001" step="0.001" value="${displayQty}" oninput="setComponentQtyLive(${idx},this.value)" onchange="setComponentQty(${idx},this.value)">
           <select aria-label="Единица ингредиента" onchange="changeComponentDisplayUnit(${idx},this.value)" style="min-height:44px;max-width:100px;">${stockUnit(p)?productUnitOptions(stockUnit(p),displayUnit):'<option value="">Ед. не задана</option>'}</select>
         </div>
         <button type="button" class="icon-btn danger" onclick="removeComponent(${idx})">✕</button>
@@ -4417,7 +4421,7 @@ function renderTypeFields(){
             <div class="component-builder-title">Состав товара</div>
             <div class="component-builder-note">Расход на одну продаваемую позицию. Выберите г/кг или мл/л рядом с количеством. Если единица не задана, сначала настройте карточку ингредиента.</div>
           </div>
-          <div class="component-total">Себестоимость: ${fullMoney(calculatedCost)}</div>
+          <div id="component-total-cost" class="component-total">Себестоимость: ${fullMoney(calculatedCost)}</div>
         </div>
         <div class="component-selected">
           ${selectedRows || '<div class="component-empty">Состав пока пуст.<br>Найдите товар ниже и нажмите «Добавить».</div>'}
@@ -4454,7 +4458,6 @@ function addComponent(productId, qty){
   const existing=window._pmComponents.find(c=>c.productId===id);
   if(existing) existing.qty=Number(existing.qty||0)+normalized;
   else window._pmComponents.push({productId:id,qty:normalized});
-  if(!window._pmEditingId || getProduct(window._pmEditingId)?.recipeYield==null)window._pmRecipeYieldManual=false;
   renderTypeFields();
   setTimeout(()=>{const i=document.getElementById('comp-search'); if(i){i.value=search; renderComponentOptions(); i.focus();}},0);
 }
@@ -4464,16 +4467,38 @@ function changeComponentQty(idx,delta){
   c.qty=Math.max(0.001, Number(c.qty||0)+delta);
   renderTypeFields();
 }
+function refreshCompositeEditorCalculations(){
+  clearCompositeCostCache();
+  if(!window._pmRecipeYieldManual){
+    const inferred=inferredCompositeYield();
+    if(inferred){
+      window._pmRecipeYield=inferred.qty;window._pmRecipeUnit=inferred.unit;
+      const yieldInput=document.getElementById('pf-recipe-yield');if(yieldInput)yieldInput.value=String(inferred.qty);
+      const yieldUnit=document.getElementById('pf-recipe-unit');if(yieldUnit)yieldUnit.value=inferred.unit;
+    }
+  }
+  let total=0;
+  (window._pmComponents||[]).forEach((c,idx)=>{
+    const p=getProduct(c.productId);if(!p)return;
+    const line=compositeCost(p)*Number(c.qty||0);total+=line;
+    const cost=document.getElementById('component-cost-'+idx);if(cost)cost.textContent=money(line);
+  });
+  const totalEl=document.getElementById('component-total-cost');if(totalEl)totalEl.textContent='Себестоимость: '+fullMoney(total);
+  updateProductEditorSummary();
+}
+function setComponentQtyLive(idx,value){
+  const qty=parseFloat(value),c=window._pmComponents[idx];if(!c||!Number.isFinite(qty)||qty<=0)return;
+  const p=getProduct(c.productId);
+  try{c.qty=componentBaseQty(p,qty,componentDisplayUnit(c));refreshCompositeEditorCalculations();}catch(e){}
+}
 function setComponentQty(idx,value){
   const qty=parseFloat(value);
-  if(!Number.isFinite(qty)||qty<=0){ flash('Количество должно быть больше нуля'); renderTypeFields(); return; }
-  if(window._pmComponents[idx]){const c=window._pmComponents[idx],p=getProduct(c.productId);try{c.qty=componentBaseQty(p,qty,componentDisplayUnit(c));}catch(e){flash(e.message);return;}}
-  if(!window._pmEditingId || getProduct(window._pmEditingId)?.recipeYield==null)window._pmRecipeYieldManual=false;
-  renderTypeFields();
+  if(!Number.isFinite(qty)||qty<=0){flash('Количество должно быть больше нуля');renderTypeFields();return;}
+  const c=window._pmComponents[idx],p=getProduct(c?.productId);if(!c||!p)return;
+  try{c.qty=componentBaseQty(p,qty,componentDisplayUnit(c));refreshCompositeEditorCalculations();}catch(e){flash(e.message);renderTypeFields();}
 }
 function removeComponent(idx){
   window._pmComponents.splice(idx,1);
-  if(!window._pmEditingId || getProduct(window._pmEditingId)?.recipeYield==null)window._pmRecipeYieldManual=false;
   renderTypeFields();
 }
 function setComponentCategory(category){
@@ -4609,7 +4634,7 @@ async function saveProduct(editingId){
         delete p.components;
       } else {
         p.components = window._pmComponents;
-        p.recipeYield=Number(document.getElementById('pf-recipe-yield')?.value||window._pmRecipeYield||1);p.recipeUnit=document.getElementById('pf-recipe-unit')?.value||window._pmRecipeUnit||'piece';
+        p.recipeYield=Number(document.getElementById('pf-recipe-yield')?.value||window._pmRecipeYield||1);p.recipeUnit=document.getElementById('pf-recipe-unit')?.value||window._pmRecipeUnit||'piece';p.recipeYieldManual=!!window._pmRecipeYieldManual;
         if(!Number.isFinite(p.recipeYield)||p.recipeYield<=0)throw new Error('Выход состава должен быть больше нуля');
         delete p.cost; delete p.stock;
       }
@@ -4623,7 +4648,7 @@ async function saveProduct(editingId){
         p.stock = parseFloat(document.getElementById('pf-stock')?.value) || 0;
       } else {
         p.components = window._pmComponents;
-        p.recipeYield=Number(document.getElementById('pf-recipe-yield')?.value||window._pmRecipeYield||1);p.recipeUnit=document.getElementById('pf-recipe-unit')?.value||window._pmRecipeUnit||'piece';
+        p.recipeYield=Number(document.getElementById('pf-recipe-yield')?.value||window._pmRecipeYield||1);p.recipeUnit=document.getElementById('pf-recipe-unit')?.value||window._pmRecipeUnit||'piece';p.recipeYieldManual=!!window._pmRecipeYieldManual;
         if(!Number.isFinite(p.recipeYield)||p.recipeYield<=0)throw new Error('Выход состава должен быть больше нуля');
       }
     }
