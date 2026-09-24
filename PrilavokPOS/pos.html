@@ -802,6 +802,15 @@
   @media(max-width:1000px){.warehouse-page .analytics-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}}
   @media(max-width:800px){.warehouse-page>header{flex-wrap:wrap;padding:14px;}.warehouse-page main{padding:14px;}.warehouse-page h1{min-width:160px;}.warehouse-page .analytics-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}.warehouse-page .k-value{font-size:19px;}}
 
+  /* Compact purchase order rows: product + all order fields fit on one desktop/iPad row. */
+  .supply-focused .supply-request[data-purchase-row]{grid-template-columns:minmax(150px,1.15fr) minmax(540px,2.85fr);gap:10px 16px;padding:12px 0;}
+  .supply-focused .supply-request-fields{display:grid;grid-template-columns:minmax(82px,.75fr) minmax(125px,1.15fr) minmax(92px,.8fr) minmax(115px,1fr);gap:8px;align-items:end;margin:0;}
+  .supply-focused .supply-request-fields .field{margin:0;min-width:0;}
+  .supply-focused .supply-request-fields input,.supply-focused .supply-request-fields select{height:44px;min-height:44px;font-size:14px;padding-left:9px;padding-right:9px;}
+  .supply-focused .supply-request-fields label{font-size:10px;line-height:1.15;white-space:nowrap;}
+  .supply-focused [data-request-note]{grid-column:2;margin-top:-4px;}
+  @media(max-width:900px){.supply-focused .supply-request[data-purchase-row]{grid-template-columns:minmax(130px,.8fr) minmax(500px,2.2fr);}.supply-focused .supply-request-fields{grid-template-columns:80px 120px 90px 110px;}}
+  @media(max-width:700px){.supply-focused .supply-request[data-purchase-row]{grid-template-columns:1fr;}.supply-focused .supply-request-fields{grid-template-columns:repeat(2,minmax(0,1fr));}.supply-focused [data-request-note]{grid-column:1/-1;}}
 </style>
 </head>
 <body>
@@ -4830,7 +4839,7 @@ function updatePurchaseRequest(productId){
   const idx=state.purchaseOrderCart.findIndex(x=>x.productId===productId);
   const draft={productId,requestedQty:qty,requestedUnit:unit,packSize:size,contentUnit};
   if(qty!==''){if(idx<0)state.purchaseOrderCart.push(draft);else state.purchaseOrderCart[idx]=draft;}else if(idx>=0)state.purchaseOrderCart.splice(idx,1);
-  row.querySelector('[data-pack-field]').hidden=!['bottle','pack','box'].includes(unit);
+  row.querySelectorAll('[data-pack-field]').forEach(el=>el.hidden=!['bottle','pack','box'].includes(unit));
   const note=row.querySelector('[data-request-note]');
   try{const line=makePurchaseLine(getProduct(productId),qty,unit,size,contentUnit);note.textContent=line.expectedQty===null?'Количество внутри уточняется при приёмке':`На склад поступит: ${line.expectedQty} ${unitLabel(line.stockUnit)}`;}catch(e){note.textContent=qty===''?'Укажите количество':e.message;}
   const button=document.getElementById('po-create');if(button)button.disabled=!state.purchaseOrderCart.length;
@@ -4839,7 +4848,8 @@ function finalizePurchaseOrder(){
   const supplier=getPurchaseOrderSupplier();if(!supplier){flash('Выберите поставщика');return;}
   try{
     const items=state.purchaseOrderCart.map(x=>{
-      const p=getProduct(x.productId);if(!p||p.type!=='simple'||!(supplier.productIds||[]).includes(p.id))throw new Error('Проверьте товары поставщика');
+      const p=getProduct(x.productId);if(!p||p.type!=='simple')throw new Error('Товар недоступен: '+(p?.name||x.productId));
+      const supplierProductIds=(supplier.productIds||[]).map(String);if(supplierProductIds.length && !supplierProductIds.includes(String(p.id)))throw new Error('Товар «'+p.name+'» больше не привязан к выбранному поставщику');
       const line=makePurchaseLine(p,x.requestedQty??x.qty,x.requestedUnit??stockUnit(p),x.packSize??'',x.contentUnit??p.purchaseContentUnit??stockUnit(p)); p.purchaseUnit=line.requestedUnit; p.purchasePackSize=line.packSize??undefined; p.purchaseContentUnit=line.contentUnit; return line;
     });
     if(!items.length)throw new Error('Добавьте хотя бы один товар');
