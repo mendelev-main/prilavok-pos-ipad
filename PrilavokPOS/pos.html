@@ -4239,7 +4239,7 @@ function renderProductModal(editing, type, simpleProducts, catList){
       </section>
       <section class="pe-card" data-pe-panel="stock" hidden><div class="pe-section-heading"><h2>Состав и остатки</h2></div><div id="pf-type-fields"></div></section>
       <section class="pe-card" data-pe-panel="usage" hidden><div class="pe-section-heading"><h2>Где используется</h2></div>${renderProductUsage(editing?.id)}</section>
-      <section class="pe-card" data-pe-panel="web" hidden><h2>Онлайн-меню</h2><div class="web-setting-row"><div><strong>Публиковать в WEB</strong><p class="pe-note">Товар виден в онлайн-меню, если опубликована и его категория.</p></div><button id="pf-web-toggle" type="button" role="switch" aria-label="Публиковать в WEB" aria-checked="${window._pmOnline}" class="toggle-switch ${window._pmOnline?'on':''}" onclick="toggleProductModalOnline();this.setAttribute('aria-checked',String(window._pmOnline));updateProductEditorSummary()"><span></span></button></div><p class="pe-note">Изменения меню отправляются вручную: Настройки → Сетевые настройки → Синхронизировать меню.</p></section>
+      <section class="pe-card" data-pe-panel="web" hidden><h2>Онлайн-меню</h2><div class="web-setting-row"><div><strong>Публиковать в WEB</strong><p class="pe-note">Товар виден в онлайн-меню, если опубликована и его категория.</p></div><button id="pf-web-toggle" type="button" role="switch" aria-label="Публиковать в WEB" aria-checked="${window._pmOnline}" aria-disabled="${!canEditProductWebSetting()}" class="toggle-switch ${window._pmOnline?'on':''}" ${canEditProductWebSetting()?'':'disabled'} onclick="toggleProductModalOnline();updateProductEditorSummary()"><span></span></button></div><p class="pe-note">${canEditProductWebSetting()?'Изменения меню отправляются вручную: Настройки → Сетевые настройки → Синхронизировать меню.':'Настройку WEB может изменять только администратор при открытой им смене.'}</p></section>
       </main><aside class="pe-summary"><div class="pe-price-block"><span>Цена продажи</span><strong id="pe-summary-price"></strong></div><div class="pe-summary-row"><span>Себестоимость</span><strong id="pe-summary-cost"></strong></div><div class="pe-summary-row"><span>Цена − себестоимость</span><strong id="pe-summary-difference"></strong></div><p class="pe-note">Для составного товара себестоимость рассчитывается по ингредиентам.</p><div class="pe-summary-hint">Количество в составе указывается на одну продаваемую единицу товара.</div></aside></div>
     </div></div></section>`;
   renderTypeFields();toggleNoStockFields();updateProductEditorSummary();
@@ -4496,7 +4496,7 @@ async function saveProduct(editingId){
       p.name = name; p.category = category; p.price = price; p.type = type;
       p.tileSymbol = tileSymbol;
       p.noStockTracking = noStockTracking;
-      p.availableOnline = window._pmOnline !== false;
+      p.availableOnline = canEditProductWebSetting() ? window._pmOnline !== false : getProduct(editingId)?.availableOnline !== false;
       if(window._pmRemoveImage) p.imageUrl = '';
       if(type==='simple'){
         p.cost = parseFloat(document.getElementById('pf-cost').value) || 0;
@@ -4510,7 +4510,7 @@ async function saveProduct(editingId){
       const catKey = category.trim() || 'Без категории';
       const siblingOrders = state.products.filter(x=>productCategoryKey(x)===catKey).map(x=>x.sortOrder||0);
       const nextOrder = siblingOrders.length ? Math.max(...siblingOrders)+1 : 0;
-      p = {id: uid(), name, category, price, type, tileSymbol, noStockTracking, sortOrder: nextOrder, availableOnline: window._pmOnline !== false, imageUrl:''};
+      p = {id: uid(), name, category, price, type, tileSymbol, noStockTracking, sortOrder: nextOrder, availableOnline: canEditProductWebSetting() ? window._pmOnline !== false : false, imageUrl:''};
       if(type==='simple'){
         p.cost = parseFloat(document.getElementById('pf-cost')?.value) || 0;
         p.stock = parseFloat(document.getElementById('pf-stock')?.value) || 0;
@@ -4545,15 +4545,27 @@ async function saveProduct(editingId){
   }
 }
 
+function canEditProductWebSetting(){
+  return currentShiftEmployeeIsAdmin();
+}
 function toggleProductOnline(id){
+  if(!canEditProductWebSetting()){
+    flash('Настройку WEB может изменять только администратор при открытой им смене');
+    return;
+  }
   const p=getProduct(id); if(!p) return;
   p.availableOnline = p.availableOnline===false;
   saveKey('products',state.products); render();
   flash(p.availableOnline?'Товар опубликован в WEB':'Товар снят с публикации WEB');
 }
 function toggleProductModalOnline(){
+  if(!canEditProductWebSetting()){
+    flash('Настройку WEB может изменять только администратор при открытой им смене');
+    return;
+  }
   window._pmOnline = !window._pmOnline;
-  const b=document.getElementById('pf-web-toggle'); if(b) b.classList.toggle('on',window._pmOnline);
+  const b=document.getElementById('pf-web-toggle');
+  if(b){ b.classList.toggle('on',window._pmOnline); b.setAttribute('aria-checked',String(window._pmOnline)); }
 }
 function pickProductImage(){
   window._pmPhotoRequestSession=window._pmSession;
