@@ -1967,6 +1967,18 @@ async function acceptWebOrder(id){
   finally{webAcceptBusy=false;}
 }
 
+async function markCurrentWebOrderReady(){
+  const id=state.currentWebOrderId;
+  if(!id || state.currentOrderSource!=='web') return;
+  const n=networkConfigFromState();
+  if(!n.backendUrl||!n.deviceKey){flash('Проверьте сетевые настройки');return;}
+  try{
+    const r=await fetch(n.backendUrl.replace(/\/+$/,'')+'/api/orders/'+encodeURIComponent(id)+'/status',{method:'PATCH',headers:{'Content-Type':'application/json','X-Device-Key':n.deviceKey},body:JSON.stringify({status:'ready'}),cache:'no-store'});
+    const d=await r.json().catch(()=>null); if(!r.ok)throw new Error(d?.error||('HTTP '+r.status));
+    state.currentWebOrderStatus='ready'; saveCurrentOrderSession(); render(); flash('Веб-заказ отмечен как готовый');
+  }catch(e){flash('Не удалось отметить заказ готовым: '+(e?.message||'Ошибка сети'));}
+}
+
 function testWebOrder(){const n=networkConfigFromState();fetch(n.backendUrl.replace(/\/+$/,'')+'/api/orders/test',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Key':n.deviceKey},body:'{}',cache:'no-store'}).then(async r=>{const d=await r.json().catch(()=>null);if(!r.ok)throw new Error(d?.error||('HTTP '+r.status));flash('Тестовый заказ отправлен');}).catch(()=>flash('Не удалось создать тестовый заказ'));}
 
 function networkConfigFromState(){
@@ -2924,6 +2936,7 @@ function renderCartPanel(shift){
       <div class="total-row"><span class="label">Итого</span><span class="value">${fullMoney(total)}</span></div>
       <div class="cart-actions">
         <button class="btn btn-secondary" ${hasItems?'':'disabled'} onclick="parkOrder()">Отложить</button>
+        ${hasItems&&state.currentOrderSource==='web'&&state.currentWebOrderId&&state.currentWebOrderStatus!=='ready'?'<button class="btn btn-primary" onclick="markCurrentWebOrderReady()">Заказ готов</button>':''}
       </div>
       <div class="cart-actions" style="margin-top:8px;">
         <button class="btn btn-primary" ${hasItems&&shift?'':'disabled'} onclick="openPaymentModal()">Оплатить</button>
