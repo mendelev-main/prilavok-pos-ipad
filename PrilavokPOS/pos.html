@@ -866,7 +866,7 @@ let state = {
   bookingDuration: 120,
   selectedHallTableId: null,
   hallEditMode: false,
-  telegram: {enabled:false, botToken:'', chatId:'', threadId:'', notifyShiftOpened:true, notifyShiftClosed:true},
+  telegram: {enabled:false, botToken:'', chatId:'', threadId:'', notifyShiftOpened:true, notifyShiftClosed:true, notifyMonthlyWarehouse:false, lastMonthlyWarehouseSent:''},
   network: {backendUrl:'https://prilavok-backend-production.up.railway.app', deviceKey:'', deviceName:'M POS iPad', lastSyncAt:null, lastSyncStatus:''}
 };
 
@@ -934,7 +934,7 @@ async function loadAll(){
     loadKey('theme', 'light'),
     loadKey('company', {establishmentName:'', legalName:'', address:'', deliveryAddress:''}),
     loadKey('deliveryRates', []),
-    loadKey('telegram', {enabled:false, botToken:'', chatId:'', threadId:'', notifyShiftOpened:true, notifyShiftClosed:true}),
+    loadKey('telegram', {enabled:false, botToken:'', chatId:'', threadId:'', notifyShiftOpened:true, notifyShiftClosed:true, notifyMonthlyWarehouse:false, lastMonthlyWarehouseSent:''}),
     loadKey('network', {backendUrl:'https://prilavok-backend-production.up.railway.app', deviceKey:'', deviceName:'M POS iPad', lastSyncAt:null, lastSyncStatus:''}),
     loadKey('currentOrderSession', null),
     loadKey('hallTables', []),
@@ -967,7 +967,7 @@ async function loadAll(){
   state.printer = Object.assign({enabled:false, autoPrint:false, ip:'', port:9100 }, printer || {});
   state.company = Object.assign({establishmentName:'', legalName:'', address:'', deliveryAddress:''}, company || {});
   state.deliveryRates = Array.isArray(deliveryRates) ? deliveryRates : [];
-  state.telegram = Object.assign({enabled:false, botToken:'', chatId:'', threadId:'', notifyShiftOpened:true, notifyShiftClosed:true}, telegram || {});
+  state.telegram = Object.assign({enabled:false, botToken:'', chatId:'', threadId:'', notifyShiftOpened:true, notifyShiftClosed:true, notifyMonthlyWarehouse:false, lastMonthlyWarehouseSent:''}, telegram || {});
   state.network = Object.assign({backendUrl:'https://prilavok-backend-production.up.railway.app', deviceKey:'', deviceName:'M POS iPad', lastSyncAt:null, lastSyncStatus:''}, network || {});
   if(!state.network.deviceKey){
     state.network.deviceKey = (crypto?.randomUUID ? crypto.randomUUID() : ('dev_'+uid()+'_'+uid()));
@@ -2191,6 +2191,10 @@ function renderNetworkScreen(){
           <div><div class="setting-title">Смена закрыта</div><div class="setting-sub">Отправлять в группу чек-отчёт о закрытой смене в виде изображения.</div></div>
           <label class="switch"><input id="telegram-shift-closed" type="checkbox" ${t.notifyShiftClosed!==false?'checked':''}><span></span></label>
         </div>
+        <div class="setting-row">
+          <div><div class="setting-title">Ежемесячный складской отчёт</div><div class="setting-sub">При первом открытии смены в новом месяце отправлять PDF «Складской учёт» за весь предыдущий календарный месяц. Повторно за тот же месяц отчёт не отправляется.</div></div>
+          <label class="switch"><input id="telegram-monthly-warehouse" type="checkbox" ${t.notifyMonthlyWarehouse===true?'checked':''}><span></span></label>
+        </div>
         <div class="modal-actions">
           <button class="btn btn-primary" onclick="saveTelegramSettings()">Сохранить</button>
           <button class="btn btn-secondary" onclick="testTelegramConnection()">Проверить подключение</button>
@@ -2214,13 +2218,15 @@ function saveTelegramSettings(){
     chatId:(document.getElementById('telegram-chat-id')?.value||'').trim(),
     threadId:(document.getElementById('telegram-thread-id')?.value||'').trim(),
     notifyShiftOpened:!!document.getElementById('telegram-shift-opened')?.checked,
-    notifyShiftClosed:!!document.getElementById('telegram-shift-closed')?.checked
+    notifyShiftClosed:!!document.getElementById('telegram-shift-closed')?.checked,
+    notifyMonthlyWarehouse:!!document.getElementById('telegram-monthly-warehouse')?.checked,
+    lastMonthlyWarehouseSent:state.telegram?.lastMonthlyWarehouseSent||''
   };
   saveKey('telegram',state.telegram); render(); flash('Настройки Telegram сохранены');
 }
 function telegramConfigFromState(){
   const t=state.telegram||{};
-  return {enabled:!!t.enabled,botToken:String(t.botToken||''),chatId:String(t.chatId||''),threadId:String(t.threadId||''),notifyShiftOpened:t.notifyShiftOpened!==false,notifyShiftClosed:t.notifyShiftClosed!==false};
+  return {enabled:!!t.enabled,botToken:String(t.botToken||''),chatId:String(t.chatId||''),threadId:String(t.threadId||''),notifyShiftOpened:t.notifyShiftOpened!==false,notifyShiftClosed:t.notifyShiftClosed!==false,notifyMonthlyWarehouse:t.notifyMonthlyWarehouse===true,lastMonthlyWarehouseSent:String(t.lastMonthlyWarehouseSent||'')};
 }
 function telegramNativeRequest(action, extra={}){
   const cfg=telegramConfigFromState();
@@ -2282,6 +2288,35 @@ function sendTelegramShiftClosed(shift){
     window.webkit.messageHandlers.telegram.postMessage({...t,action:'sendShiftCloseReport',report:buildShiftReportPayload(shift)});
   }
 }
+
+function previousCalendarMonthRange(now=new Date()){
+  const firstCurrent=new Date(now.getFullYear(),now.getMonth(),1);
+  const lastPrevious=new Date(firstCurrent); lastPrevious.setDate(0);
+  const firstPrevious=new Date(lastPrevious.getFullYear(),lastPrevious.getMonth(),1);
+  const key=firstPrevious.getFullYear()+'-'+String(firstPrevious.getMonth()+1).padStart(2,'0');
+  return {key,from:localDateString(firstPrevious),to:localDateString(lastPrevious)};
+}
+function maybeSendMonthlyWarehouseReport(){
+  const t=telegramConfigFromState();
+  if(!t.enabled || !t.notifyMonthlyWarehouse || !t.botToken || !t.chatId) return;
+  if(!currentShiftEmployeeIsAdmin()) return;
+  if(!window.webkit?.messageHandlers?.telegram) return;
+  try{
+    const period=previousCalendarMonthRange();
+    if(t.lastMonthlyWarehouseSent===period.key) return;
+    const payload=warehouseExportPayload(warehouseReport(period.from,period.to));
+    window.webkit.messageHandlers.telegram.postMessage({...t,action:'sendMonthlyWarehouseReport',periodKey:period.key,report:payload});
+  }catch(e){ console.error('Не удалось подготовить ежемесячный складской отчёт:',e); }
+}
+window.onTelegramMonthlyWarehouseResult=function(result){
+  if(result?.ok && result.periodKey){
+    state.telegram.lastMonthlyWarehouseSent=String(result.periodKey);
+    saveKey('telegram',state.telegram);
+    flash(result.message||'Ежемесячный складской отчёт отправлен в Telegram');
+  }else if(result?.message){
+    flash(result.message);
+  }
+};
 
 function openAppearanceModal(){
   showModal(`<div class="modal-title">Внешний вид</div>
@@ -5252,6 +5287,7 @@ function submitOpenShift(){
   closeModal();
   render();
   sendTelegramShiftOpened(newShift);
+  maybeSendMonthlyWarehouseReport();
 }
 
 function openCashMovementModal(type){
