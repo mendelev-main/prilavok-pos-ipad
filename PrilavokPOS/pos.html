@@ -2930,7 +2930,7 @@ function onLayoutPointerUp(e){
 function onSearch(v){ state.search=v; render(); const el=document.querySelector('.search-box'); if(el){ el.focus(); el.setSelectionRange(v.length,v.length); } }
 function renderCartPanel(shift){
   const rows = state.cart.length ? state.cart.map(i=>`
-    <div class="cart-row" data-cart-id="${i.productId}" onclick="handleCartRowClick(event, '${i.productId}')" ontouchstart="cartRowTouchStart(event, this)" ontouchmove="cartRowTouchMove(event, this)" ontouchend="cartRowTouchEnd(event, this)" ontouchcancel="cartRowTouchCancel(event, this)">
+    <div class="cart-row" data-cart-id="${escapeAttr(cartItemKey(i))}" onclick="handleCartRowClick(event, '${escapeAttr(cartItemKey(i))}')" ontouchstart="cartRowTouchStart(event, this)" ontouchmove="cartRowTouchMove(event, this)" ontouchend="cartRowTouchEnd(event, this)" ontouchcancel="cartRowTouchCancel(event, this)">
       <div class="cart-row-swipe-bg"><div class="cart-swipe-delete-action"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v5"/><path d="M14 11v5"/></svg><span>Удалить</span></div></div>
       <div class="cart-row-content">
       <div class="cart-row-top">
@@ -2939,13 +2939,13 @@ function renderCartPanel(shift){
           <div class="cart-row-sub">${money(i.price)} / шт${i.discountId ? ' · '+escapeHtml((state.discounts.find(d=>d.id===i.discountId)||{}).name||'Скидка') : ''}</div>
           ${i.comment ? `<div class="cart-row-sub" style="color:var(--text);margin-top:5px;">💬 ${escapeHtml(i.comment)}</div>` : ''}
         </div>
-        <button class="cart-row-remove" onclick="event.stopPropagation();removeFromCart('${i.productId}')" title="Удалить">✕</button>
+        <button class="cart-row-remove" onclick="event.stopPropagation();removeFromCart('${escapeAttr(cartItemKey(i))}')" title="Удалить">✕</button>
       </div>
       <div class="cart-row-bottom">
         <div class="qty-stepper" onclick="event.stopPropagation()">
-          <button class="qty-minus" onclick="event.stopPropagation();changeQty('${i.productId}',-1)">−</button>
+          <button class="qty-minus" onclick="event.stopPropagation();changeQty('${escapeAttr(cartItemKey(i))}',-1)">−</button>
           <span onclick="event.stopPropagation()">${i.qty}</span>
-          <button class="qty-plus" onclick="event.stopPropagation();changeQty('${i.productId}',1)">+</button>
+          <button class="qty-plus" onclick="event.stopPropagation();changeQty('${escapeAttr(cartItemKey(i))}',1)">+</button>
         </div>
         <div class="cart-row-linetotal">${money(itemTotal(i))}</div>
       </div>
@@ -2989,7 +2989,7 @@ function discountValue(item){
 function itemTotal(item){ return Math.max(0,item.price*item.qty-discountValue(item)); }
 function cartSubtotal(){ return state.cart.reduce((sum,i)=>sum+itemTotal(i),0); }
 function openCartItemModal(id){
-  const item=state.cart.find(i=>i.productId===id); if(!item) return;
+  const item=state.cart.find(i=>cartItemKey(i)===id); if(!item) return;
   const discounts=state.discounts||[];
   showModal(`<div class="modal-title">${escapeHtml(item.name)}</div>
     <div class="field"><label>Комментарий к товару</label><textarea id="ci-comment" rows="3" placeholder="Например: без сахара, хорошо прожарить...">${escapeHtml(item.comment||'')}</textarea></div>
@@ -3008,7 +3008,7 @@ function selectCartDiscount(id){
   document.querySelectorAll('.discount-choice').forEach(b=>b.classList.toggle('selected',(b.dataset.discountId||'')===(id||'')));
 }
 function saveCartItemOptions(id){
-  const item=state.cart.find(i=>i.productId===id); if(!item) return;
+  const item=state.cart.find(i=>cartItemKey(i)===id); if(!item) return;
   item.comment=(document.getElementById('ci-comment')?.value||'').trim();
   item.discountId=document.getElementById('ci-discount')?.value||'';
   saveCurrentOrderSession();
@@ -3043,29 +3043,15 @@ function saveOrderSettings(){
   closeModal(); render();
 }
 
-function addToCart(id){
-  const p = getProduct(id);
-  if(!p) return;
-  const existing = state.cart.find(i=>i.productId===id);
-  const proposed=state.cart.map(i=>({...i,qty:i.qty+(i.productId===id?1:0)}));
-  if(!existing) proposed.push({productId:id,qty:1});
-  if(!canFulfillCart(proposed)) return;
-  if(existing){ existing.qty += 1; }
-  else{ state.cart.push({productId:id, name:p.name, price:p.price, qty:1}); }
-  saveCurrentOrderSession();
-  render();
-}
-function changeQty(id, delta){
-  const item = state.cart.find(i=>i.productId===id);
-  if(!item) return;
-  const newQty = item.qty + delta;
-  if(newQty <= 0){ state.cart = state.cart.filter(i=>i.productId!==id); saveCurrentOrderSession(); render(); return; }
-  if(!canFulfillCart(state.cart.map(i=>({...i,qty:i.productId===id?newQty:i.qty})))) return;
-  item.qty = newQty;
-  saveCurrentOrderSession();
-  render();
-}
-let cartSwipeState = null;
+function modifierSelectionSignature(mods){return JSON.stringify((mods||[]).map(m=>[m.groupId,m.productId,Number(m.qty)||0,Number(m.priceDelta)||0]).sort());}
+function cartItemKey(item){return item.cartLineId||item.productId;}
+function addToCart(id){const p=getProduct(id);if(!p)return;if(Array.isArray(p.modifierGroups)&&p.modifierGroups.length){openModifierSelection(id);return;}addConfiguredCartItem(p,[]);}
+function addConfiguredCartItem(p,mods){const extra=(mods||[]).reduce((x,m)=>x+Number(m.priceDelta||0),0),sig=modifierSelectionSignature(mods);const existing=state.cart.find(i=>i.productId===p.id&&modifierSelectionSignature(i.selectedModifiers)===sig&&!i.comment&&!i.discountId);const proposed=state.cart.map(i=>({...i,qty:i===existing?i.qty+1:i.qty}));if(!existing)proposed.push({productId:p.id,qty:1,selectedModifiers:mods});if(!canFulfillCart(proposed))return;if(existing)existing.qty++;else state.cart.push({cartLineId:uid(),productId:p.id,name:p.name,price:(Number(p.price)||0)+extra,basePrice:Number(p.price)||0,qty:1,selectedModifiers:JSON.parse(JSON.stringify(mods||[]))});saveCurrentOrderSession();closeModal();render();}
+function openModifierSelection(productId){const p=getProduct(productId);if(!p)return;const groups=(p.modifierGroups||[]).map(normalizeModifierGroup),html=groups.map((g,gi)=>'<div class="field"><label>'+escapeHtml(g.name)+(g.min>0?' *':'')+'</label><div class="discount-choice-grid">'+g.options.map(o=>{const mp=getProduct(o.productId),type=g.max===1?'radio':'checkbox';return '<label class="discount-choice" style="cursor:pointer"><input type="'+type+'" name="modifier-group-'+gi+'" data-modifier-group="'+gi+'" data-modifier-option="'+escapeAttr(o.id)+'" '+(o.default?'checked':'')+' onchange="updateModifierSelectionTotal(\''+escapeAttr(productId)+'\')"><span>'+escapeHtml(mp?.name||'Товар недоступен')+'</span><span>'+(Number(o.priceDelta)?(Number(o.priceDelta)>0?'+':'')+money(o.priceDelta):'Без доплаты')+'</span></label>';}).join('')+'</div><div class="settings-note">Выберите от '+g.min+' до '+g.max+'</div></div>').join('');showModal('<div class="modal-title">'+escapeHtml(p.name)+'</div><div class="settings-note">Выберите модификаторы товара.</div>'+html+'<div style="font-size:22px;font-weight:850;margin-top:14px">Итого: <span id="modifier-selection-total">'+fullMoney(p.price)+'</span></div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button class="btn btn-primary" onclick="confirmModifierSelection(\''+escapeAttr(productId)+'\')">Добавить в заказ</button></div>',true);updateModifierSelectionTotal(productId);}
+function readModifierSelection(productId){const p=getProduct(productId),groups=(p?.modifierGroups||[]).map(normalizeModifierGroup),selected=[];for(let gi=0;gi<groups.length;gi++){const g=groups[gi],checked=[...document.querySelectorAll('[data-modifier-group="'+gi+'"]:checked')];if(checked.length<g.min||checked.length>g.max)throw new Error('«'+g.name+'»: выберите от '+g.min+' до '+g.max);for(const input of checked){const o=g.options.find(x=>x.id===input.dataset.modifierOption);if(!o)continue;const mp=getProduct(o.productId);if(!mp)throw new Error('Модификатор больше недоступен: '+g.name);selected.push({groupId:g.id,groupName:g.name,optionId:o.id,productId:o.productId,name:mp.name,qty:Number(o.qty)||1,priceDelta:Number(o.priceDelta)||0});}}return selected;}
+function updateModifierSelectionTotal(productId){try{const p=getProduct(productId),mods=readModifierSelection(productId),total=(Number(p?.price)||0)+mods.reduce((x,m)=>x+Number(m.priceDelta||0),0),el=document.getElementById('modifier-selection-total');if(el)el.textContent=fullMoney(total);}catch(e){}}
+function confirmModifierSelection(productId){try{const p=getProduct(productId);if(p)addConfiguredCartItem(p,readModifierSelection(productId));}catch(e){flash(e.message);}}
+function changeQty(id,delta){const item=state.cart.find(i=>cartItemKey(i)===id);if(!item)return;const q=item.qty+delta;if(q<=0){state.cart=state.cart.filter(i=>cartItemKey(i)!==id);saveCurrentOrderSession();render();return;}if(!canFulfillCart(state.cart.map(i=>({...i,qty:cartItemKey(i)===id?q:i.qty}))))return;item.qty=q;saveCurrentOrderSession();render();}
 function handleCartRowClick(e,id){
   if(e.target.closest('button,.qty-stepper')) return;
   if(cartSwipeState && cartSwipeState.suppressClick){
@@ -3136,7 +3122,7 @@ function resetCurrentOrderState(){
   window.__currentOrderKitchenPrinted=false;
 }
 function removeFromCart(id){
-  state.cart = state.cart.filter(i=>i.productId!==id);
+  state.cart = state.cart.filter(i=>cartItemKey(i)!==id);
   if(!state.cart.length){
     resetCurrentOrderState();
     clearCurrentOrderSession();
