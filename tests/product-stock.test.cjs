@@ -47,6 +47,20 @@ test('cash, card and split payments create one receipt and retain payment data',
   f.c.finalizePayment(payments);assert.equal(f.state.orders.length,1,'empty cart cannot create duplicate receipt');
  }
 });
+
+test('web order context is cleared after payment and after removing the last cart item',()=>{
+ const paid=fixture();paid.state.orderComment='Комментарий с WEB';paid.state.currentOrderSource='web';paid.state.currentWebOrderId='web-1';paid.state.currentWebOrderStatus='accepted';
+ paid.sale();assert.equal(paid.state.orderComment,'');assert.equal(paid.state.currentOrderSource,'');assert.equal(paid.state.currentWebOrderId,'');assert.equal(paid.state.currentWebOrderStatus,'');
+ const removed=fixture();removed.cart();removed.state.orderComment='Не оставлять';removed.state.currentOrderSource='web';removed.state.currentWebOrderId='web-2';removed.state.currentWebOrderStatus='accepted';
+ removed.c.removeFromCart('pizza');assert.equal(removed.state.cart.length,0);assert.equal(removed.state.orderComment,'');assert.equal(removed.state.currentOrderSource,'');assert.equal(removed.state.currentWebOrderId,'');assert.equal(removed.state.currentWebOrderStatus,'');
+ const saved=JSON.parse(removed.data.get('prilavok_currentOrderSession'));assert.equal(saved.orderComment,'');assert.equal(saved.webOrderId,'');
+});
+
+test('stock arithmetic is normalized to at most three decimal places',()=>{
+ const sale=fixture();sale.c.getProduct('pizza').components=[{productId:'flour',qty:0.1}];sale.c.getProduct('flour').stock=15.1;sale.sale();
+ assert.equal(sale.c.getProduct('flour').stock,15);assert.equal(sale.c.stockQtyText(15.0000000000002),'15');assert.equal(sale.c.stockQtyText(1.2345),'1.235');
+ sale.c.processFullReturn(sale.state.orders[0].id);assert.equal(sale.c.getProduct('flour').stock,15.1);
+});
 test('shared ingredients across different cart products reject overselling without mutation',()=>{
  const f=fixture();f.c.getProduct('flour').stock=0.3;f.state.products.push({id:'second',name:'Вторая пицца',type:'composite',price:10,components:[{productId:'flour',qty:0.2}]});
  f.c.addToCart('pizza');f.c.addToCart('second');assert.equal(f.state.cart.length,1);assert.match(f.messages.at(-1),/Недостаточно остатка/);
