@@ -2937,6 +2937,7 @@ function renderCartPanel(shift){
         <div>
           <div class="cart-row-name">${escapeHtml(i.name)}</div>
           <div class="cart-row-sub">${money(i.price)} / шт${i.discountId ? ' · '+escapeHtml((state.discounts.find(d=>d.id===i.discountId)||{}).name||'Скидка') : ''}</div>
+          ${(i.selectedModifiers||[]).length?`<div class="cart-row-sub" style="color:var(--text);margin-top:5px;">↳ ${(i.selectedModifiers||[]).map(m=>escapeHtml(m.name)).join(' · ')}</div>`:''}
           ${i.comment ? `<div class="cart-row-sub" style="color:var(--text);margin-top:5px;">💬 ${escapeHtml(i.comment)}</div>` : ''}
         </div>
         <button class="cart-row-remove" onclick="event.stopPropagation();removeFromCart('${escapeAttr(cartItemKey(i))}')" title="Удалить">✕</button>
@@ -3617,6 +3618,7 @@ function receiptBodyHtml(order){
     return `
     <div class="receipt-line"><span>${escapeHtml(i.name)} × ${i.qty}</span><span>${money(total)}</span></div>
     ${discount>0 ? `<div class="receipt-line" style="font-size:12px;color:var(--accent);padding-top:0;"><span>↳ Скидка: ${escapeHtml(i.discountName)}${i.discountType==='percent'?` (${Number(i.discountValue)}%)`:''}</span><span>−${money(discount)}</span></div>` : ''}
+    ${(i.selectedModifiers||[]).length?`<div style="font-size:12px;color:var(--muted);padding:0 0 5px 10px;">↳ ${(i.selectedModifiers||[]).map(m=>escapeHtml(m.name)+(Number(m.priceDelta)?' ('+(Number(m.priceDelta)>0?'+':'')+money(m.priceDelta)+')':'')).join(' · ')}</div>`:''}
     ${i.comment ? `<div style="font-size:12px;color:var(--muted);padding:0 0 5px 10px;">💬 ${escapeHtml(i.comment)}</div>` : ''}`;
   }).join('');
   return `
