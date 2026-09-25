@@ -1151,6 +1151,16 @@ function currentShiftEmployeeIsAdmin(){
 function productTracksStock(p){
   return !!p && p.type==='simple' && !p.noStockTracking;
 }
+function roundStockQty(value){
+  const n=Number(value);
+  if(!Number.isFinite(n)) return n;
+  const rounded=Math.round((n+Number.EPSILON)*1000)/1000;
+  return Object.is(rounded,-0)?0:rounded;
+}
+function stockQtyText(value){
+  const rounded=roundStockQty(value);
+  return Number.isFinite(rounded)?String(rounded):'0';
+}
 function saveCurrentOrderSession(){
   const session = {
     items: JSON.parse(JSON.stringify(state.cart || [])),
@@ -2589,7 +2599,7 @@ function renderPosFolderModal(){
   if(!folder||state.posPath!==context.category){closeModal();return;}
   const editing=state.editMode,products=items.filter(i=>i.type==='product'&&i.parentId===folder.id).map(i=>getProduct(i.id)).filter(Boolean);
   const columns=Math.max(1,Math.min(4,products.length)),width=Math.max(320,columns*220+(columns-1)*12+52);
-  document.getElementById('modal-root').innerHTML=`<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><section class="modal pos-folder-modal" data-columns="${columns}" style="--folder-columns:${columns};--folder-width:${width}px" role="dialog" aria-modal="true" aria-label="${escapeAttr(folder.name)}"><header><h2>${escapeHtml(folder.name)}</h2><button class="btn btn-outline" onclick="closeModal()">Закрыть</button></header><div class="pos-folder-grid ${editing?'category-edit-grid':''}" id="pos-folder-grid">${products.map((p,index)=>{const avail=availableStock(p);return `<div class="layout-tile" data-tile-type="product" data-id="${escapeAttr(p.id)}" data-index="${index}"><div class="pcard ${!editing&&avail<=0?'disabled':''}" role="button" tabindex="0" aria-label="${escapeAttr(p.name)}">${editing?`<button class="navigation-action" onclick="event.stopPropagation();openPosTileMove(${escapeAttr(JSON.stringify(p.id))})">Переместить</button>`:''}${renderProductTileSymbol(p)}<div class="pcard-name">${escapeHtml(p.name)}</div><div class="pcard-bottom"><div><div class="pcard-price">${money(p.price)}</div><div class="pcard-stock">${avail===Infinity?'Остаток не учитывается':'Остаток: '+avail+' '+unitLabel(stockUnit(p))}</div></div></div></div></div>`;}).join('')||'<p class="pe-note" style="grid-column:1/-1">В папке пока нет товаров.</p>'}</div></section></div>`;
+  document.getElementById('modal-root').innerHTML=`<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><section class="modal pos-folder-modal" data-columns="${columns}" style="--folder-columns:${columns};--folder-width:${width}px" role="dialog" aria-modal="true" aria-label="${escapeAttr(folder.name)}"><header><h2>${escapeHtml(folder.name)}</h2><button class="btn btn-outline" onclick="closeModal()">Закрыть</button></header><div class="pos-folder-grid ${editing?'category-edit-grid':''}" id="pos-folder-grid">${products.map((p,index)=>{const avail=availableStock(p);return `<div class="layout-tile" data-tile-type="product" data-id="${escapeAttr(p.id)}" data-index="${index}"><div class="pcard ${!editing&&avail<=0?'disabled':''}" role="button" tabindex="0" aria-label="${escapeAttr(p.name)}">${editing?`<button class="navigation-action" onclick="event.stopPropagation();openPosTileMove(${escapeAttr(JSON.stringify(p.id))})">Переместить</button>`:''}${renderProductTileSymbol(p)}<div class="pcard-name">${escapeHtml(p.name)}</div><div class="pcard-bottom"><div><div class="pcard-price">${money(p.price)}</div><div class="pcard-stock">${avail===Infinity?'Остаток не учитывается':'Остаток: '+stockQtyText(avail)+' '+unitLabel(stockUnit(p))}</div></div></div></div></div>`;}).join('')||'<p class="pe-note" style="grid-column:1/-1">В папке пока нет товаров.</p>'}</div></section></div>`;
   const grid=document.getElementById('pos-folder-grid');
   grid.addEventListener('click',handlePosGridClick);
   grid.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&!e.target.closest('button')){e.preventDefault();handlePosGridClick(e);}});
@@ -2711,7 +2721,7 @@ function renderPosScreen(shift){
         ${editing&&currentCategory?`<button class="navigation-action" onclick="event.stopPropagation();openPosTileMove(${escapeAttr(JSON.stringify(p.id))})">Переместить</button>`:''}
         ${renderProductTileSymbol(p)}
         <div class="pcard-name">${escapeHtml(p.name)}</div>
-        <div class="pcard-bottom"><div><div class="pcard-price">${money(p.price)}</div><div class="pcard-stock ${p.noStockTracking?'':(avail<=3?'low':'')}">${p.type==='simple' ? (p.noStockTracking ? 'Остаток не учитывается' : 'Остаток: '+avail+' '+unitLabel(stockUnit(p))) : (avail===Infinity?'Остаток не учитывается':'Доступно: '+avail)}</div></div></div>
+        <div class="pcard-bottom"><div><div class="pcard-price">${money(p.price)}</div><div class="pcard-stock ${p.noStockTracking?'':(avail<=3?'low':'')}">${p.type==='simple' ? (p.noStockTracking ? 'Остаток не учитывается' : 'Остаток: '+stockQtyText(avail)+' '+unitLabel(stockUnit(p))) : (avail===Infinity?'Остаток не учитывается':'Доступно: '+avail)}</div></div></div>
       </div>
     </div>`;
   }).join('');
@@ -3106,7 +3116,28 @@ function cartRowTouchCancel(e,row){
   row.querySelector('.cart-row-content').style.transform='';
   cartSwipeState=null;
 }
-function removeFromCart(id){ state.cart = state.cart.filter(i=>i.productId!==id); saveCurrentOrderSession(); render(); }
+function resetCurrentOrderState(){
+  state.cart=[];
+  state.orderLabel='';
+  state.orderType='На месте';
+  state.deliveryFee=0;
+  state.customer={name:'',phone:'',address:''};
+  state.orderComment='';
+  state.currentOrderSource='';
+  state.currentWebOrderId='';
+  state.currentWebOrderStatus='';
+  window.__currentOrderKitchenPrinted=false;
+}
+function removeFromCart(id){
+  state.cart = state.cart.filter(i=>i.productId!==id);
+  if(!state.cart.length){
+    resetCurrentOrderState();
+    clearCurrentOrderSession();
+  }else{
+    saveCurrentOrderSession();
+  }
+  render();
+}
 
 function flash(msg){
   const el = document.createElement('div');
@@ -3129,11 +3160,8 @@ function parkOrder(){
     employeeName:employee?.name||employee?.fullName||'Сотрудник',registerName:'POS 1',timestamp:Date.now(),createdAt:Date.now(),kitchenPrinted:!!window.__currentOrderKitchenPrinted
   };
   if(!parked.kitchenPrinted && typeof window.printKitchenOrderNow==='function'){window.printKitchenOrderNow(parked);parked.kitchenPrinted=true;}
-  window.__currentOrderKitchenPrinted=false;
   state.parked.push(parked); saveKey('parked',state.parked);
-  state.cart=[]; clearCurrentOrderSession();
-  state.orderLabel=''; state.orderType='На месте'; state.deliveryFee=0; state.customer={name:'',phone:'',address:''};
-  state.orderComment=''; state.currentOrderSource=''; state.currentWebOrderId=''; state.currentWebOrderStatus='';
+  resetCurrentOrderState(); clearCurrentOrderSession();
   render(); flash('Чек отложен');
 }
 function openParkedModal(){
@@ -3571,12 +3599,12 @@ function finalizePayment(payments){
   order.stockConsumption=stockConsumption;
   for(const item of stockConsumption.items){
     const p=getProduct(item.productId);
-    p.stock=Math.max(0,Number(p.stock)-item.qty);
+    p.stock=roundStockQty(Math.max(0,Number(p.stock)-item.qty));
   }
   state.orders.push(order);
   if(deliveryFee>0){if(!Array.isArray(shift.cashMovements))shift.cashMovements=[];shift.cashMovements.push({id:uid(),type:'withdrawal',subtype:'delivery',amount:deliveryFee,timestamp:Date.now(),note:'🚗 Доставка'});}
   saveKey('products',state.products);saveKey('orders',state.orders);saveKey('shifts',state.shifts);
-  state.cart=[];state.orderLabel='';state.orderType='На месте';state.deliveryFee=0;state.customer={name:'',phone:'',address:''};state._splitPayments=[];state._splitCount=0;
+  resetCurrentOrderState();state._splitPayments=[];state._splitCount=0;
   clearCurrentOrderSession();
   render();showReceipt(order);setTimeout(()=>{if(typeof window.printCompletedOrder==='function')window.printCompletedOrder(order);else if(state.printer?.autoPrint)sendOrderToPrint(order);window.__currentOrderKitchenPrinted=false},250);
 }
@@ -3667,7 +3695,7 @@ function restoreOrderStock(order){
       if(!Number.isFinite(stock) || !Number.isFinite(stock+item.qty)) throw new Error('Некорректный остаток для возврата');
       return {p,stock:stock+item.qty};
     });
-    for(const update of updates) update.p.stock=update.stock;
+    for(const update of updates) update.p.stock=roundStockQty(update.stock);
     return;
   }
   // Old receipts have no historical recipe. Preserve their legacy return path.
@@ -3676,11 +3704,11 @@ function restoreOrderStock(order){
     const p=getProduct(item.productId);
     if(!p) continue;
     if(p.type==='simple'){
-      p.stock = Number(p.stock||0) + Number(item.qty||0);
+      p.stock = roundStockQty(Number(p.stock||0) + Number(item.qty||0));
     }else{
       for(const c of (p.components||[])){
         const comp=getProduct(c.productId);
-        if(productTracksStock(comp)) comp.stock = Number(comp.stock||0) + Number(c.qty||0)*Number(item.qty||0);
+        if(productTracksStock(comp)) comp.stock = roundStockQty(Number(comp.stock||0) + Number(c.qty||0)*Number(item.qty||0));
       }
     }
   }
@@ -3895,7 +3923,7 @@ function renderProductsScreen(){
   const rows = sortedProducts.map(p=>{
     const avail = availableStock(p);
     const typeLabel = p.type==='composite'?'Составной':'Простой';
-    const stockLabel = avail===Infinity ? 'Не учитывается' : String(avail)+' '+unitLabel(stockUnit(p))+(p.type==='simple' && p.minStock!=null && avail<=p.minStock?' · низкий':'');
+    const stockLabel = avail===Infinity ? 'Не учитывается' : stockQtyText(avail)+' '+unitLabel(stockUnit(p))+(p.type==='simple' && p.minStock!=null && avail<=p.minStock?' · низкий':'');
     return `
     <div class="products-table-row" data-product-search="${escapeAttr(productSearchText(p.name)+' '+productSearchText(productCategoryKey(p)))}" style="${productMatchesSearch(p,query)?'':'display:none'}" role="button" tabindex="0" onclick="openProductModal('${p.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openProductModal('${p.id}')}" aria-label="Открыть товар ${escapeAttr(p.name)}">
       <div class="products-table-main">
@@ -4984,7 +5012,7 @@ function renderPurchaseOrdersScreen(){
   const supplier=getPurchaseOrderSupplier(),products=supplier?state.products.filter(p=>p.type==='simple'&&(supplier.productIds||[]).includes(p.id)).slice().sort((a,b)=>a.name.localeCompare(b.name,'ru')):[];
   return `<div class="screen content-screen ${state.tab==='purchaseOrders'?'active':''}"><div class="supply-stack"><div class="supply-stack-actions"><button class="btn btn-outline supply-history-button" id="purchase-history-button" aria-controls="purchase-history-panel" aria-expanded="${!!window._purchaseHistoryExpanded}" onclick="togglePurchaseHistory()"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>История</button><div id="purchase-history-panel" class="purchase-history-panel" ${window._purchaseHistoryExpanded?'':'hidden'}>${purchaseHistoryMarkup()}</div><button class="btn btn-primary supply-expand-button" aria-expanded="${!!window._purchaseExpanded}" onclick="togglePurchasePanel(this)">Новый заказ</button></div>
   <div id="purchase-expand-panel" class="supply-layout supply-focused" ${window._purchaseExpanded?'':'hidden'}><div class="card"><div class="field"><label for="po-supplier">Поставщик</label><select id="po-supplier" onchange="selectPurchaseOrderSupplier(this.value)"><option value="">Выберите поставщика</option>${state.suppliers.map(s=>`<option value="${escapeAttr(s.id)}" ${s.id===supplier?.id?'selected':''}>${escapeHtml(s.name)}</option>`).join('')}</select></div>
-  ${products.map(p=>{const d=state.purchaseOrderCart.find(x=>x.productId===p.id)||{},u=d.requestedUnit??p.purchaseUnit??stockUnit(p),size=d.packSize??p.purchasePackSize??'',content=d.contentUnit??p.purchaseContentUnit??stockUnit(p);return `<div class="supply-request" data-purchase-row="${escapeAttr(p.id)}" oninput="updatePurchaseRequest(${escapeAttr(JSON.stringify(p.id))})" onchange="updatePurchaseRequest(${escapeAttr(JSON.stringify(p.id))})"><div class="supply-product"><strong>${escapeHtml(p.name)}</strong><small>Остаток: ${p.stock||0} ${unitLabel(stockUnit(p))}${p.minStock!=null?' · Минимум: '+p.minStock:''}</small></div><div class="supply-request-fields"><div class="field"><label>Количество</label><input data-request-qty type="text" readonly inputmode="none" role="button" onclick="openPurchaseQuantity(${escapeAttr(JSON.stringify(p.id))})" value="${escapeAttr(String(d.requestedQty??d.qty??''))}" placeholder="0"></div><div class="field"><label>Единица заказа</label><select data-request-unit>${purchaseUnitOptions(p,u)}</select></div><div class="field" data-pack-field ${['bottle','pack','box'].includes(u)?'':'hidden'}><label>В единице</label><input data-request-size type="text" readonly inputmode="none" role="button" onclick="openPurchaseQuantity(${escapeAttr(JSON.stringify(p.id))},'size')" value="${escapeAttr(String(size))}" placeholder="0"></div><div class="field" data-pack-field ${['bottle','pack','box'].includes(u)?'':'hidden'}><label>Единица внутри</label><select data-content-unit>${productUnitOptions(stockUnit(p),content)}</select></div></div><small data-request-note class="pe-note"></small></div>`;}).join('')}
+  ${products.map(p=>{const d=state.purchaseOrderCart.find(x=>x.productId===p.id)||{},u=d.requestedUnit??p.purchaseUnit??stockUnit(p),size=d.packSize??p.purchasePackSize??'',content=d.contentUnit??p.purchaseContentUnit??stockUnit(p);return `<div class="supply-request" data-purchase-row="${escapeAttr(p.id)}" oninput="updatePurchaseRequest(${escapeAttr(JSON.stringify(p.id))})" onchange="updatePurchaseRequest(${escapeAttr(JSON.stringify(p.id))})"><div class="supply-product"><strong>${escapeHtml(p.name)}</strong><small>Остаток: ${stockQtyText(p.stock)} ${unitLabel(stockUnit(p))}${p.minStock!=null?' · Минимум: '+stockQtyText(p.minStock):''}</small></div><div class="supply-request-fields"><div class="field"><label>Количество</label><input data-request-qty type="text" readonly inputmode="none" role="button" onclick="openPurchaseQuantity(${escapeAttr(JSON.stringify(p.id))})" value="${escapeAttr(String(d.requestedQty??d.qty??''))}" placeholder="0"></div><div class="field"><label>Единица заказа</label><select data-request-unit>${purchaseUnitOptions(p,u)}</select></div><div class="field" data-pack-field ${['bottle','pack','box'].includes(u)?'':'hidden'}><label>В единице</label><input data-request-size type="text" readonly inputmode="none" role="button" onclick="openPurchaseQuantity(${escapeAttr(JSON.stringify(p.id))},'size')" value="${escapeAttr(String(size))}" placeholder="0"></div><div class="field" data-pack-field ${['bottle','pack','box'].includes(u)?'':'hidden'}><label>Единица внутри</label><select data-content-unit>${productUnitOptions(stockUnit(p),content)}</select></div></div><small data-request-note class="pe-note"></small></div>`;}).join('')}
   ${supplier&&!products.length?'<p class="pe-note">Закрепите товары за поставщиком во вкладке «Поставщики».</p>':''}
   <div class="supply-order-footer"><button id="po-create" class="btn btn-primary" onclick="finalizePurchaseOrder()" ${state.purchaseOrderCart.length?'':'disabled'}>Сформировать заказ</button></div></div>
 </div></div></div>`;
@@ -5155,7 +5183,7 @@ function applyReceivingDocument(){
     // Recalculate against current stock, not the preview: POS may have sold items meanwhile.
     const items=invoiceReceivingItems(pending.draft),updates=receivingStockUpdates(items),now=Date.now(),shortage=receivingDiscrepancy(order,items);
     window._receivingSaving=true;
-    for(const u of updates){const p=getProduct(u.id);p.stock=u.stock;p.cost=u.cost;}
+    for(const u of updates){const p=getProduct(u.id);p.stock=roundStockQty(u.stock);p.cost=u.cost;}
     const supplier=state.suppliers.find(s=>s.id===pending.draft.supplierId);
     const record={id:uid(),type:order?'purchaseOrder':'purchase',purchaseOrderId:order?.id||'',supplierId:order?.supplierId||supplier?.id||'',supplierName:order?.supplierName||supplier?.name||'',items,totalCost:Math.round(items.reduce((s,i)=>s+i.totalCost,0)*100)/100,shortage,invoiceNumber:pending.draft.invoiceNumber.trim(),invoiceDate:pending.draft.invoiceDate,timestamp:now};
     if(order){order.status='received';order.receivedAt=now;order.receivedItems=items;order.shortage=shortage;order.receivingIncomplete=false;delete order.receivingDraft;delete order.receivingDraftV2;}
