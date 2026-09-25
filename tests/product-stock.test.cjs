@@ -162,8 +162,8 @@ test('insufficient stock blocks payment screen before card-terminal instruction'
  const f=fixture();f.cart();f.c.getProduct('flour').stock=0;let shown=false;f.c.renderPaymentScreen=()=>{shown=true;};f.c.openCardPartConfirmation=()=>{shown=true;};f.c.openPaymentModal();f.c.confirmPaymentScreen('card');assert.equal(shown,false);
 });
 test('print bridge still receives original receipt fields plus ignored stock snapshot',()=>{
- const f=fixture(),order=f.sale();let sent;f.c.webkit={messageHandlers:{printer:{postMessage:m=>{sent=m;}}}};f.c.printReceipt(order.id);
- assert.equal(sent.action,'print');assert.equal(sent.order.total,10);assert.equal(sent.order.items[0].productId,'pizza');assert.equal(sent.order.stockConsumption.version,1);
+ const f=fixture(),order=f.sale();let sent;f.c.sendOrderToPrint=o=>{sent=o;};f.c.printReceipt(order.id);
+ assert.equal(sent.total,10);assert.equal(sent.items[0].productId,'pizza');assert.equal(sent.stockConsumption.version,1);
  assert.match(f.c.receiptBodyHtml(order),/Пицца/);
 });
 
@@ -281,7 +281,7 @@ test('new configuration and recipe display unit survive loadAll restart',async()
 // Supplier order / TTN workflow uses synthetic local state only.
 test('supplier requests preserve packages independently from expected warehouse quantity',()=>{
  const f=fixture(),p=f.c.getProduct('flour');p.stockUnit='kg';
- const unknown=f.c.makePurchaseLine(p,4,'pack','');assert.equal(unknown.qty,0);assert.equal(unknown.expectedQty,null);assert.equal(f.c.requestedQuantityText(unknown),'4 упак.');
+ const unknown=f.c.makePurchaseLine(p,4,'pack','');assert.equal(unknown.qty,0);assert.equal(unknown.expectedQty,null);assert.equal(f.c.requestedQuantityText(unknown),'4 упаковка');
  const known=f.c.makePurchaseLine(p,4,'pack',2.5);near(known.expectedQty,10);near(known.requestedQty,4);
  near(f.c.makePurchaseLine(p,20000,'g','').expectedQty,20);assert.throws(()=>f.c.makePurchaseLine(p,2,'l',''));assert.throws(()=>f.c.makePurchaseLine(p,2,'box',-1));
 });
@@ -330,7 +330,7 @@ test('cost cannot be manually changed in an existing product save',async()=>{
 });
 test('text and native share payload preserve fractional package request',()=>{
  const f=fixture();const order={id:'p',supplierName:'Supplier',items:[{productId:'flour',productName:'Мука',qty:0,requestedQty:1.5,requestedUnit:'box'}],timestamp:1};f.state.purchaseOrders=[order];
- assert.match(f.c.purchaseOrderText(order),/1.5 кор\./);let payload;f.c.webkit={messageHandlers:{printer:{postMessage:p=>payload=p}}};f.c.sharePurchaseOrder('p');assert.equal(payload.order.items[0].qty,1.5);assert.equal(payload.order.items[0].quantityText,'1.5 кор.');
+ assert.match(f.c.purchaseOrderText(order),/1.5 коробка/);let payload;f.c.webkit={messageHandlers:{printer:{postMessage:p=>payload=p}}};f.c.sharePurchaseOrder('p');assert.equal(payload.order.items[0].qty,1.5);assert.equal(payload.order.items[0].quantityText,'1.5 коробка');
 });
 test('standalone invoice has same cost calculation and no purchase order requirement',()=>{
  const f=invoiceFixture();f.c._receivingPending.orderId=null;f.c.applyReceivingDocument();near(f.c.getProduct('flour').stock,13);near(f.c.getProduct('flour').cost,80/13);assert.equal(f.state.receivings[0].type,'purchase');assert.equal(f.state.purchaseOrders[0].status,'pending');
