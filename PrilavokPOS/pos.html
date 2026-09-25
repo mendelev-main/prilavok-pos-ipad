@@ -1084,7 +1084,14 @@ function productIngredients(p, qty=1, trail=new Set(), totals=new Map(), resolve
 }
 function stockConsumptionFor(items){
   const totals=new Map();
-  for(const item of items) productIngredients(getProduct(item.productId),item.qty,new Set(),totals);
+  for(const item of items){
+    productIngredients(getProduct(item.productId),item.qty,new Set(),totals);
+    for(const m of (item.selectedModifiers||[])){
+      const mp=getProduct(m.productId);
+      if(!mp) throw new Error('Товар-модификатор не найден');
+      productIngredients(mp,Number(item.qty||0)*Number(m.qty||0),new Set(),totals);
+    }
+  }
   return {version:1,items:[...totals].filter(([id])=>productTracksStock(getProduct(id))).map(([productId,qty])=>({productId,qty}))};
 }
 function checkedStockConsumption(items){
@@ -4266,6 +4273,7 @@ function openProductModal(id){
   window._pmReturnScroll=document.querySelector('.screen.active')?.scrollTop||0;
   window._pmReturnFocus=document.activeElement;
   window._pmComponents=JSON.parse(JSON.stringify(editing?.components||[]));
+  window._pmModifierGroups=JSON.parse(JSON.stringify(editing?.modifierGroups||[]));
   window._pmComponentCategory='Все';window._pmSearch='';
   window._pmStockUnlocked=currentShiftEmployeeIsAdmin();
   window._pmNoStockUnlocked=window._pmStockUnlocked;
@@ -4285,14 +4293,14 @@ function productEditorSnapshot(){
   return JSON.stringify({purchaseUnit:value('pf-purchase-unit'),packSize:value('pf-pack-size'),purchaseContentUnit:value('pf-purchase-content-unit'),sku:value('pf-sku'),note:value('pf-note'),unit:window._pmUnit,minimum:value('pf-min-stock'),name:value('pf-name'),category:value('pf-category'),symbol:value('pf-symbol'),price:value('pf-price'),type:window._pmType,
     cost:window._pmType==='simple'?value('pf-cost'):null,stock:window._pmType==='simple'?value('pf-stock'):null,
     noStock:window._pmType==='simple'?!!document.getElementById('pf-no-stock')?.checked:false,
-    components:window._pmType==='composite'?window._pmComponents:[],recipeYield:window._pmType==='composite'?Number(document.getElementById('pf-recipe-yield')?.value||window._pmRecipeYield||1):null,recipeUnit:window._pmType==='composite'?(document.getElementById('pf-recipe-unit')?.value||window._pmRecipeUnit||'piece'):null,online:window._pmOnline,image:window._pmImageData,removeImage:window._pmRemoveImage});
+    components:window._pmType==='composite'?window._pmComponents:[],modifierGroups:window._pmModifierGroups||[],recipeYield:window._pmType==='composite'?Number(document.getElementById('pf-recipe-yield')?.value||window._pmRecipeYield||1):null,recipeUnit:window._pmType==='composite'?(document.getElementById('pf-recipe-unit')?.value||window._pmRecipeUnit||'piece'):null,online:window._pmOnline,image:window._pmImageData,removeImage:window._pmRemoveImage});
 }
 function productEditorDirty(){return productEditorSnapshot()!==window._pmInitial;}
 function finishProductEditor(nextId=null){
   document.getElementById('product-editor-root').innerHTML='';
   document.getElementById('app').inert=false;
   const screen=document.querySelector('.screen.active');if(screen)screen.scrollTop=window._pmReturnScroll||0;
-  window._pmComponents=[];window._pmImageData=null;window._pmEditingId=null;window._pmExitAction=null;
+  window._pmComponents=[];window._pmModifierGroups=[];window._pmImageData=null;window._pmEditingId=null;window._pmExitAction=null;
   if(nextId){openProductModal(nextId);return;}
   if(window._pmReturnFocus?.isConnected)window._pmReturnFocus.focus();
   else document.getElementById('products-search')?.focus({preventScroll:true});
@@ -4355,7 +4363,7 @@ function renderProductModal(editing, type, simpleProducts, catList){
   document.getElementById('product-editor-root').innerHTML=`<section class="product-editor" aria-label="Карточка товара">
     <header class="pe-header"><button id="pe-back" class="btn btn-outline pe-back" onclick="requestCloseProductEditor()">← Назад</button><div class="pe-heading"><div id="pe-draft-state" class="pe-eyebrow">Карточка товара</div><h1 id="pe-title">${escapeHtml(editing?.name||'Новый товар')}</h1></div><button id="pe-save" class="btn btn-primary" onclick="saveProductEditor()">Сохранить</button></header>
     <div class="pe-layout"><nav class="pe-nav" aria-label="Разделы карточки"><div id="pe-kind" class="pe-nav-caption">${type==='simple'?'Простой товар':'Составной товар'}</div>
-      ${[['main','Основное'],['stock','Состав и остатки'],['usage','Где используется'],['web','Онлайн-меню']].map(([id,label])=>`<button aria-pressed="${id==='main'}" data-pe-tab="${id}" class="${id==='main'?'selected':''}" onclick="selectProductEditorSection('${id}')">${label}</button>`).join('')}
+      ${[['main','Основное'],['stock','Состав и остатки'],['modifiers','Модификаторы'],['usage','Где используется'],['web','Онлайн-меню']].map(([id,label])=>`<button aria-pressed="${id==='main'}" data-pe-tab="${id}" class="${id==='main'?'selected':''}" onclick="selectProductEditorSection('${id}')">${label}</button>`).join('')}
       <div class="pe-nav-bottom">${editing?`<button class="btn product-modal-delete" onclick="deleteProduct(${escapeAttr(JSON.stringify(editing.id))})">Удалить товар</button>`:''}</div></nav>
     <div class="pe-content" oninput="updateProductEditorSummary()" onchange="updateProductEditorSummary()">
       <div class="pe-workspace"><main>
@@ -4369,6 +4377,11 @@ function renderProductModal(editing, type, simpleProducts, catList){
         <div class="pe-photo"><div id="pf-image-preview" class="product-image-preview">${editing?.imageUrl?`<img src="${escapeAttr(editing.imageUrl)}" alt="Фото товара">`:'<div class="product-image-empty">Фото товара</div>'}</div><div><h3>Фото товара</h3><p class="pe-note">Изображение для онлайн-меню.</p><button class="btn btn-outline" onclick="pickProductImage()">Выбрать фото</button><button class="btn btn-outline" onclick="removeProductImage();updateProductEditorSummary()">Убрать фото</button></div><input id="pf-image-input" type="file" accept="image/*" hidden onchange="handleProductImage(this)"></div>
       </section>
       <section class="pe-card" data-pe-panel="stock" hidden><div class="pe-section-heading"><h2>Состав и остатки</h2></div><div id="pf-type-fields"></div></section>
+      <section class="pe-card" data-pe-panel="modifiers" hidden>
+        <div class="pe-section-heading"><h2>Модификаторы</h2><button type="button" class="btn btn-outline" onclick="addModifierGroup()">+ Группа</button></div>
+        <p class="pe-note">Варианты связаны с существующими товарами и списываются с их остатков.</p>
+        <div id="pf-modifier-groups">${renderModifierGroups()}</div>
+      </section>
       <section class="pe-card" data-pe-panel="usage" hidden><div class="pe-section-heading"><h2>Где используется</h2></div>${renderProductUsage(editing?.id)}</section>
       <section class="pe-card" data-pe-panel="web" hidden><h2>Онлайн-меню</h2><div class="web-setting-row"><div><strong>Публиковать в WEB</strong><p class="pe-note">Товар виден в онлайн-меню, если опубликована и его категория.</p></div><button id="pf-web-toggle" type="button" role="switch" aria-label="Публиковать в WEB" aria-checked="${window._pmOnline}" aria-disabled="${!canEditProductWebSetting()}" class="toggle-switch ${window._pmOnline?'on':''}" ${canEditProductWebSetting()?'':'disabled'} onclick="toggleProductModalOnline();updateProductEditorSummary()"><span></span></button></div><p class="pe-note">${canEditProductWebSetting()?'Изменения меню отправляются вручную: Настройки → Сетевые настройки → Синхронизировать меню.':'Настройку WEB может изменять только администратор при открытой им смене.'}</p></section>
       </main><aside class="pe-summary"><div class="pe-price-block"><span>Цена продажи</span><strong id="pe-summary-price"></strong></div><div class="pe-summary-row"><span>Себестоимость</span><strong id="pe-summary-cost"></strong></div><div class="pe-summary-row"><span>Цена − себестоимость</span><strong id="pe-summary-difference"></strong></div><p class="pe-note">Для составного товара себестоимость рассчитывается по ингредиентам.</p><div class="pe-summary-hint">Количество в составе указывается на одну продаваемую единицу товара.</div></aside></div>
@@ -4680,6 +4693,8 @@ async function saveProduct(editingId){
         if(!Number.isFinite(p.recipeYield)||p.recipeYield<=0)throw new Error('Выход состава должен быть больше нуля');
       }
     }
+    validateModifierGroups(window._pmModifierGroups||[],editingId||p.id);
+    p.modifierGroups=(window._pmModifierGroups||[]).map(normalizeModifierGroup);
     saveProductConfiguration(p);
     if(editingId && p.type==='simple')p.cost=Number(getProduct(editingId)?.type==='simple'?getProduct(editingId).cost:compositeCost(getProduct(editingId)))||0;
     if(p.type==='simple'){
