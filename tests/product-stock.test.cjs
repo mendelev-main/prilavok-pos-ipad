@@ -61,6 +61,38 @@ test('stock arithmetic is normalized to at most three decimal places',()=>{
  assert.equal(sale.c.getProduct('flour').stock,15);assert.equal(sale.c.stockQtyText(15.0000000000002),'15');assert.equal(sale.c.stockQtyText(1.2345),'1.235');
  sale.c.processFullReturn(sale.state.orders[0].id);assert.equal(sale.c.getProduct('flour').stock,15.1);
 });
+
+test('modifier stock is aggregated with base recipe and survives exact return',()=>{
+ const f=fixture();
+ f.state.products.push({id:'bacon',name:'Бекон',type:'simple',stock:1,cost:10,price:10});
+ const pizza=f.c.getProduct('pizza');pizza.modifierGroups=[{id:'filling',name:'Начинка',min:1,max:1,options:[{id:'bacon-opt',productId:'bacon',qty:.05,priceDelta:1.5}]}];
+ f.state.cart=[{cartLineId:'line-1',productId:'pizza',name:'Пицца',price:11.5,qty:2,selectedModifiers:[{groupId:'filling',groupName:'Начинка',optionId:'bacon-opt',productId:'bacon',name:'Бекон',qty:.05,priceDelta:1.5}]}];
+ const plan=f.c.checkedStockConsumption(f.state.cart);
+ near(plan.items.find(i=>i.productId==='flour').qty,.4);near(plan.items.find(i=>i.productId==='water').qty,.2);near(plan.items.find(i=>i.productId==='bacon').qty,.1);
+ f.c.finalizePayment([{method:'cash',amount:23}]);near(f.c.getProduct('bacon').stock,.9);
+ const order=f.state.orders[0];assert.equal(order.items[0].selectedModifiers[0].name,'Бекон');near(order.total,23);
+ f.c.processFullReturn(order.id);near(f.c.getProduct('bacon').stock,1);
+});
+test('modifier can be composite and expands recursively into simple stock',()=>{
+ const f=fixture();
+ f.state.products.push({id:'sauce',name:'Соус',type:'composite',components:[{productId:'water',qty:.2},{productId:'flour',qty:.1}]});
+ const items=[{productId:'pizza',qty:1,selectedModifiers:[{productId:'sauce',qty:.5,priceDelta:0}]}];
+ const plan=f.c.checkedStockConsumption(items);
+ near(plan.items.find(i=>i.productId==='flour').qty,.25);near(plan.items.find(i=>i.productId==='water').qty,.2);
+});
+test('modifier shortage rejects cart without stock mutation',()=>{
+ const f=fixture();f.state.products.push({id:'bacon',name:'Бекон',type:'simple',stock:.04,cost:10,price:10});
+ const before=JSON.stringify(f.state.products);
+ f.c.addConfiguredCartItem(f.c.getProduct('pizza'),[{groupId:'filling',productId:'bacon',name:'Бекон',qty:.05,priceDelta:1.5}]);
+ assert.equal(f.state.cart.length,0);assert.equal(JSON.stringify(f.state.products),before);assert.match(f.messages.at(-1),/Недостаточно остатка: Бекон/);
+});
+test('same modifier selection merges, different selection stays separate and legacy cart remains compatible',()=>{
+ const f=fixture();f.state.products.push({id:'bacon',name:'Бекон',type:'simple',stock:10},{id:'ham',name:'Ветчина',type:'simple',stock:10});
+ const p=f.c.getProduct('pizza'),b=[{groupId:'f',productId:'bacon',name:'Бекон',qty:.05,priceDelta:1}],h=[{groupId:'f',productId:'ham',name:'Ветчина',qty:.05,priceDelta:0}];
+ f.c.addConfiguredCartItem(p,b);f.c.addConfiguredCartItem(p,b);f.c.addConfiguredCartItem(p,h);
+ assert.equal(f.state.cart.length,2);assert.equal(f.state.cart[0].qty,2);assert.equal(f.state.cart[0].price,11);assert.equal(f.state.cart[1].price,10);
+ f.state.cart=[{productId:'pizza',name:'Пицца',price:10,qty:1}];assert.doesNotThrow(()=>f.c.checkedStockConsumption(f.state.cart));assert.equal(f.c.cartItemKey(f.state.cart[0]),'pizza');
+});
 test('shared ingredients across different cart products reject overselling without mutation',()=>{
  const f=fixture();f.c.getProduct('flour').stock=0.3;f.state.products.push({id:'second',name:'Вторая пицца',type:'composite',price:10,components:[{productId:'flour',qty:0.2}]});
  f.c.addToCart('pizza');f.c.addToCart('second');assert.equal(f.state.cart.length,1);assert.match(f.messages.at(-1),/Недостаточно остатка/);
