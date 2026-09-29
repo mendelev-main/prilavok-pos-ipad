@@ -519,6 +519,13 @@
   .payment-amount-display{min-height:58px;display:flex;align-items:center;justify-content:flex-end;padding:0 14px;background:var(--surface);border:1px solid var(--border);border-radius:14px;font-size:28px;font-weight:800;letter-spacing:.2px;cursor:pointer;user-select:none;}
   .payment-amount-display:active{background:var(--bg);}
   @media(max-width:620px){.receipt-modal-actions{grid-template-columns:1fr;}.receipt-action{width:100%;}}
+  .payment-page{position:fixed;inset:0;z-index:120;background:var(--bg);padding:22px;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;}
+  .payment-page-header{display:flex;align-items:center;gap:14px;margin-bottom:16px;flex:0 0 auto;}
+  .payment-page-back{min-height:44px;padding:0 18px;border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text);font-size:14px;font-weight:800;cursor:pointer;}
+  .payment-page-title{font-size:24px;font-weight:850;}
+  .payment-page-body{flex:1;min-height:0;}
+  .payment-page .payment-layout{height:100%;}
+  .payment-page .payment-receipt,.payment-page .payment-box{max-height:none;height:100%;box-sizing:border-box;}
   .payment-layout{display:grid;grid-template-columns:minmax(280px,.82fr) minmax(420px,1.18fr);gap:18px;align-items:stretch;}
   .payment-receipt,.payment-box{background:var(--bg);border:1px solid var(--border);border-radius:18px;padding:18px;min-width:0;}
   .payment-receipt{max-height:68vh;overflow:auto;}
@@ -3229,12 +3236,16 @@ function openPaymentModal(){
   if(!state.cart.length){flash('Заказ пуст');return;}
   if(!currentShift()){flash('Смена не открыта');return;}
   if(!canFulfillCart()) return;
-  renderPaymentScreen();
+  state.paymentPage='main'; renderPaymentScreen();
 }
 function renderPaymentScreen(){
   const total=cartTotal();
-  showModal(`<div class="modal-title">Оплата</div>
-    <div class="payment-layout">
+  closeModal();
+  document.getElementById('payment-page-root')?.remove();
+  const page=document.createElement('div');
+  page.id='payment-page-root';
+  page.className='payment-page';
+  page.innerHTML=`<div class="payment-page-header"><button class="payment-page-back" onclick="closePaymentPage()">← Назад</button><div class="payment-page-title">Оплата</div></div><div class="payment-page-body"><div class="payment-layout">
       <div class="payment-receipt">
         <div style="font-size:16px;font-weight:800;margin-bottom:12px;">Чек</div>
         ${paymentReceiptHtml()}
@@ -3257,14 +3268,14 @@ function renderPaymentScreen(){
         <div style="margin-top:auto;padding-top:14px;display:flex;flex-direction:column;gap:8px;">
           <button class="btn btn-cash" onclick="confirmPaymentScreen('cash')">Оплатить</button>
           <button class="btn btn-card" onclick="confirmPaymentScreen('card')">Оплата картой</button>
-          <button class="btn btn-secondary" onclick="closeModal()">Отмена</button>
         </div>
       </div>
-    </div>`, true);
-  const modal=document.querySelector('#modal-root .modal'); if(modal) modal.classList.add('payment-modal');
+    </div></div>`;
+  document.body.appendChild(page);
   state._paymentCashGiven=Number(total)||0;
   setTimeout(()=>renderPaymentAmount(total),0);
 }
+function closePaymentPage(){state.paymentPage='';state._splitPayments=[];state._splitCount=0;document.getElementById('payment-page-root')?.remove();closeModal();}
 function paymentGivenValue(){return Number(String(state._paymentCashGiven??'').replace(',','.'))||0;}
 function renderPaymentAmount(total){
   const el=document.getElementById('paymentCashGiven');
@@ -3615,7 +3626,7 @@ function finalizePayment(payments){
   state.orders.push(order);
   if(deliveryFee>0){if(!Array.isArray(shift.cashMovements))shift.cashMovements=[];shift.cashMovements.push({id:uid(),type:'withdrawal',subtype:'delivery',amount:deliveryFee,timestamp:Date.now(),note:'🚗 Доставка'});}
   saveKey('products',state.products);saveKey('orders',state.orders);saveKey('shifts',state.shifts);
-  resetCurrentOrderState();state._splitPayments=[];state._splitCount=0;
+  resetCurrentOrderState();state.paymentPage='';document.getElementById('payment-page-root')?.remove();state._splitPayments=[];state._splitCount=0;
   clearCurrentOrderSession();
   render();showReceipt(order);setTimeout(()=>{if(typeof window.printCompletedOrder==='function')window.printCompletedOrder(order);else if(state.printer?.autoPrint)sendOrderToPrint(order);window.__currentOrderKitchenPrinted=false},250);
 }
