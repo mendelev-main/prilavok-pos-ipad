@@ -163,6 +163,8 @@
   .pcard-type{font-size:10px;font-weight:700;color:var(--accent);background:var(--accent-soft);padding:2px 7px;border-radius:100px;align-self:flex-start;}
   .layout-tile .tile-remove{position:absolute;top:7px;right:7px;width:28px;height:28px;border-radius:50%;background:var(--danger-soft);color:var(--danger);font-size:15px;font-weight:800;z-index:2;}
   .category-tile .pcard-name:after{content:'›';float:right;color:var(--muted);font-size:20px;line-height:14px;}
+  .folder-tile .pcard-name{font-size:19px;font-weight:800;line-height:1.2;}
+  .folder-tile .pcard-name:after{content:none;}
   :root[data-theme='dark'] .category-tile .pcard{background:var(--surface)!important;border:2px solid var(--category-color);box-shadow:0 0 8px color-mix(in srgb,var(--category-color) 70%, transparent),0 0 18px color-mix(in srgb,var(--category-color) 28%, transparent);}
   .layout-list{display:flex;flex-direction:column;gap:8px;max-height:52vh;overflow:auto;}
   .layout-add-row{display:flex;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);}
@@ -2619,7 +2621,7 @@ function renderPosFolderModal(){
   if(!folder||state.posPath!==context.category){closeModal();return;}
   const editing=state.editMode,products=items.filter(i=>i.type==='product'&&i.parentId===folder.id).map(i=>getProduct(i.id)).filter(Boolean);
   const columns=Math.max(1,Math.min(4,products.length)),width=Math.max(320,columns*220+(columns-1)*12+52);
-  document.getElementById('modal-root').innerHTML=`<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><section class="modal pos-folder-modal" data-columns="${columns}" style="--folder-columns:${columns};--folder-width:${width}px" role="dialog" aria-modal="true" aria-label="${escapeAttr(folder.name)}"><header><h2>${escapeHtml(folder.name)}</h2><button class="btn btn-outline" onclick="closeModal()">Закрыть</button></header><div class="pos-folder-grid ${editing?'category-edit-grid':''}" id="pos-folder-grid">${products.map((p,index)=>{const avail=availableStock(p);return `<div class="layout-tile" data-tile-type="product" data-id="${escapeAttr(p.id)}" data-index="${index}"><div class="pcard ${!editing&&avail<=0?'disabled':''}" role="button" tabindex="0" aria-label="${escapeAttr(p.name)}">${editing?`<button class="navigation-action" onclick="event.stopPropagation();openPosTileMove(${escapeAttr(JSON.stringify(p.id))})">Переместить</button>`:''}${renderProductTileSymbol(p)}<div class="pcard-name">${escapeHtml(p.name)}</div><div class="pcard-bottom"><div><div class="pcard-price">${money(p.price)}</div><div class="pcard-stock">${avail===Infinity?'Остаток не учитывается':'Остаток: '+stockQtyText(avail)+' '+unitLabel(stockUnit(p))}</div></div></div></div></div>`;}).join('')||'<p class="pe-note" style="grid-column:1/-1">В папке пока нет товаров.</p>'}</div></section></div>`;
+  document.getElementById('modal-root').innerHTML=`<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><section class="modal pos-folder-modal" data-columns="${columns}" style="--folder-columns:${columns};--folder-width:${width}px" role="dialog" aria-modal="true" aria-label="${escapeAttr(folder.name)}"><header><h2>${escapeHtml(folder.name)}</h2><button class="btn btn-outline" onclick="closeModal()">Закрыть</button></header><div class="pos-folder-grid ${editing?'category-edit-grid':''}" id="pos-folder-grid">${products.map((p,index)=>{const avail=availableStock(p);return `<div class="layout-tile" data-tile-type="product" data-id="${escapeAttr(p.id)}" data-index="${index}"><div class="pcard ${!editing&&avail<=0?'disabled':''}" role="button" tabindex="0" aria-label="${escapeAttr(p.name)}">${editing?`<button class="navigation-action" onclick="event.stopPropagation();openPosTileMove(${escapeAttr(JSON.stringify(p.id))})">Переместить</button>`:''}${renderProductTileSymbol(p)}<div class="pcard-name">${escapeHtml(p.name)}</div><div class="pcard-bottom"><div><div class="pcard-price">${money(p.price)}</div><div class="pcard-stock">${avail===Infinity?'Остаток: ∞':'Остаток: '+stockQtyText(avail)+' '+unitLabel(stockUnit(p))}</div></div></div></div></div>`;}).join('')||'<p class="pe-note" style="grid-column:1/-1">В папке пока нет товаров.</p>'}</div></section></div>`;
   const grid=document.getElementById('pos-folder-grid');
   grid.addEventListener('click',handlePosGridClick);
   grid.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&!e.target.closest('button')){e.preventDefault();handlePosGridClick(e);}});
@@ -2720,7 +2722,7 @@ function renderPosScreen(shift){
 
   const tileHtml = tiles.map((t, index)=>{
     const pos = !currentCategory ? tilePositionStyle(t.tile) : '';
-    if(t.type==='folder')return `<div class="layout-tile category-tile" data-tile-type="folder" data-id="${escapeAttr(t.id)}" data-index="${index}"><div class="pcard ${editing?'edit-tile':''}" role="button" tabindex="0" style="background:var(--accent-soft)">${editing?`<button class="navigation-action" onclick="event.stopPropagation();openPosFolderEditor(${escapeAttr(JSON.stringify(t.id))})">Изменить</button>`:''}<div class="pcard-name">${escapeHtml(t.name)}</div></div></div>`;
+    if(t.type==='folder')return `<div class="layout-tile category-tile folder-tile" data-tile-type="folder" data-id="${escapeAttr(t.id)}" data-index="${index}"><div class="pcard ${editing?'edit-tile':''}" role="button" tabindex="0" style="background:var(--accent-soft)">${editing?`<button class="navigation-action" onclick="event.stopPropagation();openPosFolderEditor(${escapeAttr(JSON.stringify(t.id))})">Изменить</button>`:''}<div class="pcard-name">${escapeHtml(t.name)}</div></div></div>`;
     if(t.type==='category'){
       const categoryColor = state.categoryColors[t.id] || '#EEF1F5';
       return `<div class="layout-tile category-tile" data-tile-type="category" data-id="${escapeAttr(t.id)}" data-index="${t.index ?? index}" style="${pos}">
@@ -2741,7 +2743,7 @@ function renderPosScreen(shift){
         ${editing&&currentCategory?`<button class="navigation-action" onclick="event.stopPropagation();openPosTileMove(${escapeAttr(JSON.stringify(p.id))})">Переместить</button>`:''}
         ${renderProductTileSymbol(p)}
         <div class="pcard-name">${escapeHtml(p.name)}</div>
-        <div class="pcard-bottom"><div><div class="pcard-price">${money(p.price)}</div><div class="pcard-stock ${p.noStockTracking?'':(avail<=3?'low':'')}">${p.type==='simple' ? (p.noStockTracking ? 'Остаток не учитывается' : 'Остаток: '+stockQtyText(avail)+' '+unitLabel(stockUnit(p))) : (avail===Infinity?'Остаток не учитывается':'Доступно: '+avail)}</div></div></div>
+        <div class="pcard-bottom"><div><div class="pcard-price">${money(p.price)}</div><div class="pcard-stock ${p.noStockTracking?'':(avail<=3?'low':'')}">${p.type==='simple' ? (p.noStockTracking ? 'Остаток: ∞' : 'Остаток: '+stockQtyText(avail)+' '+unitLabel(stockUnit(p))) : (avail===Infinity?'Остаток: ∞':'Доступно: '+avail)}</div></div></div>
       </div>
     </div>`;
   }).join('');
@@ -3940,7 +3942,7 @@ function renderProductsScreen(){
         <div class="products-table-sub">${escapeHtml(productCategoryKey(p))}</div>
         <div class="products-mobile-meta">
           <span class="badge ${p.type==='composite'?'type-composite':''}">${typeLabel}</span>
-          <span class="badge">${p.noStockTracking?'Остаток не учитывается':'Остаток '+stockLabel}</span>
+          <span class="badge">${p.noStockTracking?'Остаток: ∞':'Остаток '+stockLabel}</span>
         </div>
       </div>
       <div class="products-table-cell products-table-muted">${escapeHtml(productCategoryKey(p))}</div>
