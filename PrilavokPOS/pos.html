@@ -3854,8 +3854,14 @@ function printReceipt(orderId){
 
 /* ============================= RECEIPTS SCREEN (история чеков) ============================= */
 function selectReceipt(orderId){
+  const list=document.getElementById('receipts-list');
+  const scrollTop=list?.scrollTop||0;
   state.selectedReceiptId=orderId;
   render();
+  requestAnimationFrame(()=>{
+    const nextList=document.getElementById('receipts-list');
+    if(nextList) nextList.scrollTop=scrollTop;
+  });
 }
 function renderReceiptsScreen(){
   const list = state.orders.slice().sort((a,b)=>b.timestamp-a.timestamp).slice(0,300);
@@ -3865,7 +3871,7 @@ function renderReceiptsScreen(){
   <div class="screen content-screen ${state.tab==='receipts'?'active':''}">
     <div class="content-head"><div class="content-title">Чеки</div></div>
     <div style="display:grid;grid-template-columns:minmax(320px,.82fr) minmax(440px,1.18fr);gap:16px;min-height:0;flex:1;">
-      <div class="card" style="min-height:0;overflow:auto;">
+      <div class="card" id="receipts-list" style="min-height:0;overflow:auto;">
         ${list.length ? list.map(o=>`
           <div class="list-row" style="cursor:pointer;border-radius:14px;margin:3px 0;${o.id===selected?.id?'background:var(--accent-soft);border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);':''}${o.returnedAt?'opacity:.72;':''}" onclick="selectReceipt('${escapeAttr(o.id)}')">
             <div style="flex:1;min-width:0;">
