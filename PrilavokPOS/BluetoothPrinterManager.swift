@@ -60,9 +60,33 @@ private enum ReceiptEncoder {
         func pair(_ left:String,_ right:String,_ font:UIFont=regular,_ gap:CGFloat=4){rows.append(Row(kind:.pair,left:left,right:right,font:font,align:.left,gap:gap))}
         func separator(_ gap:CGFloat=8){rows.append(Row(kind:.separator,left:"",right:"",font:small,align:.left,gap:gap))}
         func money(_ v:Double)->String{String(format:"%.2f BYN",v)}
-        let kitchen=(order["__printDocumentType"] as? String)=="kitchen"
+        let documentType=(order["__printDocumentType"] as? String) ?? "receipt"
+        let kitchen=documentType=="kitchen"
+        let shiftClose=documentType=="shift-close"
 
-        if kitchen {
+        if shiftClose {
+            let establishment=(order["establishmentName"] as? String)?.trimmingCharacters(in:.whitespacesAndNewlines) ?? ""
+            if !establishment.isEmpty { add(establishment,title,.center,5) }
+            add("ОТЧЁТ О ЗАКРЫТИИ СМЕНЫ",bold,.center,6)
+            add("Сотрудник: "+((order["employeeName"] as? String) ?? "Сотрудник"),small,.center,3)
+            let opened=number(order["openedAt"]),closed=number(order["closedAt"])
+            if opened>0 { add("Открыта: "+dateText(ms:opened),small,.center,2) }
+            if closed>0 { add("Закрыта: "+dateText(ms:closed),small,.center,8) }
+            separator(8)
+            pair("Заказов",qty(number(order["count"])),regular,3)
+            pair("Выручка",money(number(order["total"])),medium,3)
+            pair("Наличные",money(number(order["cash"])),regular,3)
+            pair("Карта",money(number(order["card"])),regular,8)
+            separator(8)
+            pair("Наличные на начало",money(number(order["openingCash"])),regular,3)
+            pair("Внесения",money(number(order["deposits"])),regular,3)
+            pair("Изъятия",money(number(order["withdrawals"])),regular,3)
+            pair("Ожидается в кассе",money(number(order["expectedCash"])),medium,3)
+            pair("Фактически в кассе",money(number(order["countedCash"])),medium,3)
+            pair("Расхождение",money(number(order["difference"])),bold,8)
+            separator(8)
+            add("Смена закрыта",medium,.center,8)
+        } else if kitchen {
             add((order["receiptDisplayNumber"] as? String) ?? "#—",title,.center,3)
             add(dateText(order),small,.center,8)
             separator(7)
@@ -165,5 +189,6 @@ private enum ReceiptEncoder {
     }
     private static func number(_ v:Any?,_ fallback:Double=0)->Double { if let n=v as? NSNumber{return n.doubleValue};if let d=v as? Double{return d};if let i=v as? Int{return Double(i)};if let s=v as? String,let d=Double(s.replacingOccurrences(of:",",with:".")){return d};return fallback }
     private static func qty(_ q:Double)->String { q.rounded()==q ? String(Int(q)) : String(format:"%.2f",q) }
-    private static func dateText(_ order:[String:Any])->String { let ms=number(order["timestamp"]);return DateFormatter.localizedString(from:Date(timeIntervalSince1970:ms/1000),dateStyle:.short,timeStyle:.short) }
+    private static func dateText(ms:Double)->String { DateFormatter.localizedString(from:Date(timeIntervalSince1970:ms/1000),dateStyle:.short,timeStyle:.short) }
+    private static func dateText(_ order:[String:Any])->String { dateText(ms:number(order["timestamp"])) }
 }
