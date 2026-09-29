@@ -129,11 +129,35 @@ private enum ReceiptEncoder {
             if delivery>0 {pair("Доставка",money(delivery),regular,10)}
             separator(10)
             pair("Итого",money(number(order["total"])),bold,12)
-            let cash=(order["method"] as? String)=="cash"
-            pair(cash ? "Наличные":"Карта",money(number(order["total"])),regular,3)
-            if cash {
-                let given=number(order["cashGiven"])
-                if given>0 {pair("Внесено",money(given),regular,3);pair("Сдача",money(number(order["change"])),medium,10)}
+            let payments=(order["payments"] as? [[String:Any]]) ?? []
+            if payments.count > 1 {
+                add("Платежи",small,.left,4)
+                for (index,payment) in payments.enumerated() {
+                    let method=(payment["method"] as? String) ?? ""
+                    let label=method=="cash" ? "Наличные" : (method=="card" ? "Карта" : "Платёж")
+                    pair("Платёж \(index+1) · \(label)",money(number(payment["amount"])),regular,3)
+                    if method=="cash" {
+                        let given=number(payment["cashGiven"])
+                        if given>0 {
+                            pair("  Внесено",money(given),small,2)
+                            pair("  Сдача",money(number(payment["change"])),small,4)
+                        }
+                    }
+                }
+            } else if let payment=payments.first {
+                let method=(payment["method"] as? String) ?? ((order["method"] as? String) ?? "")
+                pair(method=="cash" ? "Наличные":"Карта",money(number(payment["amount"],number(order["total"]))),regular,3)
+                if method=="cash" {
+                    let given=number(payment["cashGiven"],number(order["cashGiven"]))
+                    if given>0 {pair("Внесено",money(given),regular,3);pair("Сдача",money(number(payment["change"],number(order["change"]))),medium,10)}
+                }
+            } else {
+                let cash=(order["method"] as? String)=="cash"
+                pair(cash ? "Наличные":"Карта",money(number(order["total"])),regular,3)
+                if cash {
+                    let given=number(order["cashGiven"])
+                    if given>0 {pair("Внесено",money(given),regular,3);pair("Сдача",money(number(order["change"])),medium,10)}
+                }
             }
             separator(9)
             pair(dateText(order),(order["receiptDisplayNumber"] as? String) ?? "#—",small,8)
