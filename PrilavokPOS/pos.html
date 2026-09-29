@@ -63,6 +63,15 @@
     display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:100px;
     background:rgba(255,255,255,.08);font-size:13.5px;font-weight:600;white-space:nowrap;
   }
+  .settings-topbar-btn{
+    width:34px;height:34px;min-width:34px;padding:0;border-radius:100px;
+    display:flex;align-items:center;justify-content:center;
+    color:rgba(255,255,255,.62);background:transparent;
+    transition:background .15s,color .15s;flex-shrink:0;
+  }
+  .settings-topbar-btn:hover{color:#fff;}
+  .settings-topbar-btn.active{background:rgba(255,255,255,.14);color:#fff;}
+  .settings-topbar-btn svg{width:18px;height:18px;display:block;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
   .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
   .dot.on{background:#3ED28E;box-shadow:0 0 0 3px rgba(62,210,142,.25);}
   .dot.off{background:#FF7A70;box-shadow:0 0 0 3px rgba(255,122,112,.25);}
@@ -1308,8 +1317,8 @@ function renderTopbar(shift){
       <span class="dot ${shift?'on':'off'}"></span>
       ${shift ? escapeHtml(employeeShortName(shift.employeeName)) : 'Открыть смену'}
     </button>
-    <button class="tab ${state.tab==='settings'?'active':''}" style="width:44px;min-width:44px;padding:0;display:flex;align-items:center;justify-content:center;" title="Настройки" aria-label="Настройки" onclick="setTab('settings')">
-      <svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true" style="display:block;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.09A1.7 1.7 0 0 0 8.94 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.57 15a1.7 1.7 0 0 0-1.56-1.03H3v-4h.09A1.7 1.7 0 0 0 4.6 8.94a1.7 1.7 0 0 0-.34-1.88L4.2 7l2.83-2.83.06.06A1.7 1.7 0 0 0 8.97 4.57 1.7 1.7 0 0 0 10 3.01V3h4v.09a1.7 1.7 0 0 0 1.03 1.51 1.7 1.7 0 0 0 1.88-.34l.06-.06L19.8 7l-.06.06a1.7 1.7 0 0 0-.34 1.88A1.7 1.7 0 0 0 20.96 10H21v4h-.09A1.7 1.7 0 0 0 19.4 15Z"></path></svg>
+    <button class="settings-topbar-btn ${state.tab==='settings'?'active':''}" title="Настройки" aria-label="Настройки" onclick="setTab('settings')">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.25"></circle><path d="M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M5.99 5.99l1.42 1.42M16.59 16.59l1.42 1.42M18.01 5.99l-1.42 1.42M7.41 16.59l-1.42 1.42"></path><circle cx="12" cy="12" r="7"></circle></svg>
     </button>
   </div>`;
 }
