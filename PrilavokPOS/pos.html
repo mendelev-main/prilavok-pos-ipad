@@ -5623,6 +5623,27 @@ function sharePurchaseOrder(id){
   }
 }
 
+/* ---- Shift summary ---- */
+  .shift-summary-card{padding:20px;}
+  .shift-summary-actions{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px;}
+  .shift-summary-header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 18px;background:var(--bg);border:1px solid var(--border);border-radius:16px;}
+  .shift-summary-number{font-size:18px;font-weight:850;color:var(--ink);}
+  .shift-summary-meta{font-size:12.5px;color:var(--muted);font-weight:650;margin-top:5px;line-height:1.4;}
+  .shift-summary-grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(260px,.75fr);gap:14px;margin-top:14px;align-items:start;}
+  .shift-summary-section{background:var(--bg);border:1px solid var(--border);border-radius:16px;padding:16px 18px;}
+  .shift-summary-section.cash{grid-row:span 2;}
+  .shift-summary-title{font-size:14px;font-weight:850;margin-bottom:9px;}
+  .shift-summary-row{display:flex;align-items:center;justify-content:space-between;gap:18px;min-height:38px;border-bottom:1px solid var(--border);font-size:13.5px;}
+  .shift-summary-row:last-child{border-bottom:0;}
+  .shift-summary-row span:first-child{color:var(--muted);font-weight:650;}
+  .shift-summary-row strong{font-size:14px;white-space:nowrap;}
+  .shift-summary-row.total{margin-top:5px;padding-top:6px;min-height:44px;border-top:1.5px solid var(--border);border-bottom:0;}
+  .shift-summary-row.total span:first-child{color:var(--ink);font-weight:800;}
+  .shift-summary-row.total strong{font-size:18px;}
+  .shift-summary-footer{display:flex;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--border);}
+  @media(max-width:900px){.shift-summary-grid{grid-template-columns:1fr;}.shift-summary-section.cash{grid-row:auto;}}
+  @media(max-width:620px){.shift-summary-card{padding:16px;}.shift-summary-header{padding:14px;}.shift-summary-grid{gap:10px;}.shift-summary-section{padding:14px;}.shift-summary-row{gap:10px;}}
+
 /* ============================= SHIFT SCREEN ============================= */
 function renderShiftScreen(shift){
   const history = state.shifts.filter(s=>s.status==='closed').slice().sort((a,b)=>b.closedAt-a.closedAt).slice(0,20);
@@ -5646,42 +5667,50 @@ function renderShiftScreen(shift){
     const expected = Number(shift.openingCash||0) + t.cash + t.netMovements;
     const netRevenue=Math.max(0,grossSales-returnsTotal);
     openBlock = `
-      <div class="card">
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px;">
+      <div class="card shift-summary-card">
+        <div class="shift-summary-actions">
           <button class="btn" style="width:auto;background:#16a34a;border-color:#16a34a;color:#fff;" onclick="openCashMovementModal('deposit')">Внести наличные</button>
           <button class="btn" style="width:auto;background:#dc2626;border-color:#dc2626;color:#fff;" onclick="openCashMovementModal('withdrawal')">Изъять наличные</button>
         </div>
 
-        <div style="font-size:18px;font-weight:800;">Кассовая смена №${shiftNumber}</div>
-        <div class="list-row-sub" style="margin-top:6px;">Смена открыта ${fmtDate(shift.openedAt)}</div>
+        <div class="shift-summary-header">
+          <div>
+            <div class="shift-summary-number">Кассовая смена №${shiftNumber}</div>
+            <div class="shift-summary-meta">Смена открыта: ${fmtDate(shift.openedAt)} · ${escapeHtml(shift.employeeName||'Сотрудник не указан')}</div>
+          </div>
+        </div>
 
-        <div style="border-top:1px solid var(--border);margin:18px 0;"></div>
-        <div style="font-size:15px;font-weight:800;margin-bottom:10px;">Наличные в кассе</div>
-        <div class="list-row" style="padding:8px 0;"><div>Наличные на начало смены</div><div style="font-weight:800;">${money(shift.openingCash)}</div></div>
-        <div class="list-row" style="padding:8px 0;"><div>Оплата наличными</div><div style="font-weight:800;">${money(t.cash+cashRefunds)}</div></div>
-        <div class="list-row" style="padding:8px 0;"><div>Возвраты наличными</div><div style="font-weight:800;">${money(cashRefunds)}</div></div>
-        <div class="list-row" style="padding:8px 0;"><div>Сумма внесений</div><div style="font-weight:800;">${money(t.deposits)}</div></div>
-        <div class="list-row" style="padding:8px 0;"><div>Сумма изъятий</div><div style="font-weight:800;">${money(t.withdrawals)}</div></div>
-        <div class="list-row" style="padding:10px 0 8px;border-top:1px solid var(--border);margin-top:4px;"><div style="font-weight:800;">Ожидаемая сумма наличных</div><div style="font-weight:800;font-size:17px;">${money(expected)}</div></div>
+        <div class="shift-summary-grid">
+          <div class="shift-summary-section cash">
+            <div class="shift-summary-title">Наличные в кассе</div>
+            <div class="shift-summary-row"><span>Наличные на начало смены</span><strong>${money(shift.openingCash)}</strong></div>
+            <div class="shift-summary-row"><span>Оплата наличными</span><strong>${money(t.cash+cashRefunds)}</strong></div>
+            <div class="shift-summary-row"><span>Возвраты наличными</span><strong>${money(cashRefunds)}</strong></div>
+            <div class="shift-summary-row"><span>Сумма внесений</span><strong>${money(t.deposits)}</strong></div>
+            <div class="shift-summary-row"><span>Сумма изъятий</span><strong>${money(t.withdrawals)}</strong></div>
+            <div class="shift-summary-row total"><span>Ожидаемая сумма наличных</span><strong>${money(expected)}</strong></div>
+          </div>
 
-        <div style="border-top:1px solid var(--border);margin:18px 0;"></div>
-        <div style="font-size:15px;font-weight:800;margin-bottom:10px;">Итоги продаж</div>
-        <div class="list-row" style="padding:8px 0;"><div>Продажи</div><div style="font-weight:800;">${money(grossSales)}</div></div>
-        <div class="list-row" style="padding:8px 0;"><div>Возвраты</div><div style="font-weight:800;">${money(returnsTotal)}</div></div>
-        <div class="list-row" style="padding:8px 0;"><div>Скидки</div><div style="font-weight:800;">${money(discountsTotal)}</div></div>
+          <div class="shift-summary-section">
+            <div class="shift-summary-title">Итоги продаж</div>
+            <div class="shift-summary-row"><span>Продажи</span><strong>${money(grossSales)}</strong></div>
+            <div class="shift-summary-row"><span>Возвраты</span><strong>${money(returnsTotal)}</strong></div>
+            <div class="shift-summary-row"><span>Скидки</span><strong>${money(discountsTotal)}</strong></div>
+          </div>
 
-        <div style="border-top:1px solid var(--border);margin:18px 0;"></div>
-        <div style="font-size:15px;font-weight:800;margin-bottom:10px;">Выручка</div>
-        <div class="list-row" style="padding:8px 0;"><div>Выручка</div><div style="font-weight:800;font-size:17px;">${money(netRevenue)}</div></div>
-        <div class="list-row" style="padding:8px 0;"><div>Наличные</div><div style="font-weight:800;">${money(t.cash)}</div></div>
-        <div class="list-row" style="padding:8px 0;"><div>Карта</div><div style="font-weight:800;">${money(t.card)}</div></div>
+          <div class="shift-summary-section">
+            <div class="shift-summary-title">Выручка</div>
+            <div class="shift-summary-row total" style="margin-top:0;padding-top:0;border-top:0;"><span>Выручка</span><strong>${money(netRevenue)}</strong></div>
+            <div class="shift-summary-row"><span>Наличные</span><strong>${money(t.cash)}</strong></div>
+            <div class="shift-summary-row"><span>Карта</span><strong>${money(t.card)}</strong></div>
+          </div>
+        </div>
 
-        ${t.movements.length ? `<div style="border-top:1px solid var(--border);margin:18px 0;"></div><div style="font-weight:800;font-size:14px;margin-bottom:6px;">Движение средств</div>${t.movements.slice().reverse().map(m=>`<div class="list-row" style="padding:8px 0;"><div style="flex:1;"><div class="list-row-name">${m.type==='deposit'?'Внесение наличных':(m.subtype==='delivery'||m.note==='🚗 Доставка'?'🚗 Доставка':(m.subtype==='refund'||m.note==='↩️ Возврат чека'?'↩️ Возврат чека':'Изъятие наличных'))}</div><div class="list-row-sub">${fmtDate(m.timestamp)}${m.note?' · '+escapeHtml(m.note):''}</div></div><div class="badge">${m.type==='deposit'?'+':'−'}${money(m.amount)}</div></div>`).join('')}` : ''}
-        <div style="display:flex;justify-content:flex-end;margin-top:22px;padding-top:16px;border-top:1px solid var(--border);">
+        ${t.movements.length ? `<div style="margin-top:16px;padding:16px 18px;background:var(--bg);border:1px solid var(--border);border-radius:16px;"><div style="font-weight:800;font-size:14px;margin-bottom:6px;">Движение средств</div>${t.movements.slice().reverse().map(m=>`<div class="list-row" style="padding:8px 0;"><div style="flex:1;"><div class="list-row-name">${m.type==='deposit'?'Внесение наличных':(m.subtype==='delivery'||m.note==='🚗 Доставка'?'🚗 Доставка':(m.subtype==='refund'||m.note==='↩️ Возврат чека'?'↩️ Возврат чека':'Изъятие наличных'))}</div><div class="list-row-sub">${fmtDate(m.timestamp)}${m.note?' · '+escapeHtml(m.note):''}</div></div><div class="badge">${m.type==='deposit'?'+':'−'}${money(m.amount)}</div></div>`).join('')}</div>` : ''}
+        <div class="shift-summary-footer">
           <button class="btn btn-danger-outline" style="width:auto;padding:10px 18px;" onclick="openCloseShiftModal()">Закрыть смену</button>
         </div>
-      </div>`;
-  } else {
+      </div>`;  } else {
     openBlock = `
       <div class="card" style="text-align:center;padding:36px 20px;">
         <div style="font-weight:800;font-size:16px;margin-bottom:6px;">Смена закрыта</div>
