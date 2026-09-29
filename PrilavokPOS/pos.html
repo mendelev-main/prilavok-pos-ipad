@@ -3697,22 +3697,14 @@ function printPaymentReceipt(orderId){
   finishPaymentFlow();
 }
 function showPaymentReceipt(order){
-  closeModal();
-  document.getElementById('payment-page-root')?.remove();
-  const page=document.createElement('div');
-  page.id='payment-page-root';
-  page.className='payment-page';
-  page.innerHTML=`<div class="payment-page-header"><div class="payment-page-title">Чек оплачен</div></div>
-    <div class="payment-page-body" style="display:flex;align-items:stretch;justify-content:center;min-height:0;">
-      <div class="payment-box" style="width:min(720px,100%);height:100%;box-sizing:border-box;">
-        <div id="receipt-body" style="overflow:auto;min-height:0;flex:1;padding-right:4px;">${receiptBodyHtml(order)}</div>
-        <div class="receipt-modal-actions" style="margin-top:18px;flex:0 0 auto;">
-          <button class="btn receipt-action receipt-action-print" onclick="printPaymentReceipt('${escapeAttr(order.id)}')">Печать</button>
-          <button class="btn receipt-action receipt-action-close" onclick="finishPaymentFlow()">Готово</button>
-        </div>
-      </div>
-    </div>`;
-  document.body.appendChild(page);
+  showModal(`
+    <div class="modal-title">Чек оплачен</div>
+    <div id="receipt-body">${receiptBodyHtml(order)}</div>
+    <div class="receipt-modal-actions">
+      <button class="btn receipt-action receipt-action-print" onclick="printPaymentReceipt('${escapeAttr(order.id)}')">Печать</button>
+      <button class="btn receipt-action receipt-action-close" onclick="finishPaymentFlow()">Готово</button>
+    </div>
+  `);
 }
 function showReceipt(order){
   showPaymentReceipt(order);
