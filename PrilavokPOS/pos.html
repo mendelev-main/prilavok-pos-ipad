@@ -2492,12 +2492,16 @@ function saveInventorySettings(){
  delete state.inventoryConfig.monthDay;delete state.inventoryConfig.customDates;
  saveKey('inventoryConfig',state.inventoryConfig);render();flash('Настройки инвентаризации сохранены');
 }
-function startInventory(){
+function startInventory(type='scheduled'){
  const ps=inventoryTrackedProducts();if(!ps.length){flash('Нет товаров для инвентаризации');return false;}
- state.inventoryDraft={id:uid(),startedAt:Date.now(),scheduledDate:(inventoryWindow()?.start||inventoryDateOnly(new Date())).getTime(),items:ps.map(p=>({productId:p.id,name:p.name,unit:stockUnit(p),expected:roundStockQty(Number(p.stock)||0),actual:null}))};
+ state.inventoryDraft={id:uid(),type,startedAt:Date.now(),scheduledDate:type==='adhoc'?Date.now():(inventoryWindow()?.start||inventoryDateOnly(new Date())).getTime(),items:ps.map(p=>({productId:p.id,name:p.name,unit:stockUnit(p),expected:roundStockQty(Number(p.stock)||0),actual:null}))};
  saveKey('inventoryDraft',state.inventoryDraft);return true;
 }
-function openInventoryWork(){if(!state.inventoryDraft&&!startInventory())return;state.tab='inventoryWork';render();}
+function openInventoryWork(){if(!state.inventoryDraft&&!startInventory('scheduled'))return;state.tab='inventoryWork';render();}
+function startAdhocInventory(){
+ if(state.inventoryDraft){state.tab='inventoryWork';render();flash('Сначала завершите текущую инвентаризацию');return;}
+ if(!startInventory('adhoc'))return;state.tab='inventoryWork';render();
+}
 function updateInventoryActual(id,v){const x=state.inventoryDraft?.items.find(i=>i.productId===id);if(!x||x.fixedAt)return;const n=Number(String(v).replace(',','.'));x.actual=Number.isFinite(n)&&n>=0?roundStockQty(n):null;saveKey('inventoryDraft',state.inventoryDraft);}
 function fixInventoryItem(id){
  const d=state.inventoryDraft,x=d?.items.find(i=>i.productId===id);if(!x||x.fixedAt)return;
@@ -2535,7 +2539,7 @@ function showInventorySummary(){
 }
 function confirmCompleteInventory(){
  const d=state.inventoryDraft;if(!d)return;const completedAt=Date.now(),summary=inventorySummaryData();
- state.inventoryHistory.unshift({...d,completedAt,estimatedLoss:summary.loss,items:d.items.map(x=>({...x}))});state.inventoryConfig.lastCompletedAt=completedAt;
+ state.inventoryHistory.unshift({...d,completedAt,estimatedLoss:summary.loss,items:d.items.map(x=>({...x}))});if(d.type!=='adhoc')state.inventoryConfig.lastCompletedAt=completedAt;
  state.inventoryDraft=null;state.tab='pos';saveKey('products',state.products);saveKey('inventoryHistory',state.inventoryHistory);saveKey('inventoryConfig',state.inventoryConfig);saveKey('inventoryDraft',null);closeModal();render();flash('Инвентаризация завершена');
 }
 function renderInventoryScreen(){
@@ -2544,10 +2548,10 @@ function renderInventoryScreen(){
  const rows=tracked.map(p=>`<label data-inventory-product-row data-inventory-product-name="${escapeAttr(String(p.name||'').toLocaleLowerCase('ru'))}" class="list-row" style="cursor:pointer;"><input data-inventory-product type="checkbox" value="${escapeAttr(p.id)}" ${(c.productIds||[]).includes(p.id)?'checked':''} style="width:20px;height:20px;"><div style="flex:1;"><div class="list-row-name">${escapeHtml(p.name)}</div><div class="setting-sub">Остаток: ${stockQtyText(p.stock)} ${unitLabel(stockUnit(p))}</div></div></label>`).join('');
  const scheduleText=w?.active?`Окно инвентаризации открыто до ${w.end.toLocaleDateString('ru-RU')} включительно.`:w?.completed?'Инвентаризация в текущем периоде завершена.':next?`Следующее окно начнётся ${next.toLocaleDateString('ru-RU')}.`:'После сохранения настроек окно будет открываться автоматически.';
  return `<div class="screen content-screen ${state.tab==='inventory'?'active':''}"><div class="content-head"><div style="display:flex;align-items:center;gap:12px;"><button class="btn btn-secondary" style="width:auto;padding:10px 16px;" onclick="state.settingsAdminPanel=true;setTab('settings')">← Назад</button><div class="content-title">Инвентаризация</div></div></div><div style="overflow:auto;min-height:0;flex:1;padding-right:4px;">
- <div class="card" style="margin-bottom:16px;"><div style="font-size:17px;font-weight:850;">График</div><div class="setting-sub" style="margin:4px 0 16px;">${scheduleText} На проведение даётся 7 дней с начала периода.</div>
- <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;"><button class="btn ${c.frequency==='weekly'?'btn-primary':'btn-secondary'}" onclick="setInventoryFrequency('weekly')">Раз в неделю</button><button class="btn ${c.frequency==='monthly'?'btn-primary':'btn-secondary'}" onclick="setInventoryFrequency('monthly')">Раз в месяц</button><button class="btn ${c.frequency==='quarterly'?'btn-primary':'btn-secondary'}" onclick="setInventoryFrequency('quarterly')">Раз в квартал</button></div></div>
+ <div class="card" style="margin-bottom:16px;"><div style="font-size:17px;font-weight:850;">График</div><div class="setting-sub" style="margin:4px 0 8px;">${scheduleText} На проведение даётся 7 дней с начала периода.</div><div style="font-size:15px;font-weight:800;margin-bottom:16px;">Следующая инвентаризация: ${next?next.toLocaleDateString('ru-RU'):'—'}</div>
+ <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px;"><button class="btn ${c.frequency==='weekly'?'btn-primary':'btn-secondary'}" onclick="setInventoryFrequency('weekly')">Раз в неделю</button><button class="btn ${c.frequency==='monthly'?'btn-primary':'btn-secondary'}" onclick="setInventoryFrequency('monthly')">Раз в месяц</button><button class="btn ${c.frequency==='quarterly'?'btn-primary':'btn-secondary'}" onclick="setInventoryFrequency('quarterly')">Раз в квартал</button></div><button class="btn btn-secondary" style="width:100%;" onclick="startAdhocInventory()">Внеплановая инвентаризация</button></div>
  <div class="card" style="margin-bottom:16px;"><div style="font-size:17px;font-weight:850;">Товары для инвентаризации</div><div class="setting-sub" style="margin:4px 0 12px;">Выберите товары, которые нужно пересчитывать. Товары с остатком ∞ исключены.</div><input type="search" placeholder="Поиск товара" oninput="filterInventoryProducts(this.value)" style="width:100%;padding:11px 14px;border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--ink);font:inherit;margin-bottom:10px;"><div style="max-height:360px;overflow:auto;border-top:1px solid var(--border);">${rows||'<div class="center-note">Нет товаров с учётом остатков</div>'}</div><button class="btn btn-primary" style="width:100%;margin-top:14px;" onclick="saveInventorySettings()">Сохранить настройки</button></div>
- <div class="card"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;"><div style="font-size:17px;font-weight:850;">История</div></div>${state.inventoryHistory.length?state.inventoryHistory.slice(0,50).map(r=>`<div class="list-row"><div><div class="list-row-name">${fmtDate(r.completedAt)}</div><div class="setting-sub">${r.items.length} товаров · расхождений: ${r.items.filter(x=>Number(x.difference)!==0).length} · недостач: ${r.items.filter(x=>Number(x.difference)<0).length}</div></div></div>`).join(''):'<div class="center-note">Инвентаризаций пока не было</div>'}</div></div></div>`;
+ <div class="card"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;"><div style="font-size:17px;font-weight:850;">История</div></div>${state.inventoryHistory.length?state.inventoryHistory.slice(0,50).map(r=>`<div class="list-row"><div><div class="list-row-name">${fmtDate(r.completedAt)}${r.type==='adhoc'?' · Внеплановая':''}</div><div class="setting-sub">${r.items.length} товаров · расхождений: ${r.items.filter(x=>Number(x.difference)!==0).length} · недостач: ${r.items.filter(x=>Number(x.difference)<0).length}</div></div></div>`).join(''):'<div class="center-note">Инвентаризаций пока не было</div>'}</div></div></div>`;
 }
 
 function renderInventoryWorkScreen(){
@@ -2561,7 +2565,7 @@ function renderInventoryWorkScreen(){
    return `<div class="list-row" style="align-items:center;gap:16px;padding-top:14px;padding-bottom:14px;"><div style="flex:1;min-width:0;"><div class="list-row-name">${escapeHtml(x.name)}</div>${before}</div>${control}</div>`;
  }).join('');
  return `<div class="screen content-screen ${state.tab==='inventoryWork'?'active':''}">
-   <div class="content-head"><div><div class="content-title">Инвентаризация</div><div class="setting-sub">Зафиксировано: ${fixed} из ${d.items.length}</div></div></div>
+   <div class="content-head"><div><div class="content-title">${d.type==='adhoc'?'Внеплановая инвентаризация':'Инвентаризация'}</div><div class="setting-sub">Зафиксировано: ${fixed} из ${d.items.length}</div></div></div>
    <div style="display:flex;flex-direction:column;min-height:0;flex:1;">
      <div class="card" style="flex:1;min-height:0;overflow:auto;padding-top:4px;">${rows||'<div class="center-note">Нет товаров для пересчёта</div>'}</div>
      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;padding-top:14px;flex:0 0 auto;">
