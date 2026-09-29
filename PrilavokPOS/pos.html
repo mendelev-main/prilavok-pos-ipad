@@ -912,6 +912,9 @@ let state = {
   bookings: [],
   webEvents: [],
   webEventsSource: null,
+  inventoryConfig: {enabled:false,frequency:'weekly',customDates:[],productIds:[],lastCompletedAt:null},
+  inventoryHistory: [],
+  inventoryDraft: null,
   bookingDate: '',
   bookingTime: '19:00',
   bookingDuration: 120,
@@ -970,7 +973,7 @@ async function loadAll(){
     markStorageBroken('localStorage test write failed');
   }
   storageCheckedOnce = true;
-  const [products, shifts, employees, orders, parked, receivings, suppliers, purchaseOrders, discounts, layout, printer, theme, company, deliveryRates, telegram, network, currentOrderSession, hallTables, bookings, webEvents, posNavigation] = await Promise.all([
+  const [products, shifts, employees, orders, parked, receivings, suppliers, purchaseOrders, discounts, layout, printer, theme, company, deliveryRates, telegram, network, currentOrderSession, hallTables, bookings, webEvents, posNavigation, inventoryConfig, inventoryHistory, inventoryDraft] = await Promise.all([
     loadKey('products', null),
     loadKey('shifts', []),
     loadKey('employees', []),
@@ -991,7 +994,10 @@ async function loadAll(){
     loadKey('hallTables', []),
     loadKey('bookings', []),
     loadKey('webEvents', []),
-    loadKey('posNavigation', {version:1,categories:[]})
+    loadKey('posNavigation', {version:1,categories:[]}),
+    loadKey('inventoryConfig', {enabled:false,frequency:'weekly',customDates:[],productIds:[],lastCompletedAt:null}),
+    loadKey('inventoryHistory', []),
+    loadKey('inventoryDraft', null)
   ]);
   state.products = products === null ? seedProducts() : products;
   state.shifts = shifts;
@@ -1027,6 +1033,11 @@ async function loadAll(){
   state.hallTables = Array.isArray(hallTables) ? hallTables : [];
   state.bookings = Array.isArray(bookings) ? bookings : [];
   state.webEvents = Array.isArray(webEvents) ? webEvents : [];
+  state.inventoryConfig = Object.assign({enabled:false,frequency:'weekly',customDates:[],productIds:[],lastCompletedAt:null}, inventoryConfig || {});
+  state.inventoryConfig.productIds = Array.isArray(state.inventoryConfig.productIds) ? state.inventoryConfig.productIds : [];
+  state.inventoryConfig.customDates = Array.isArray(state.inventoryConfig.customDates) ? state.inventoryConfig.customDates : [];
+  state.inventoryHistory = Array.isArray(inventoryHistory) ? inventoryHistory : [];
+  state.inventoryDraft = inventoryDraft && typeof inventoryDraft==='object' ? inventoryDraft : null;
   if(!state.bookingDate) state.bookingDate = localDateString(new Date());
   if(!state.hallTables.length) saveKey('hallTables', state.hallTables);
 
@@ -1279,6 +1290,7 @@ function render(){
       ${renderNetworkScreen()}
       ${renderAnalyticsScreen()}
       ${renderBookingsScreen()}
+      ${renderInventoryScreen()}
     </div>
   `;
   if(state.tab==='pos'){
@@ -1312,6 +1324,7 @@ function renderTopbar(shift){
     <div class="tabs">
       ${tabs.map(([k,label])=>`<button class="tab ${state.tab===k?'active':''}" onclick="setTab('${k}')">${label}</button>`).join('')}
     </div>
+    ${renderInventoryTopbarReminder()}
     <button class="tab" style="margin-left:auto;position:relative;display:flex;align-items:center;gap:7px;" onclick="openWebEventsModal()"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" style="display:block;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path><path d="M10 21h4"></path></svg><span>События</span>${state.webEvents.length?`<span style="min-width:20px;height:20px;padding:0 6px;border-radius:100px;background:#E45858;color:#fff;font-size:11px;font-weight:900;display:inline-flex;align-items:center;justify-content:center;">${state.webEvents.length}</span>`:''}</button>
     <button class="shift-pill" style="cursor:pointer;" onclick="${shift ? "setTab('shift')" : "openShiftModal()"}">
       <span class="dot ${shift?'on':'off'}"></span>
@@ -2433,6 +2446,46 @@ function employeeDisplayName(name){
   return parts[0]+' '+parts.slice(1,3).map(part=>part.split('-').filter(Boolean).map(piece=>Array.from(piece)[0].toLocaleUpperCase('ru')+'.').join('-')).join(' ');
 }
 
+
+function inventoryDateOnly(value){if(!value)return null;const d=value instanceof Date?new Date(value):new Date(String(value).length===10?value+'T00:00:00':value);if(Number.isNaN(d.getTime()))return null;return new Date(d.getFullYear(),d.getMonth(),d.getDate());}
+function inventoryNextDate(){
+  const c=state.inventoryConfig||{};if(!c.enabled||!c.productIds?.length)return null;const today=inventoryDateOnly(new Date());
+  if(c.frequency==='custom')return (c.customDates||[]).map(inventoryDateOnly).filter(d=>d&&d>=today).sort((a,b)=>a-b)[0]||null;
+  if(!c.lastCompletedAt&&c.startDate){const first=inventoryDateOnly(c.startDate);if(first&&first>=today)return first;}
+  if(!c.lastCompletedAt&&!c.startDate)return today;const next=inventoryDateOnly(c.lastCompletedAt||c.startDate);
+  do{c.frequency==='monthly'?next.setMonth(next.getMonth()+1):next.setDate(next.getDate()+7);}while(next<today);return next;
+}
+function inventoryDaysUntil(){const n=inventoryNextDate();return n?Math.ceil((n-inventoryDateOnly(new Date()))/86400000):null;}
+function renderInventoryTopbarReminder(){const d=inventoryDaysUntil();if(d===null||d>5)return '';const t=d<=0?'Инвентаризация сегодня':'До инвентаризации '+d+' '+(d===1?'день':d<5?'дня':'дней');return '<button class="tab" style="color:#FFD86B;background:rgba(255,216,107,.1);white-space:nowrap;" onclick="setTab(\\'inventory\\')">'+t+'</button>';}
+function inventoryTrackedProducts(){const ids=new Set(state.inventoryConfig?.productIds||[]);return state.products.filter(p=>ids.has(p.id)&&productTracksStock(p));}
+function saveInventorySettings(){
+ const frequency=document.getElementById('inventory-frequency')?.value||'weekly',startDate=document.getElementById('inventory-start-date')?.value||'',raw=document.getElementById('inventory-custom-dates')?.value||'';
+ const productIds=[...document.querySelectorAll('[data-inventory-product]:checked')].map(x=>x.value),customDates=raw.split(/[\n,;]+/).map(x=>x.trim()).filter(x=>inventoryDateOnly(x)).sort();
+ if(!productIds.length){flash('Выберите хотя бы один товар');return;}if(frequency==='custom'&&!customDates.length){flash('Укажите хотя бы одну дату');return;}
+ state.inventoryConfig={...state.inventoryConfig,enabled:true,frequency,startDate,customDates,productIds};saveKey('inventoryConfig',state.inventoryConfig);render();flash('Настройки инвентаризации сохранены');
+}
+function toggleInventoryProductSelection(v){document.querySelectorAll('[data-inventory-product]').forEach(x=>x.checked=v);}
+function startInventory(){const ps=inventoryTrackedProducts();if(!ps.length){flash('Сначала выберите товары');return;}state.inventoryDraft={id:uid(),startedAt:Date.now(),scheduledDate:inventoryNextDate()?.getTime()||Date.now(),items:ps.map(p=>({productId:p.id,name:p.name,unit:stockUnit(p),expected:roundStockQty(Number(p.stock)||0),actual:null}))};saveKey('inventoryDraft',state.inventoryDraft);render();}
+function updateInventoryActual(id,v){const x=state.inventoryDraft?.items.find(i=>i.productId===id);if(!x)return;const n=Number(String(v).replace(',','.'));x.actual=Number.isFinite(n)&&n>=0?roundStockQty(n):null;saveKey('inventoryDraft',state.inventoryDraft);}
+function cancelInventoryDraft(){state.inventoryDraft=null;saveKey('inventoryDraft',null);render();}
+function completeInventory(){
+ const d=state.inventoryDraft;if(!d)return;if(d.items.some(x=>x.actual===null)){flash('Введите фактический остаток для каждого товара');return;}const completedAt=Date.now();
+ d.items.forEach(x=>{const p=getProduct(x.productId);x.difference=roundStockQty(Number(x.actual)-Number(x.expected));if(productTracksStock(p))p.stock=roundStockQty(Number(x.actual));});
+ state.inventoryHistory.unshift({...d,completedAt,items:d.items.map(x=>({...x}))});state.inventoryConfig.lastCompletedAt=completedAt;
+ if(state.inventoryConfig.frequency==='custom'){const done=inventoryDateOnly(d.scheduledDate);state.inventoryConfig.customDates=(state.inventoryConfig.customDates||[]).filter(x=>inventoryDateOnly(x)?.getTime()!==done.getTime());}
+ state.inventoryDraft=null;saveKey('products',state.products);saveKey('inventoryHistory',state.inventoryHistory);saveKey('inventoryConfig',state.inventoryConfig);saveKey('inventoryDraft',null);render();flash('Инвентаризация завершена');
+}
+function renderInventoryScreen(){
+ const c=state.inventoryConfig||{},tracked=state.products.filter(productTracksStock).sort((a,b)=>a.name.localeCompare(b.name,'ru')),next=inventoryNextDate(),days=inventoryDaysUntil(),d=state.inventoryDraft;
+ const rows=tracked.map(p=>`<label class="list-row" style="cursor:pointer;"><input data-inventory-product type="checkbox" value="${{escapeAttr(p.id)}" ${{(c.productIds||[]).includes(p.id)?'checked':''} style="width:20px;height:20px;"><div style="flex:1;"><div class="list-row-name">${{escapeHtml(p.name)}</div><div class="setting-sub">Остаток: ${{stockQtyText(p.stock)} ${{unitLabel(stockUnit(p))}</div></div></label>`).join('');
+ const count=d?`<div class="card" style="margin-bottom:16px;border-color:var(--accent);"><div style="font-size:18px;font-weight:850;">Проведение инвентаризации</div><div class="setting-sub" style="margin:4px 0 14px;">Введите фактический остаток каждого товара.</div>${{d.items.map(x=>`<div class="list-row"><div style="flex:1;"><div class="list-row-name">${{escapeHtml(x.name)}</div><div class="setting-sub">По учёту: ${{stockQtyText(x.expected)} ${{unitLabel(x.unit)}</div></div><input type="number" min="0" step="0.001" value="${{x.actual===null?'':x.actual}" placeholder="Факт" style="width:150px;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--ink);" onchange="updateInventoryActual('${{escapeAttr(x.productId)}',this.value)"></div>`).join('')}<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;"><button class="btn btn-secondary" onclick="cancelInventoryDraft()">Отменить</button><button class="btn btn-primary" onclick="completeInventory()">Завершить и обновить остатки</button></div></div>`:'';
+ return `<div class="screen content-screen ${{state.tab==='inventory'?'active':''}"><div class="content-head"><div style="display:flex;align-items:center;gap:12px;"><button class="btn btn-secondary" style="width:auto;padding:10px 16px;" onclick="state.settingsAdminPanel=true;setTab('settings')">← Назад</button><div class="content-title">Инвентаризация</div></div></div><div style="overflow:auto;min-height:0;flex:1;padding-right:4px;">${{count}
+ <div class="card" style="margin-bottom:16px;"><div style="font-size:17px;font-weight:850;margin-bottom:4px;">График</div><div class="setting-sub" style="margin-bottom:14px;">Следующая: <b>${{next?next.toLocaleDateString('ru-RU'):'Не запланирована'}</b>${{days!==null&&days<=5?' · '+(days<=0?'срок наступил':'через '+days+' дн.') : ''}</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;"><div class="field"><label>Периодичность</label><select id="inventory-frequency"><option value="weekly" ${{c.frequency==='weekly'?'selected':''}>Раз в 7 дней</option><option value="monthly" ${{c.frequency==='monthly'?'selected':''}>Раз в месяц</option><option value="custom" ${{c.frequency==='custom'?'selected':''}>Выбранные даты</option></select></div><div class="field"><label>Первая дата</label><input id="inventory-start-date" type="date" value="${{escapeAttr(c.startDate||'')}"></div></div><div class="field"><label>Выбранные даты</label><textarea id="inventory-custom-dates" rows="3" style="width:100%;" placeholder="2026-10-05, 2026-10-20">${{escapeHtml((c.customDates||[]).join(', '))}</textarea></div></div>
+ <div class="card" style="margin-bottom:16px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><div><div style="font-size:17px;font-weight:850;">Товары для пересчёта</div><div class="setting-sub">Товары с остатком ∞ исключены.</div></div><div><button class="btn btn-secondary" style="width:auto;" onclick="toggleInventoryProductSelection(true)">Все</button> <button class="btn btn-secondary" style="width:auto;" onclick="toggleInventoryProductSelection(false)">Снять</button></div></div><div style="max-height:330px;overflow:auto;border-top:1px solid var(--border);">${{rows||'<div class="center-note">Нет товаров с учётом остатков</div>'}</div><button class="btn btn-primary" style="width:100%;margin-top:14px;" onclick="saveInventorySettings()">Сохранить настройки</button></div>
+ <div class="card" style="margin-bottom:16px;"><div style="display:flex;justify-content:space-between;align-items:center;"><div><div style="font-size:17px;font-weight:850;">Пересчёт</div><div class="setting-sub">Выбрано товаров: ${{inventoryTrackedProducts().length}</div></div><button class="btn btn-primary" style="width:auto;" onclick="startInventory()">Начать пересчёт</button></div></div>
+ <div class="card"><div style="font-size:17px;font-weight:850;margin-bottom:10px;">История</div>${{state.inventoryHistory.length?state.inventoryHistory.slice(0,50).map(r=>`<div class="list-row"><div><div class="list-row-name">${{fmtDate(r.completedAt)}</div><div class="setting-sub">${{r.items.length} товаров · расхождений: ${{r.items.filter(x=>Number(x.difference)!==0).length} · недостач: ${{r.items.filter(x=>Number(x.difference)<0).length}</div></div></div>`).join(''):'<div class="center-note">Инвентаризаций пока не было</div>'}</div></div></div>`;
+}
+
 function openAdminPanel(){
   if(!currentShiftEmployeeIsAdmin()){
     showAdminOnlyInfo('Панель администратора');
@@ -2468,6 +2521,10 @@ function renderAdminPanel(){
       <button class="settings-card" style="text-align:left;cursor:pointer;font:inherit;color:inherit;" onclick="openCompanyDetailsModal()">
         <div style="font-size:16px;font-weight:800;">Реквизиты организации</div>
         <div class="setting-sub" style="margin-top:6px;">Название заведения, юридическое лицо, адрес и адрес доставки.</div>
+      </button>
+      <button class="settings-card" style="text-align:left;cursor:pointer;font:inherit;color:inherit;" onclick="setTab('inventory')">
+        <div style="font-size:16px;font-weight:800;">Инвентаризация</div>
+        <div class="setting-sub" style="margin-top:6px;">График пересчёта, список товаров, проведение и история.</div>
       </button>
     </div>`;
 }
