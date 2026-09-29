@@ -121,8 +121,8 @@ private enum ReceiptEncoder {
                     pair(name,money(max(0,gross-disc)),medium,2)
                     add("\(qty(q)) × "+money(price),regular,.left,3)
                     if disc>0 {add("Скидка: −"+money(disc),small,.left,2)}
-                    if cfg["printPaymentComments"] as? Bool != false, let comment=item["comment"] as? String,!comment.isEmpty {add("Комментарий: "+comment,small,.left,3)}
-                    add("",small,.left,8)
+                    if cfg["printPaymentComments"] as? Bool != false, let comment=item["comment"] as? String,!comment.isEmpty {add("Комментарий: "+comment,small,.left,2)}
+                    add("",small,.left,2)
                 }
             }
             let delivery=number(order["deliveryFee"])
