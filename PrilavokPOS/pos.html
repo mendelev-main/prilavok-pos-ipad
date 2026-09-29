@@ -5845,16 +5845,19 @@ function openCloseShiftModal(){
     </div>
   `);
 }
-function submitCloseShift(){
+async function submitCloseShift(){
   const shift = currentShift();
+  if(!shift){flash('Смена не открыта');closeModal();return;}
   const countedCash = parseFloat(document.getElementById('sf-counted').value) || 0;
   shift.status = 'closed';
   shift.closedAt = Date.now();
   shift.countedCash = countedCash;
-  saveKey('shifts', state.shifts);
+  await saveKey('shifts', state.shifts);
   sendTelegramShiftClosed(shift);
   closeModal();
   render();
+  // После успешного сохранения закрытой смены автоматически печатаем её итоговый отчёт.
+  printShiftReport(shift.id);
 }
 
 function openEmployeeModal(id=''){
