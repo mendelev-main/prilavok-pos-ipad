@@ -2453,8 +2453,14 @@ function inventoryDateOnly(value){if(!value)return null;const d=value instanceof
 function inventoryNextDate(){
  const c=state.inventoryConfig||{};if(!c.enabled||!c.productIds?.length)return null;const today=inventoryDateOnly(new Date());
  if(c.frequency==='custom')return (c.customDates||[]).map(inventoryDateOnly).filter(d=>d&&d>=today).sort((a,b)=>a-b)[0]||null;
- const day=Math.max(1,Math.min(31,Number(c.monthDay)||1));let next=new Date(today.getFullYear(),today.getMonth(),Math.min(day,new Date(today.getFullYear(),today.getMonth()+1,0).getDate()));
- if(next<today){const y=today.getMonth()===11?today.getFullYear()+1:today.getFullYear(),m=(today.getMonth()+1)%12;next=new Date(y,m,Math.min(day,new Date(y,m+1,0).getDate()));}
+ const day=Math.max(1,Math.min(31,Number(c.monthDay)||1));
+ const makeMonthlyDate=(year,month)=>new Date(year,month,Math.min(day,new Date(year,month+1,0).getDate()));
+ let next=makeMonthlyDate(today.getFullYear(),today.getMonth());
+ const last=inventoryDateOnly(c.lastCompletedAt);
+ const completedThisScheduledPeriod=last&&last.getFullYear()===today.getFullYear()&&last.getMonth()===today.getMonth()&&last>=next;
+ if(next<today||completedThisScheduledPeriod){
+   const y=today.getMonth()===11?today.getFullYear()+1:today.getFullYear(),m=(today.getMonth()+1)%12;next=makeMonthlyDate(y,m);
+ }
  return next;
 }
 function inventoryDaysUntil(){const n=inventoryNextDate();return n?Math.ceil((n-inventoryDateOnly(new Date()))/86400000):null;}
