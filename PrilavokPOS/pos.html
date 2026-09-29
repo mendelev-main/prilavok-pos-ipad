@@ -2754,7 +2754,6 @@ function renderPosScreen(shift){
   return `<div class="screen ${state.tab==='pos'?'active':''}" id="screen-pos">
     <div class="pos-left">
       ${!shift ? `<div class="no-shift-banner"><span>Чтобы принимать оплату, откройте кассовую смену.</span><button onclick="openShiftModal()">Открыть смену</button></div>` : ''}
-      ${editing ? `<div class="no-shift-banner" style="background:var(--accent-soft);border-color:#BFE4D6;color:#0E6B54;"><span>${currentCategory?'Перетаскивайте плитки для изменения порядка. Нажмите на товар, чтобы выбрать папку.':'Режим раскладки: перетаскивайте плитки по сетке. Добавляйте товары и категории через «Изменить содержимое». '}</span><button style="background:var(--accent);" onclick="toggleEditMode()">Готово</button></div>` : ''}
       <div class="pos-toolbar">
         <div class="pos-toolbar-left">
           ${currentCategory ? `<button class="pos-back" onclick="closePosCategory()">← Назад</button>` : ''}
