@@ -526,7 +526,7 @@
   .payment-page-body{flex:1;min-height:0;}
   .payment-page .payment-layout{height:100%;}
   .payment-page .payment-receipt,.payment-page .payment-box{max-height:none;height:100%;box-sizing:border-box;}
-  .payment-layout{display:grid;grid-template-columns:minmax(280px,.82fr) minmax(420px,1.18fr);gap:18px;align-items:stretch;}
+  .payment-layout{display:grid;grid-template-columns:minmax(230px,.58fr) minmax(500px,1.42fr);gap:18px;align-items:stretch;}
   .payment-receipt,.payment-box{background:var(--bg);border:1px solid var(--border);border-radius:18px;padding:18px;min-width:0;}
   .payment-receipt{max-height:68vh;overflow:auto;}
   .payment-box{display:flex;flex-direction:column;}
@@ -3239,6 +3239,7 @@ function openPaymentModal(){
   state.paymentPage='main'; renderPaymentScreen();
 }
 function renderPaymentScreen(){
+  state.paymentPage='main';
   const total=cartTotal();
   closeModal();
   document.getElementById('payment-page-root')?.remove();
@@ -3250,7 +3251,7 @@ function renderPaymentScreen(){
         <div style="font-size:16px;font-weight:800;margin-bottom:12px;">Чек</div>
         ${paymentReceiptHtml()}
       </div>
-      <div class="payment-box">
+      <div class="payment-box" id="payment-workspace">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
           <div><div style="font-size:13px;color:var(--muted);font-weight:700;">К оплате</div><div class="payment-total-big">${fullMoney(total)}</div></div>
           <button class="btn btn-outline" style="flex:none;min-width:120px;" onclick="openSplitPayment()">Разделить</button>
@@ -3485,15 +3486,20 @@ function renderSplitPayment(){
   </div>`).join('');
   const paidTotal=splitPaidTotal();
   const remaining=Math.max(0,total-paidTotal);
-  showModal(`<div class="modal-title">Разделить оплату</div>
-    <div class="payment-layout"><div class="payment-receipt">${paymentReceiptHtml()}</div><div class="payment-box">
-      <div class="payment-split-head"><span style="font-size:14px;font-weight:800;">Количество платежей</span><div class="split-count"><button onclick="adjustSplitCount(-1)">−</button><span>${ps.length}</span><button onclick="adjustSplitCount(1)">+</button></div></div>
-      <div style="max-height:58vh;overflow:auto;">${rows}</div>
-      <div class="split-summary"><span>Оплачено</span><span class="split-summary-value">${fullMoney(paidTotal)}</span></div>
-      <div class="split-summary" style="border-top:none;padding-top:0;margin-top:0;"><span>Осталось</span><span class="split-summary-value">${fullMoney(remaining)}</span></div>
-      <div class="modal-actions"><button class="btn btn-secondary" onclick="renderPaymentScreen()">Назад</button></div>
-    </div></div>`,true);
-  const modal=document.querySelector('#modal-root .modal'); if(modal) modal.classList.add('payment-modal');
+  const workspace=document.getElementById('payment-workspace');
+  if(!workspace){renderPaymentScreen();setTimeout(renderSplitPayment,0);return;}
+  state.paymentPage='split';
+  workspace.innerHTML=`
+    <div class="payment-split-head">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <button class="btn btn-secondary" style="flex:none;" onclick="renderPaymentScreen()">← Назад</button>
+        <span style="font-size:18px;font-weight:850;">Разделить оплату</span>
+      </div>
+      <div class="split-count"><button onclick="adjustSplitCount(-1)">−</button><span>${ps.length}</span><button onclick="adjustSplitCount(1)">+</button></div>
+    </div>
+    <div style="flex:1;min-height:0;overflow:auto;padding-right:3px;">${rows}</div>
+    <div class="split-summary"><span>Оплачено</span><span class="split-summary-value">${fullMoney(paidTotal)}</span></div>
+    <div class="split-summary" style="border-top:none;padding-top:0;margin-top:0;"><span>Осталось</span><span class="split-summary-value">${fullMoney(remaining)}</span></div>`;
 }
 function setSplitMethod(index,method){
   const p=state._splitPayments?.[index];
