@@ -172,7 +172,8 @@ private enum ReceiptEncoder {
 
         func attrs(_ font:UIFont,_ alignment:NSTextAlignment)->[NSAttributedString.Key:Any]{let p=NSMutableParagraphStyle();p.alignment=alignment;p.lineBreakMode = .byWordWrapping;return [.font:font,.foregroundColor:UIColor.black,.paragraphStyle:p]}
         struct Measured {let row:Row;let leftAttrs:[NSAttributedString.Key:Any];let rightAttrs:[NSAttributedString.Key:Any];let height:CGFloat}
-        var measured:[Measured]=[],height:CGFloat=kitchen ? 4 : 12
+        let topInset:CGFloat = kitchen ? 4 : 2
+        var measured:[Measured]=[],height:CGFloat=topInset
         for row in rows {
             if row.kind == .separator {measured.append(Measured(row:row,leftAttrs:[:],rightAttrs:[:],height:1));height += 1+row.gap;continue}
             let la=attrs(row.font,row.align),ra=attrs(row.font,.right)
@@ -182,11 +183,11 @@ private enum ReceiptEncoder {
             let h=max(ceil(lb.height),ceil(rb.height))+2
             measured.append(Measured(row:row,leftAttrs:la,rightAttrs:ra,height:h));height += h+row.gap
         }
-        height += 14
+        height += kitchen ? 10 : 4
         let format=UIGraphicsImageRendererFormat();format.scale=1;format.opaque=true
         let image=UIGraphicsImageRenderer(size:CGSize(width:CGFloat(width),height:ceil(height)),format:format).image {ctx in
             UIColor.white.setFill();ctx.fill(CGRect(x:0,y:0,width:CGFloat(width),height:ceil(height)))
-            var y:CGFloat=kitchen ? 4 : 12
+            var y:CGFloat=topInset
             for m in measured {
                 if m.row.kind == .separator {
                     let c=ctx.cgContext;c.setStrokeColor(UIColor.black.cgColor);c.setLineWidth(1);c.setLineDash(phase:0,lengths:[3,3]);c.move(to:CGPoint(x:margin,y:y));c.addLine(to:CGPoint(x:CGFloat(width)-margin,y:y));c.strokePath()
@@ -209,7 +210,7 @@ private enum ReceiptEncoder {
         ctx.setFillColor(gray:1,alpha:1);ctx.fill(CGRect(x:0,y:0,width:width,height:height));ctx.interpolationQuality = .none;ctx.draw(image,in:CGRect(x:0,y:0,width:width,height:height))
         let rowBytes=width/8;var bitmap=Data(capacity:rowBytes*height)
         for y in 0..<height { for bi in 0..<rowBytes { var byte:UInt8=0;for bit in 0..<8 { let x=bi*8+bit;if pixels[y*bytesPerRow+x]<180 { byte |= UInt8(0x80>>bit) } };bitmap.append(byte) } }
-        var d=Data([0x1B,0x40]);d.append(contentsOf:[0x1D,0x76,0x30,0x00,UInt8(rowBytes&255),UInt8((rowBytes>>8)&255),UInt8(height&255),UInt8((height>>8)&255)]);d.append(bitmap);d.append(contentsOf:[0x0A,0x0A,0x0A,0x1D,0x56,0x42,0x00]);return d
+        var d=Data([0x1B,0x40]);d.append(contentsOf:[0x1D,0x76,0x30,0x00,UInt8(rowBytes&255),UInt8((rowBytes>>8)&255),UInt8(height&255),UInt8((height>>8)&255)]);d.append(bitmap);d.append(contentsOf:[0x0A,0x1D,0x56,0x42,0x00]);return d
     }
     private static func number(_ v:Any?,_ fallback:Double=0)->Double { if let n=v as? NSNumber{return n.doubleValue};if let d=v as? Double{return d};if let i=v as? Int{return Double(i)};if let s=v as? String,let d=Double(s.replacingOccurrences(of:",",with:".")){return d};return fallback }
     private static func qty(_ q:Double)->String { q.rounded()==q ? String(Int(q)) : String(format:"%.2f",q) }
