@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A92700000000000000000001 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A92700000000000000000002 /* SceneDelegate.swift */; };
 		027D13269429464C93FEC487 /* BluetoothPrinterManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC1540EF9CFF4C8BAFE4020A /* BluetoothPrinterManager.swift */; };
 		3C36AC675644423788C097B1 /* pos.html in Resources */ = {isa = PBXBuildFile; fileRef = ACB1313C6C90492FAAEB667E /* pos.html */; };
 		8A3609BED8B84C1582A06B6C /* PrilavokPOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B1EEC527F85450888BA48C5 /* PrilavokPOSApp.swift */; };
@@ -18,6 +19,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		A92700000000000000000002 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		2B1EEC527F85450888BA48C5 /* PrilavokPOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrilavokPOSApp.swift; sourceTree = "<group>"; };
 		2D98DA3BD7084D81ABE2FE4F /* PrilavokPOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PrilavokPOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6D2B8E4F1A9C43D7B5E6F012 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -43,6 +45,7 @@
 			isa = PBXGroup;
 			children = (
 				2B1EEC527F85450888BA48C5 /* PrilavokPOSApp.swift */,
+				A92700000000000000000002 /* SceneDelegate.swift */,
 				AC1540EF9CFF4C8BAFE4020A /* BluetoothPrinterManager.swift */,
 				9F4A7C2D8B84C1582A06B6D /* NativeNotificationSound.swift */,
 				ACB1313C6C90492FAAEB667E /* pos.html */,
@@ -152,6 +155,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				8A3609BED8B84C1582A06B6C /* PrilavokPOSApp.swift in Sources */,
+				A92700000000000000000001 /* SceneDelegate.swift in Sources */,
 				027D13269429464C93FEC487 /* BluetoothPrinterManager.swift in Sources */,
 				9F4A7C2D8B84C1582A06B6C /* NativeNotificationSound.swift in Sources */,
 			);
