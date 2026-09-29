@@ -2501,10 +2501,36 @@ function fixInventoryItem(id){
 }
 function pauseInventory(){saveKey('inventoryDraft',state.inventoryDraft);state.tab='pos';render();flash('Инвентаризация сохранена. Можно продолжить позже');}
 function completeInventory(){
- const d=state.inventoryDraft;if(!d)return;if(d.items.some(x=>!x.fixedAt)){flash('Сначала зафиксируйте остаток каждого товара');return;}const completedAt=Date.now();
- state.inventoryHistory.unshift({...d,completedAt,items:d.items.map(x=>({...x}))});state.inventoryConfig.lastCompletedAt=completedAt;
+ const d=state.inventoryDraft;if(!d)return;if(d.items.some(x=>!x.fixedAt)){flash('Сначала зафиксируйте остаток каждого товара');return;}
+ showInventorySummary();
+}
+function inventorySummaryData(){
+ const d=state.inventoryDraft;if(!d)return {rows:[],loss:0,shortages:0,surpluses:0};
+ let loss=0,shortages=0,surpluses=0;
+ const rows=d.items.map(x=>{const p=getProduct(x.productId),difference=roundStockQty(Number(x.difference||0)),cost=Number(p?.cost)||0,lossAmount=difference<0?Math.abs(difference)*cost:0;if(difference<0)shortages++;if(difference>0)surpluses++;loss+=lossAmount;return {...x,difference,cost,lossAmount};});
+ return {rows,loss,shortages,surpluses};
+}
+function showInventorySummary(){
+ const d=state.inventoryDraft;if(!d)return;
+ const summary=inventorySummaryData();
+ const changed=summary.rows.filter(x=>x.difference!==0);
+ showModal(`<div class="modal-title">Сводка инвентаризации</div>
+   <div class="grid-3" style="margin-bottom:14px;">
+     <div class="stat-box"><div class="label">Недостачи</div><div class="value">${summary.shortages}</div></div>
+     <div class="stat-box"><div class="label">Излишки</div><div class="value">${summary.surpluses}</div></div>
+     <div class="stat-box"><div class="label">Примерный убыток</div><div class="value">${money(summary.loss)}</div></div>
+   </div>
+   <div class="setting-sub" style="margin-bottom:12px;">Убыток рассчитан по текущей себестоимости товаров и учитывает только недостачи.</div>
+   <div style="max-height:46vh;overflow:auto;border-top:1px solid var(--border);">
+     ${changed.length?changed.map(x=>`<div class="list-row"><div style="flex:1;min-width:0;"><div class="list-row-name">${escapeHtml(x.name)}</div><div class="setting-sub">Было: ${stockQtyText(x.expected)} ${unitLabel(x.unit)} · Стало: ${stockQtyText(x.actual)} ${unitLabel(x.unit)}</div></div><div style="text-align:right;"><div style="font-weight:850;color:${x.difference<0?'var(--danger)':'var(--accent)'};">${x.difference>0?'+':''}${stockQtyText(x.difference)} ${unitLabel(x.unit)}</div>${x.lossAmount>0?`<div class="setting-sub">≈ −${money(x.lossAmount)}</div>`:''}</div></div>`).join(''):'<div class="center-note">Расхождений нет</div>'}
+   </div>
+   <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Вернуться</button><button class="btn btn-primary" onclick="confirmCompleteInventory()">Завершить инвентаризацию</button></div>`,true);
+}
+function confirmCompleteInventory(){
+ const d=state.inventoryDraft;if(!d)return;const completedAt=Date.now(),summary=inventorySummaryData();
+ state.inventoryHistory.unshift({...d,completedAt,estimatedLoss:summary.loss,items:d.items.map(x=>({...x}))});state.inventoryConfig.lastCompletedAt=completedAt;
  if(state.inventoryConfig.frequency==='custom'){const done=inventoryDateOnly(d.scheduledDate);state.inventoryConfig.customDates=(state.inventoryConfig.customDates||[]).filter(x=>inventoryDateOnly(x)?.getTime()!==done.getTime());}
- state.inventoryDraft=null;state.tab='pos';saveKey('products',state.products);saveKey('inventoryHistory',state.inventoryHistory);saveKey('inventoryConfig',state.inventoryConfig);saveKey('inventoryDraft',null);render();flash('Инвентаризация завершена');
+ state.inventoryDraft=null;state.tab='pos';saveKey('products',state.products);saveKey('inventoryHistory',state.inventoryHistory);saveKey('inventoryConfig',state.inventoryConfig);saveKey('inventoryDraft',null);closeModal();render();flash('Инвентаризация завершена');
 }
 function renderInventoryScreen(){
  const c=state.inventoryConfig||{};if(!['monthly','custom'].includes(c.frequency))c.frequency='monthly';if(!c.monthDay)c.monthDay=1;
