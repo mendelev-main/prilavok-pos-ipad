@@ -3796,7 +3796,7 @@ function openReturnConfirm(orderId){
     <div class="field"><label>Чек</label><div style="font-size:16px;font-weight:800;">${fmtDate(order.timestamp)} · ${order.method==='cash'?'Наличные':order.method==='card'?'Карта':'Наличные + карта'}</div></div>
     <div class="field"><label>К возврату</label><div style="font-size:26px;font-weight:800;">${fullMoney(total)}</div></div>
     <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="viewReceiptModal('${escapeAttr(order.id)}')">Отмена</button>
+      <button class="btn btn-secondary" onclick="closeModal()">Отмена</button>
       <button class="btn btn-danger" onclick="window.processFullReturn('${escapeAttr(order.id)}')">Вернуть ${fullMoney(total)}</button>
     </div>`);
 }
