@@ -5856,8 +5856,9 @@ async function submitCloseShift(){
   sendTelegramShiftClosed(shift);
   closeModal();
   render();
-  // После успешного сохранения закрытой смены автоматически печатаем её итоговый отчёт.
-  printShiftReport(shift.id);
+  // После успешного сохранения закрытой смены отправляем итоговый отчёт прямо на настроенный чековый принтер.
+  if(typeof window.printShiftCloseReceipt==='function') window.printShiftCloseReceipt(buildShiftReportPayload(shift));
+  else flash('Не удалось отправить отчёт смены на чековый принтер');
 }
 
 function openEmployeeModal(id=''){
