@@ -118,17 +118,17 @@ private enum ReceiptEncoder {
                     let name=(item["name"] as? String) ?? "",q=number(item["qty"],1),price=number(item["price"])
                     let gross=q*price,dv=number(item["discountValue"]),dt=(item["discountType"] as? String) ?? ""
                     let disc=dt=="percent" ? gross*dv/100 : (dt.isEmpty ? 0 : dv*q)
-                    pair(name,money(max(0,gross-disc)),medium,2)
-                    add("\(qty(q)) × "+money(price),regular,.left,3)
-                    if disc>0 {add("Скидка: −"+money(disc),small,.left,2)}
-                    if cfg["printPaymentComments"] as? Bool != false, let comment=item["comment"] as? String,!comment.isEmpty {add("Комментарий: "+comment,small,.left,2)}
-                    add("",small,.left,2)
+                    pair(name,money(max(0,gross-disc)),medium,0)
+                    add("\(qty(q)) × "+money(price),regular,.left,1)
+                    if disc>0 {add("Скидка: −"+money(disc),small,.left,1)}
+                    if cfg["printPaymentComments"] as? Bool != false, let comment=item["comment"] as? String,!comment.isEmpty {add("Комментарий: "+comment,small,.left,1)}
+                    add("",small,.left,0)
                 }
             }
             let delivery=number(order["deliveryFee"])
             if delivery>0 {pair("Доставка",money(delivery),regular,10)}
             separator(10)
-            pair("Итого",money(number(order["total"])),bold,12)
+            pair("Итого",String(format:"%.2f BYN",number(order["total"])),medium,12)
             let payments=(order["payments"] as? [[String:Any]]) ?? []
             if payments.count > 1 {
                 add("Платежи",small,.left,4)
@@ -176,9 +176,9 @@ private enum ReceiptEncoder {
         for row in rows {
             if row.kind == .separator {measured.append(Measured(row:row,leftAttrs:[:],rightAttrs:[:],height:1));height += 1+row.gap;continue}
             let la=attrs(row.font,row.align),ra=attrs(row.font,.right)
-            let available=row.kind == .pair ? contentWidth*0.67 : contentWidth
+            let available=row.kind == .pair ? contentWidth*0.56 : contentWidth
             let lb=(row.left as NSString).boundingRect(with:CGSize(width:available,height:.greatestFiniteMagnitude),options:[.usesLineFragmentOrigin,.usesFontLeading],attributes:la,context:nil)
-            let rb=(row.right as NSString).boundingRect(with:CGSize(width:contentWidth*0.31,height:.greatestFiniteMagnitude),options:[.usesLineFragmentOrigin,.usesFontLeading],attributes:ra,context:nil)
+            let rb=(row.right as NSString).boundingRect(with:CGSize(width:contentWidth*0.42,height:.greatestFiniteMagnitude),options:[.usesLineFragmentOrigin,.usesFontLeading],attributes:ra,context:nil)
             let h=max(ceil(lb.height),ceil(rb.height))+2
             measured.append(Measured(row:row,leftAttrs:la,rightAttrs:ra,height:h));height += h+row.gap
         }
@@ -191,8 +191,8 @@ private enum ReceiptEncoder {
                 if m.row.kind == .separator {
                     let c=ctx.cgContext;c.setStrokeColor(UIColor.black.cgColor);c.setLineWidth(1);c.setLineDash(phase:0,lengths:[3,3]);c.move(to:CGPoint(x:margin,y:y));c.addLine(to:CGPoint(x:CGFloat(width)-margin,y:y));c.strokePath()
                 } else if m.row.kind == .pair {
-                    (m.row.left as NSString).draw(with:CGRect(x:margin,y:y,width:contentWidth*0.66,height:m.height),options:[.usesLineFragmentOrigin,.usesFontLeading],attributes:m.leftAttrs,context:nil)
-                    (m.row.right as NSString).draw(with:CGRect(x:margin+contentWidth*0.68,y:y,width:contentWidth*0.32,height:m.height),options:[.usesLineFragmentOrigin,.usesFontLeading],attributes:m.rightAttrs,context:nil)
+                    (m.row.left as NSString).draw(with:CGRect(x:margin,y:y,width:contentWidth*0.55,height:m.height),options:[.usesLineFragmentOrigin,.usesFontLeading],attributes:m.leftAttrs,context:nil)
+                    (m.row.right as NSString).draw(with:CGRect(x:margin+contentWidth*0.57,y:y,width:contentWidth*0.43,height:m.height),options:[.usesLineFragmentOrigin,.usesFontLeading],attributes:m.rightAttrs,context:nil)
                 } else {
                     (m.row.left as NSString).draw(with:CGRect(x:margin,y:y,width:contentWidth,height:m.height),options:[.usesLineFragmentOrigin,.usesFontLeading],attributes:m.leftAttrs,context:nil)
                 }
