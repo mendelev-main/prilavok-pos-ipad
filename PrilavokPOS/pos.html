@@ -5629,31 +5629,54 @@ function renderShiftScreen(shift){
   let openBlock;
   if(shift){
     const t = shiftTotals(shift.id);
+    const allShiftOrders=shiftOrders(shift.id);
+    const shiftNumber=Math.max(1,state.shifts.findIndex(s=>s.id===shift.id)+1);
+    const grossSales=allShiftOrders.reduce((sum,o)=>sum+Number(o.total||0),0);
+    const returnsTotal=allShiftOrders.filter(o=>o.returnedAt).reduce((sum,o)=>sum+Number(o.returnAmount||o.total||0),0);
+    const discountsTotal=allShiftOrders.reduce((sum,o)=>sum+(o.items||[]).reduce((itemSum,item)=>itemSum+receiptItemDiscount(item),0),0);
+    const cashRefunds=allShiftOrders.filter(o=>o.returnedAt).reduce((sum,o)=>{
+      const refund=Number(o.returnAmount||o.total||0);
+      const total=Number(o.total||0);
+      if(Array.isArray(o.payments) && o.payments.length && total>0){
+        const cashPaid=o.payments.filter(p=>p.method==='cash').reduce((a,p)=>a+Number(p.amount||0),0);
+        return sum+refund*(cashPaid/total);
+      }
+      return sum+(o.method==='cash'?refund:0);
+    },0);
     const expected = Number(shift.openingCash||0) + t.cash + t.netMovements;
+    const netRevenue=Math.max(0,grossSales-returnsTotal);
     openBlock = `
       <div class="card">
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px;">
           <button class="btn" style="width:auto;background:#16a34a;border-color:#16a34a;color:#fff;" onclick="openCashMovementModal('deposit')">Внести наличные</button>
           <button class="btn" style="width:auto;background:#dc2626;border-color:#dc2626;color:#fff;" onclick="openCashMovementModal('withdrawal')">Изъять наличные</button>
         </div>
-        <div class="list-row-sub" style="margin-bottom:14px;">Открыта ${fmtDate(shift.openedAt)} · ${escapeHtml(shift.employeeName||'Сотрудник не указан')}</div>
-        <div class="grid-3">
-          <div class="stat-box"><div class="label">Начальная сумма</div><div class="value">${money(shift.openingCash)}</div></div>
-          <div class="stat-box"><div class="label">Продажи наличными</div><div class="value">${money(t.cash)}</div></div>
-          <div class="stat-box"><div class="label">Продажи картой</div><div class="value">${money(t.card)}</div></div>
-        </div>
-        <div class="grid-3">
-          <div class="stat-box"><div class="label">Заказов</div><div class="value">${t.count}</div></div>
-          <div class="stat-box"><div class="label">Выручка всего</div><div class="value">${money(t.total)}</div></div>
-          <div class="stat-box"><div class="label">Ожидается в кассе</div><div class="value">${money(expected)}</div></div>
-        </div>
-        <div class="grid-3" style="margin-top:12px;">
-          <div class="stat-box"><div class="label">Внесено наличных</div><div class="value">${money(t.deposits)}</div></div>
-          <div class="stat-box"><div class="label">Изъято наличных</div><div class="value">${money(t.withdrawals)}</div></div>
-          <div class="stat-box"><div class="label">↩️ Возвраты</div><div class="value">${money(t.refunds)}</div></div>
-          <div class="stat-box"><div class="label">🚗 Доставка</div><div class="value">${money(t.movements.filter(m=>m.subtype==='delivery'||m.note==='🚗 Доставка').reduce((s,m)=>s+Number(m.amount||0),0))}</div></div>
-        </div>
-        ${t.movements.length ? `<div style="margin-top:14px;"><div style="font-weight:800;font-size:14px;margin-bottom:6px;">Движение средств</div>${t.movements.slice().reverse().map(m=>`<div class="list-row" style="padding:8px 0;"><div style="flex:1;"><div class="list-row-name">${m.type==='deposit'?'Внесение наличных':(m.subtype==='delivery'||m.note==='🚗 Доставка'?'🚗 Доставка':(m.subtype==='refund'||m.note==='↩️ Возврат чека'?'↩️ Возврат чека':'Изъятие наличных'))}</div><div class="list-row-sub">${fmtDate(m.timestamp)}${m.note?' · '+escapeHtml(m.note):''}</div></div><div class="badge">${m.type==='deposit'?'+':'−'}${money(m.amount)}</div></div>`).join('')}</div>` : ''}
+
+        <div style="font-size:18px;font-weight:800;">Кассовая смена №${shiftNumber}</div>
+        <div class="list-row-sub" style="margin-top:6px;">Смена открыта ${fmtDate(shift.openedAt)}</div>
+
+        <div style="border-top:1px solid var(--border);margin:18px 0;"></div>
+        <div style="font-size:15px;font-weight:800;margin-bottom:10px;">Наличные в кассе</div>
+        <div class="list-row" style="padding:8px 0;"><div>Наличные на начало смены</div><div style="font-weight:800;">${money(shift.openingCash)}</div></div>
+        <div class="list-row" style="padding:8px 0;"><div>Оплата наличными</div><div style="font-weight:800;">${money(t.cash+cashRefunds)}</div></div>
+        <div class="list-row" style="padding:8px 0;"><div>Возвраты наличными</div><div style="font-weight:800;">${money(cashRefunds)}</div></div>
+        <div class="list-row" style="padding:8px 0;"><div>Сумма внесений</div><div style="font-weight:800;">${money(t.deposits)}</div></div>
+        <div class="list-row" style="padding:8px 0;"><div>Сумма изъятий</div><div style="font-weight:800;">${money(t.withdrawals)}</div></div>
+        <div class="list-row" style="padding:10px 0 8px;border-top:1px solid var(--border);margin-top:4px;"><div style="font-weight:800;">Ожидаемая сумма наличных</div><div style="font-weight:800;font-size:17px;">${money(expected)}</div></div>
+
+        <div style="border-top:1px solid var(--border);margin:18px 0;"></div>
+        <div style="font-size:15px;font-weight:800;margin-bottom:10px;">Итоги продаж</div>
+        <div class="list-row" style="padding:8px 0;"><div>Продажи</div><div style="font-weight:800;">${money(grossSales)}</div></div>
+        <div class="list-row" style="padding:8px 0;"><div>Возвраты</div><div style="font-weight:800;">${money(returnsTotal)}</div></div>
+        <div class="list-row" style="padding:8px 0;"><div>Скидки</div><div style="font-weight:800;">${money(discountsTotal)}</div></div>
+
+        <div style="border-top:1px solid var(--border);margin:18px 0;"></div>
+        <div style="font-size:15px;font-weight:800;margin-bottom:10px;">Выручка</div>
+        <div class="list-row" style="padding:8px 0;"><div>Выручка</div><div style="font-weight:800;font-size:17px;">${money(netRevenue)}</div></div>
+        <div class="list-row" style="padding:8px 0;"><div>Наличные</div><div style="font-weight:800;">${money(t.cash)}</div></div>
+        <div class="list-row" style="padding:8px 0;"><div>Карта</div><div style="font-weight:800;">${money(t.card)}</div></div>
+
+        ${t.movements.length ? `<div style="border-top:1px solid var(--border);margin:18px 0;"></div><div style="font-weight:800;font-size:14px;margin-bottom:6px;">Движение средств</div>${t.movements.slice().reverse().map(m=>`<div class="list-row" style="padding:8px 0;"><div style="flex:1;"><div class="list-row-name">${m.type==='deposit'?'Внесение наличных':(m.subtype==='delivery'||m.note==='🚗 Доставка'?'🚗 Доставка':(m.subtype==='refund'||m.note==='↩️ Возврат чека'?'↩️ Возврат чека':'Изъятие наличных'))}</div><div class="list-row-sub">${fmtDate(m.timestamp)}${m.note?' · '+escapeHtml(m.note):''}</div></div><div class="badge">${m.type==='deposit'?'+':'−'}${money(m.amount)}</div></div>`).join('')}` : ''}
         <div style="display:flex;justify-content:flex-end;margin-top:22px;padding-top:16px;border-top:1px solid var(--border);">
           <button class="btn btn-danger-outline" style="width:auto;padding:10px 18px;" onclick="openCloseShiftModal()">Закрыть смену</button>
         </div>
