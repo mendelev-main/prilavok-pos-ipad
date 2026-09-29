@@ -2507,7 +2507,7 @@ function fixInventoryItem(id){
  const d=state.inventoryDraft,x=d?.items.find(i=>i.productId===id);if(!x||x.fixedAt)return;
  if(x.actual===null||!Number.isFinite(Number(x.actual))){flash('Введите остаток товара');return;}
  const p=getProduct(x.productId);if(!productTracksStock(p)){flash('Для товара недоступен учёт остатков');return;}
- x.actual=roundStockQty(Number(x.actual));x.difference=roundStockQty(x.actual-Number(x.expected));x.fixedAt=Date.now();p.stock=x.actual;
+ x.expected=roundStockQty(Number(p.stock)||0);x.actual=roundStockQty(Number(x.actual));x.difference=roundStockQty(x.actual-x.expected);x.fixedAt=Date.now();p.stock=x.actual;
  saveKey('products',state.products);saveKey('inventoryDraft',d);render();flash('Остаток зафиксирован');
 }
 function pauseInventory(){saveKey('inventoryDraft',state.inventoryDraft);state.tab='pos';render();flash('Инвентаризация сохранена. Можно продолжить позже');}
@@ -2558,8 +2558,8 @@ function renderInventoryWorkScreen(){
  if(!d)return `<div class="screen content-screen ${state.tab==='inventoryWork'?'active':''}"><div class="center-note" style="margin:auto;">Нет активной инвентаризации.</div></div>`;
  const isAdmin=currentShiftEmployeeIsAdmin(),fixed=d.items.filter(x=>!!x.fixedAt).length;
  const rows=d.items.map(x=>{
-   const unit=unitLabel(x.unit),done=!!x.fixedAt,diff=roundStockQty(Number(x.difference||0)),diffText=diff>0?'+'+stockQtyText(diff):stockQtyText(diff);
-   const before=done?`<div class="setting-sub" style="margin-top:5px;">Расчётный остаток: ${stockQtyText(x.expected)} ${unit}</div><div style="margin-top:5px;font-weight:800;color:${diff<0?'#D95C54':diff>0?'#42A66B':'var(--muted)'};">Разница: ${diffText} ${unit}</div>`:(isAdmin?`<div class="setting-sub">Учётный остаток: ${stockQtyText(x.expected)} ${unit}</div>`:'');
+   const unit=unitLabel(x.unit),done=!!x.fixedAt,p=getProduct(x.productId),currentExpected=done?roundStockQty(Number(x.expected)||0):roundStockQty(Number(p?.stock)||0),diff=roundStockQty(Number(x.difference||0)),diffText=diff>0?'+'+stockQtyText(diff):stockQtyText(diff);
+   const before=done?`<div class="setting-sub" style="margin-top:5px;">Расчётный остаток: ${stockQtyText(currentExpected)} ${unit}</div><div style="margin-top:5px;font-weight:800;color:${diff<0?'#D95C54':diff>0?'#42A66B':'var(--muted)'};">Разница: ${diffText} ${unit}</div>`:(isAdmin?`<div class="setting-sub">Учётный остаток: ${stockQtyText(currentExpected)} ${unit}</div>`:'');
    const control=done?`<div style="min-width:190px;text-align:right;"><div class="setting-sub">Зафиксированный остаток</div><div style="font-size:18px;font-weight:850;margin-top:4px;">${stockQtyText(x.actual)} ${unit}</div></div>`:`<div style="width:230px;"><div class="setting-sub" style="margin-bottom:5px;">Остаток, ${escapeHtml(unit)}</div><div style="display:flex;gap:8px;"><input type="number" min="0" step="0.001" inputmode="decimal" value="${x.actual===null?'':escapeAttr(String(x.actual))}" placeholder="0" style="min-width:0;flex:1;padding:11px 12px;border:1px solid var(--border);border-radius:11px;background:var(--surface);color:var(--ink);font:inherit;" onchange="updateInventoryActual('${escapeAttr(x.productId)}',this.value)"><button class="btn btn-primary" style="width:auto;padding:0 14px;" onclick="fixInventoryItem('${escapeAttr(x.productId)}')">Фиксировать</button></div></div>`;
    return `<div class="list-row" style="align-items:center;gap:16px;padding-top:14px;padding-bottom:14px;"><div style="flex:1;min-width:0;"><div class="list-row-name">${escapeHtml(x.name)}</div>${before}</div>${control}</div>`;
  }).join('');
