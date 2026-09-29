@@ -3593,7 +3593,7 @@ function openCardPartConfirmation(amount,onSuccess){
       <button class="btn btn-secondary" onclick="closeModal();renderSplitPayment();">Отмена</button>
       <button class="btn btn-card" onclick="window.__cardPaymentConfirm&&window.__cardPaymentConfirm()">Оплата прошла</button>
     </div>`);
-  window.__cardPaymentConfirm=()=>{window.__cardPaymentConfirm=null;onSuccess();};
+  window.__cardPaymentConfirm=()=>{window.__cardPaymentConfirm=null;closeModal();onSuccess();};
 }
 function confirmPaymentScreen(method){
   if(!canFulfillCart()) return;
