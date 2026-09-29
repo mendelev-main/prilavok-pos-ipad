@@ -172,7 +172,7 @@ private enum ReceiptEncoder {
 
         func attrs(_ font:UIFont,_ alignment:NSTextAlignment)->[NSAttributedString.Key:Any]{let p=NSMutableParagraphStyle();p.alignment=alignment;p.lineBreakMode = .byWordWrapping;return [.font:font,.foregroundColor:UIColor.black,.paragraphStyle:p]}
         struct Measured {let row:Row;let leftAttrs:[NSAttributedString.Key:Any];let rightAttrs:[NSAttributedString.Key:Any];let height:CGFloat}
-        let topInset:CGFloat = kitchen ? 4 : 2
+        let topInset:CGFloat = kitchen ? 4 : 0
         var measured:[Measured]=[],height:CGFloat=topInset
         for row in rows {
             if row.kind == .separator {measured.append(Measured(row:row,leftAttrs:[:],rightAttrs:[:],height:1));height += 1+row.gap;continue}
