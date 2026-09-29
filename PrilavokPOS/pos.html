@@ -1657,7 +1657,6 @@ function renderAnalyticsScreen(){
   const moneyOrDash=v=>showMoney?money(v):'—';
   const renderValueBars=items=>renderHbars(items,showMoney);
   return `<div class="screen content-screen ${state.tab==='analytics'?'active':''}">
-    <div class="content-head"><button class="btn btn-outline" style="width:100%" onclick="openWarehousePage()">Складской учёт</button></div>
     <div class="card" style="margin-bottom:14px;">
       <div class="analytics-filters">
         <div class="analytics-period-head">
@@ -2614,6 +2613,10 @@ function renderAdminPanel(){
       <button class="settings-card" style="text-align:left;cursor:pointer;font:inherit;color:inherit;" onclick="setTab('inventory')">
         <div style="font-size:16px;font-weight:800;">Инвентаризация</div>
         <div class="setting-sub" style="margin-top:6px;">График пересчёта, список товаров, проведение и история.</div>
+      </button>
+      <button class="settings-card" style="text-align:left;cursor:pointer;font:inherit;color:inherit;" onclick="openWarehousePage()">
+        <div style="font-size:16px;font-weight:800;">Складской учёт</div>
+        <div class="setting-sub" style="margin-top:6px;">Остатки, движение товаров, поставщики и складские отчёты.</div>
       </button>
     </div>`;
 }
