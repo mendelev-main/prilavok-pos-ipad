@@ -2043,7 +2043,8 @@ async function acceptWebOrder(id){
       const existing=state.parked.find(p=>p.webOrderId===id);
       const rawType=String(o.order_type||'').trim().toLocaleLowerCase('ru');
       const orderType=(rawType==='delivery'||rawType==='доставка')?'Доставка':((rawType==='pickup'||rawType==='самовывоз'||rawType==='с собой')?'С собой':(o.order_type||'На месте'));
-      journal[id]={stage:existing?'local':'prepared',parked:existing||{id:uid(),items:cartItems,total:Number(o.total||0),subtotal:Number(o.total||0)-Number(o.delivery_fee||0),deliveryFee:Number(o.delivery_fee||0),orderLabel:'Веб '+(o.external_id||''),orderType,customer:{name:o.customer_name||'',phone:o.phone||'',address:o.address||''},comment:o.comment||'',source:'web',webOrderId:o.id,webOrderStatus:'accepted',createdAt:Date.now(),kitchenPrinted:false,printedItems:[]}};
+      const acceptedAt=Date.now();
+      journal[id]={stage:existing?'local':'prepared',parked:existing||{id:uid(),receiptDisplayNumber:'#'+String(o.external_id||o.id||'—'),items:cartItems,total:Number(o.total||0),subtotal:Number(o.total||0)-Number(o.delivery_fee||0),deliveryFee:Number(o.delivery_fee||0),orderLabel:'Веб '+(o.external_id||''),orderType,customer:{name:o.customer_name||'',phone:o.phone||'',address:o.address||''},comment:o.comment||'',source:'web',webOrderId:o.id,webOrderStatus:'accepted',timestamp:acceptedAt,createdAt:acceptedAt,kitchenPrinted:false,printedItems:[]}};
       await window.PrilavokCore.Storage.set('webOrderAcceptances',journal);
     }
     const record=journal[id];
@@ -2058,6 +2059,8 @@ async function acceptWebOrder(id){
     // Снимок printedItems сохраняет идемпотентность и позволяет позже допечатать только добавленные позиции.
     if(!record.parked.kitchenPrinted){
       record.parked.items=(record.parked.items||[]).map(item=>({...item,category:item.category||getProduct(item.productId)?.category||''}));
+      record.parked.receiptDisplayNumber=record.parked.receiptDisplayNumber||('#'+String(o.external_id||o.id||'—'));
+      record.parked.timestamp=Number(record.parked.timestamp)||Number(record.parked.createdAt)||Date.now();
       const deltaItems=kitchenPrintDelta(record.parked.items,record.parked.printedItems||[]);
       if(deltaItems.length && typeof window.printKitchenOrderNow==='function'){
         window.printKitchenOrderNow({...record.parked,items:deltaItems});
