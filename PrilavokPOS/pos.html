@@ -251,7 +251,9 @@
   .hbar-name{font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .hbar-track{height:18px;background:var(--bg);border-radius:100px;overflow:hidden;border:1px solid var(--border);}
   .hbar-fill{height:100%;border-radius:100px;background:var(--accent);min-width:3px;}
-  .hbar-value{text-align:right;font-size:12.5px;font-weight:800;white-space:nowrap;}
+  .hbar-value{text-align:right;font-size:12.5px;font-weight:800;white-space:nowrap;min-width:0;}
+  .hbar-list.payment-method-bars .hbar-row{grid-template-columns:minmax(90px,1fr) minmax(70px,2fr) minmax(132px,auto);}
+  .hbar-list.payment-method-bars .hbar-value{max-width:100%;font-size:12px;}
   .analytics-table{width:100%;border-collapse:collapse;font-size:13px;}
   .analytics-table th{text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;padding:0 8px 9px;border-bottom:1px solid var(--border);}
   .analytics-table td{padding:10px 8px;border-bottom:1px solid var(--border);}
@@ -1460,7 +1462,8 @@ function renderHbars(items, showValues=true){
 function renderAnalyticsBars(items,{format='money',percentTotal=0,percentOnly=false}={}){
   if(!items.length) return '<div class="center-note">Нет продаж за выбранный период.</div>';
   const max=Math.max(...items.map(x=>Number(x.value)||0),1);
-  return `<div class="hbar-list">${items.map(x=>{const value=Number(x.value)||0,percentValue=percentTotal>0?(value/percentTotal*100).toLocaleString('ru-RU',{maximumFractionDigits:1})+'%':'0%',label=percentOnly?percentValue:(format==='qty'?stockQtyText(value)+' шт':money(value)+(percentTotal>0?' · '+percentValue:''));return `<div class="hbar-row"><div class="hbar-name" title="${escapeAttr(x.name)}">${escapeHtml(x.name)}</div><div class="hbar-track"><div class="hbar-fill" style="width:${Math.max(2,value/max*100)}%"></div></div><div class="hbar-value">${label}</div></div>`;}).join('')}</div>`;
+  const listClass=percentTotal>0?'hbar-list payment-method-bars':'hbar-list';
+  return `<div class="${listClass}">${items.map(x=>{const value=Number(x.value)||0,percentValue=percentTotal>0?(value/percentTotal*100).toLocaleString('ru-RU',{maximumFractionDigits:1})+'%':'0%',label=percentOnly?percentValue:(format==='qty'?stockQtyText(value)+' шт':money(value)+(percentTotal>0?' · '+percentValue:''));return `<div class="hbar-row"><div class="hbar-name" title="${escapeAttr(x.name)}">${escapeHtml(x.name)}</div><div class="hbar-track"><div class="hbar-fill" style="width:${Math.max(2,value/max*100)}%"></div></div><div class="hbar-value">${label}</div></div>`;}).join('')}</div>`;
 }
 function unlockAnalyticsSensitive(){
   state.analyticsSensitiveUnlocked=true;
