@@ -2181,7 +2181,7 @@ function renderNetworkScreen(){
   const configured = !!(p.ip || '').trim();
   return `
   <div class="screen content-screen ${state.tab==='network'?'active':''}">
-    <div class="content-head"><div class="content-title">Сетевые конфигурации</div></div>
+    <div class="content-head" style="align-items:center;"><div style="display:flex;align-items:center;gap:12px;"><button class="btn btn-secondary" style="width:auto;padding:10px 16px;" onclick="state.settingsAdminPanel=true;setTab('settings')">← Назад</button><div class="content-title">Сетевые конфигурации</div></div></div>
     <div class="settings-grid">
       <div class="settings-card">
         <div style="font-size:16px;font-weight:800;margin-bottom:4px;">Синхронизация меню</div>
@@ -2409,42 +2409,65 @@ function employeeDisplayName(name){
   if(parts.length<2)return parts[0]||'';
   return parts[0]+' '+parts.slice(1,3).map(part=>part.split('-').filter(Boolean).map(piece=>Array.from(piece)[0].toLocaleUpperCase('ru')+'.').join('-')).join(' ');
 }
+
+function openAdminPanel(){
+  if(!currentShiftEmployeeIsAdmin()){
+    showAdminOnlyInfo('Панель администратора');
+    return;
+  }
+  state.settingsAdminPanel=true;
+  render();
+}
+function closeAdminPanel(){
+  state.settingsAdminPanel=false;
+  render();
+}
+function openCompanyDetailsModal(){
+  if(!currentShiftEmployeeIsAdmin()){
+    showAdminOnlyInfo('Реквизиты организации');
+    return;
+  }
+  openCompanyEditModal();
+}
+function renderAdminPanel(){
+  return `
+    <div class="content-head" style="align-items:center;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <button class="btn btn-secondary" style="width:auto;padding:10px 16px;" onclick="closeAdminPanel()">← Назад</button>
+        <div class="content-title">Панель администратора</div>
+      </div>
+    </div>
+    <div class="settings-grid">
+      <button class="settings-card" style="text-align:left;cursor:pointer;font:inherit;color:inherit;" onclick="setTab('network')">
+        <div style="font-size:16px;font-weight:800;">Сетевые настройки</div>
+        <div class="setting-sub" style="margin-top:6px;">Синхронизация, подключение принтера и сетевые конфигурации.</div>
+      </button>
+      <button class="settings-card" style="text-align:left;cursor:pointer;font:inherit;color:inherit;" onclick="openCompanyDetailsModal()">
+        <div style="font-size:16px;font-weight:800;">Реквизиты организации</div>
+        <div class="setting-sub" style="margin-top:6px;">Название заведения, юридическое лицо, адрес и адрес доставки.</div>
+      </button>
+    </div>`;
+}
 function renderSettingsScreen(){
-  const p = state.printer || {};
-  const configured = !!(p.ip || '').trim();
+  if(state.settingsAdminPanel && currentShiftEmployeeIsAdmin()){
+    return `
+    <div class="screen content-screen ${state.tab==='settings'?'active':''}">
+      ${renderAdminPanel()}
+    </div>`;
+  }
+  state.settingsAdminPanel=false;
   return `
   <div class="screen content-screen ${state.tab==='settings'?'active':''}">
     <div class="content-head"><div class="content-title">Настройки</div></div>
+    <button class="btn btn-primary" style="width:100%;min-height:54px;margin-bottom:14px;font-size:16px;font-weight:850;" onclick="openAdminPanel()">Панель администратора</button>
     <div class="settings-quick-module">
       <div style="font-size:15px;font-weight:800;margin-bottom:10px;">Быстрые настройки</div>
       <div class="settings-quick-actions">
         <button class="settings-quick-btn" onclick="setTab('products')">Товары</button>
-        <button class="settings-quick-btn" onclick="currentShiftEmployeeIsAdmin()?setTab('network'):showAdminOnlyInfo('Сетевые настройки')">Сетевые настройки</button>
         <button class="settings-quick-btn" onclick="openAppearanceModal()">Внешний вид</button>
       </div>
     </div>
     <div class="settings-grid">
-      <div class="settings-card">
-        <div class="settings-section-head">
-          <div>
-            <div style="font-size:16px;font-weight:800;">Реквизиты организации</div>
-          </div>
-          ${canEditCompanySettings() ? `<button class="settings-edit-btn" title="Изменить реквизиты" onclick="openCompanyEditModal()">✎</button>` : ''}
-        </div>
-        <div class="setting-sub">Эти данные будут автоматически добавляться в PDF-заказ поставщику.</div>
-        <div class="field" style="margin-top:18px;"><label>Название заведения</label>
-          <input value="${escapeAttr(state.company.establishmentName||'')}" placeholder="Например: Кафе «Прилавок»" disabled>
-        </div>
-        <div class="field"><label>Юридическое лицо</label>
-          <input value="${escapeAttr(state.company.legalName||'')}" placeholder="Например: ООО «Прилавок»" disabled>
-        </div>
-        <div class="field"><label>Адрес</label>
-          <textarea rows="3" placeholder="Юридический / фактический адрес" disabled>${escapeHtml(state.company.address||'')}</textarea>
-        </div>
-        <div class="field"><label>Адрес доставки</label>
-          <textarea rows="3" placeholder="Куда поставщику доставлять заказ" disabled>${escapeHtml(state.company.deliveryAddress||'')}</textarea>
-        </div>
-      </div>
       <div class="settings-card">
         <div class="settings-section-head"><div style="font-size:16px;font-weight:800;">Сотрудники</div><button class="settings-plus-btn" title="Добавить сотрудника" onclick="openEmployeeModal()">+</button></div>
         <div class="setting-sub">Сотрудники выбираются при открытии кассовой смены. Введите ФИО и номер телефона.</div>
