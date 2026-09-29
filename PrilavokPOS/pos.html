@@ -3168,6 +3168,34 @@ function flash(msg){
 /* ---- Park (save receipt for later) ---- */
 function parkOrder(){
   if(!state.cart.length) return;
+  if(!String(state.orderLabel||'').trim()){
+    showModal(`
+      <div class="modal-title">Подпись чека</div>
+      <div class="settings-note" style="margin-bottom:14px;">Добавьте подпись, чтобы потом было проще найти этот чек в отложенных.</div>
+      <div class="field">
+        <label>Подпись</label>
+        <input id="park-order-label" type="text" placeholder="Например: Стол 4 или Александр" autocomplete="off" onkeydown="if(event.key==='Enter')confirmParkOrderLabel()">
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeModal()">Отмена</button>
+        <button class="btn btn-primary" onclick="confirmParkOrderLabel()">Отложить</button>
+      </div>`);
+    setTimeout(()=>document.getElementById('park-order-label')?.focus(),50);
+    return;
+  }
+  parkOrderNow();
+}
+function confirmParkOrderLabel(){
+  const input=document.getElementById('park-order-label');
+  const label=String(input?.value||'').trim();
+  if(!label){flash('Введите подпись чека');input?.focus();return;}
+  state.orderLabel=label;
+  saveCurrentOrderSession();
+  closeModal();
+  parkOrderNow();
+}
+function parkOrderNow(){
+  if(!state.cart.length) return;
   const shift=currentShift(), employee=state.employees.find(e=>e.id===shift?.employeeId);
   const parked = {
     id:uid(), receiptDisplayNumber:'#'+(state.parked.length+1),
