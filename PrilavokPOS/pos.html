@@ -1457,10 +1457,10 @@ function renderHbars(items, showValues=true){
   const max=Math.max(...items.map(x=>x.value),1);
   return `<div class="hbar-list">${items.map(x=>`<div class="hbar-row"><div class="hbar-name" title="${escapeAttr(x.name)}">${escapeHtml(x.name)}</div><div class="hbar-track"><div class="hbar-fill" style="width:${Math.max(2,x.value/max*100)}%"></div></div>${showValues?`<div class="hbar-value">${money(x.value)}</div>`:'<div class="hbar-value" style="visibility:hidden">0</div>'}</div>`).join('')}</div>`;
 }
-function renderAnalyticsBars(items,{format='money',percentTotal=0}={}){
+function renderAnalyticsBars(items,{format='money',percentTotal=0,percentOnly=false}={}){
   if(!items.length) return '<div class="center-note">Нет продаж за выбранный период.</div>';
   const max=Math.max(...items.map(x=>Number(x.value)||0),1);
-  return `<div class="hbar-list">${items.map(x=>{const value=Number(x.value)||0,label=format==='qty'?stockQtyText(value)+' шт':money(value),percent=percentTotal>0?' · '+(value/percentTotal*100).toLocaleString('ru-RU',{maximumFractionDigits:1})+'%':'';return `<div class="hbar-row"><div class="hbar-name" title="${escapeAttr(x.name)}">${escapeHtml(x.name)}</div><div class="hbar-track"><div class="hbar-fill" style="width:${Math.max(2,value/max*100)}%"></div></div><div class="hbar-value">${label}${percent}</div></div>`;}).join('')}</div>`;
+  return `<div class="hbar-list">${items.map(x=>{const value=Number(x.value)||0,percentValue=percentTotal>0?(value/percentTotal*100).toLocaleString('ru-RU',{maximumFractionDigits:1})+'%':'0%',label=percentOnly?percentValue:(format==='qty'?stockQtyText(value)+' шт':money(value)+(percentTotal>0?' · '+percentValue:''));return `<div class="hbar-row"><div class="hbar-name" title="${escapeAttr(x.name)}">${escapeHtml(x.name)}</div><div class="hbar-track"><div class="hbar-fill" style="width:${Math.max(2,value/max*100)}%"></div></div><div class="hbar-value">${label}</div></div>`;}).join('')}</div>`;
 }
 function unlockAnalyticsSensitive(){
   state.analyticsSensitiveUnlocked=true;
@@ -1687,7 +1687,7 @@ function renderAnalyticsScreen(){
     ${adminKpis}
     <div class="analytics-grid-2" style="margin-bottom:14px;">
       <div class="analytics-card"><div class="analytics-title">Продажи сотрудников</div><div class="analytics-sub">${admin?'Выручка по сотруднику за выбранный период':'Продажи по сотруднику за выбранный период'}</div>${admin?renderHbars(d.employees,true):renderHbars(d.employees,false)}</div>
-      <div class="analytics-card"><div class="analytics-title">Способы оплаты</div><div class="analytics-sub">Распределение оплат</div>${renderAnalyticsBars([{name:'Наличные',value:d.cash},{name:'Карта',value:d.card}],{format:'money',percentTotal:paymentTotal})}</div>
+      <div class="analytics-card"><div class="analytics-title">Способы оплаты</div><div class="analytics-sub">Распределение оплат</div>${renderAnalyticsBars([{name:'Наличные',value:d.cash},{name:'Карта',value:d.card}],{format:'money',percentTotal:paymentTotal,percentOnly:!admin})}</div>
     </div>
     <div class="analytics-grid-2">
       <div class="analytics-card"><div class="analytics-title">Продажи по категориям</div><div class="analytics-sub">Количество проданных товаров</div>${renderAnalyticsBars(d.categories.map(x=>({name:x.name,value:x.qty})),{format:'qty'})}</div>
