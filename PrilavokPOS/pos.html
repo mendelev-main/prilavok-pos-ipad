@@ -1076,6 +1076,7 @@ async function loadAll(){
     state.currentOrderSource = currentOrderSession.source || '';
     state.currentWebOrderId = currentOrderSession.webOrderId || '';
     state.currentWebOrderStatus = currentOrderSession.webOrderStatus || '';
+    window.__currentOrderKitchenPrinted = !!currentOrderSession.kitchenPrinted;
   }
   state.deliveryFee = Number(state.deliveryFee || 0);
   state.theme = theme === 'dark' ? 'dark' : 'light';
