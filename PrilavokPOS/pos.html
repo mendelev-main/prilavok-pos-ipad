@@ -2456,7 +2456,7 @@ function inventoryNextDate(){
   do{c.frequency==='monthly'?next.setMonth(next.getMonth()+1):next.setDate(next.getDate()+7);}while(next<today);return next;
 }
 function inventoryDaysUntil(){const n=inventoryNextDate();return n?Math.ceil((n-inventoryDateOnly(new Date()))/86400000):null;}
-function renderInventoryTopbarReminder(){const d=inventoryDaysUntil();if(d===null||d>5)return '';const t=d<=0?'Инвентаризация сегодня':'До инвентаризации '+d+' '+(d===1?'день':d<5?'дня':'дней');return '<button class="tab" style="color:#FFD86B;background:rgba(255,216,107,.1);white-space:nowrap;" onclick="setTab(\\'inventory\\')">'+t+'</button>';}
+function renderInventoryTopbarReminder(){const d=inventoryDaysUntil();if(d===null||d>5)return '';const t=d<=0?'Инвентаризация сегодня':'До инвентаризации '+d+' '+(d===1?'день':d<5?'дня':'дней');return '<button class="tab" style="color:#FFD86B;background:rgba(255,216,107,.1);white-space:nowrap;" onclick="setTab(&quot;inventory&quot;)">'+t+'</button>';}
 function inventoryTrackedProducts(){const ids=new Set(state.inventoryConfig?.productIds||[]);return state.products.filter(p=>ids.has(p.id)&&productTracksStock(p));}
 function saveInventorySettings(){
  const frequency=document.getElementById('inventory-frequency')?.value||'weekly',startDate=document.getElementById('inventory-start-date')?.value||'',raw=document.getElementById('inventory-custom-dates')?.value||'';
