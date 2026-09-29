@@ -2955,7 +2955,6 @@ function renderCartPanel(shift){
           ${(i.selectedModifiers||[]).length?`<div class="cart-row-sub" style="color:var(--text);margin-top:5px;">↳ ${(i.selectedModifiers||[]).map(m=>escapeHtml(m.name)).join(' · ')}</div>`:''}
           ${i.comment ? `<div class="cart-row-sub" style="color:var(--text);margin-top:5px;">💬 ${escapeHtml(i.comment)}</div>` : ''}
         </div>
-        <button class="cart-row-remove" onclick="event.stopPropagation();removeFromCart('${escapeAttr(cartItemKey(i))}')" title="Удалить">✕</button>
       </div>
       <div class="cart-row-bottom">
         <div class="qty-stepper" onclick="event.stopPropagation()">
