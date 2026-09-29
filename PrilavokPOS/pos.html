@@ -2013,7 +2013,7 @@ function webOrderCartItems(o){
     if(matches.length!==1)throw new Error('Товар не найден или неоднозначен: '+i.product_name);
     const p=matches[0],qty=Number(i.quantity),price=Number(i.price??p.price);
     if(!Number.isFinite(qty)||qty<=0||!Number.isFinite(price)||price<0)throw new Error('Некорректная позиция: '+p.name);
-    return {productId:p.id,name:p.name,price,qty,comment:i.comment||''};
+    return {productId:p.id,name:p.name,price,qty,comment:i.comment||'',category:p.category||''};
   });
 }
 async function recoverWebAcceptanceJournal(){
@@ -2057,6 +2057,7 @@ async function acceptWebOrder(id){
     // WEB-заказ печатаем на кухню один раз в момент "Взять в работу".
     // Снимок printedItems сохраняет идемпотентность и позволяет позже допечатать только добавленные позиции.
     if(!record.parked.kitchenPrinted){
+      record.parked.items=(record.parked.items||[]).map(item=>({...item,category:item.category||getProduct(item.productId)?.category||''}));
       const deltaItems=kitchenPrintDelta(record.parked.items,record.parked.printedItems||[]);
       if(deltaItems.length && typeof window.printKitchenOrderNow==='function'){
         window.printKitchenOrderNow({...record.parked,items:deltaItems});
