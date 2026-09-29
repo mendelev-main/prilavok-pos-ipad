@@ -912,7 +912,7 @@ let state = {
   bookings: [],
   webEvents: [],
   webEventsSource: null,
-  inventoryConfig: {enabled:false,frequency:'weekly',customDates:[],productIds:[],lastCompletedAt:null},
+  inventoryConfig: {enabled:false,frequency:'monthly',productIds:[],lastCompletedAt:null},
   inventoryHistory: [],
   inventoryDraft: null,
   bookingDate: '',
@@ -995,7 +995,7 @@ async function loadAll(){
     loadKey('bookings', []),
     loadKey('webEvents', []),
     loadKey('posNavigation', {version:1,categories:[]}),
-    loadKey('inventoryConfig', {enabled:false,frequency:'weekly',customDates:[],productIds:[],lastCompletedAt:null}),
+    loadKey('inventoryConfig', {enabled:false,frequency:'monthly',productIds:[],lastCompletedAt:null}),
     loadKey('inventoryHistory', []),
     loadKey('inventoryDraft', null)
   ]);
@@ -1033,7 +1033,7 @@ async function loadAll(){
   state.hallTables = Array.isArray(hallTables) ? hallTables : [];
   state.bookings = Array.isArray(bookings) ? bookings : [];
   state.webEvents = Array.isArray(webEvents) ? webEvents : [];
-  state.inventoryConfig = Object.assign({enabled:false,frequency:'weekly',customDates:[],productIds:[],lastCompletedAt:null}, inventoryConfig || {});
+  state.inventoryConfig = Object.assign({enabled:false,frequency:'monthly',productIds:[],lastCompletedAt:null}, inventoryConfig || {});
   state.inventoryConfig.productIds = Array.isArray(state.inventoryConfig.productIds) ? state.inventoryConfig.productIds : [];
   state.inventoryConfig.customDates = Array.isArray(state.inventoryConfig.customDates) ? state.inventoryConfig.customDates : [];
   state.inventoryHistory = Array.isArray(inventoryHistory) ? inventoryHistory : [];
@@ -2450,44 +2450,51 @@ function employeeDisplayName(name){
 
 
 function inventoryDateOnly(value){if(!value)return null;const d=value instanceof Date?new Date(value):new Date(String(value).length===10?value+'T00:00:00':value);if(Number.isNaN(d.getTime()))return null;return new Date(d.getFullYear(),d.getMonth(),d.getDate());}
+function inventoryPeriodStart(date=new Date(),frequency=state.inventoryConfig?.frequency){
+ const d=inventoryDateOnly(date)||inventoryDateOnly(new Date());
+ if(frequency==='weekly'){const day=(d.getDay()+6)%7;const start=new Date(d);start.setDate(d.getDate()-day);return start;}
+ if(frequency==='quarterly')return new Date(d.getFullYear(),Math.floor(d.getMonth()/3)*3,1);
+ return new Date(d.getFullYear(),d.getMonth(),1);
+}
+function inventoryPeriodEnd(start,frequency=state.inventoryConfig?.frequency){
+ const s=inventoryDateOnly(start);if(!s)return null;
+ if(frequency==='weekly'){const e=new Date(s);e.setDate(e.getDate()+6);return e;}
+ if(frequency==='quarterly')return new Date(s.getFullYear(),s.getMonth()+3,0);
+ return new Date(s.getFullYear(),s.getMonth()+1,0);
+}
+function inventoryWindow(){
+ const c=state.inventoryConfig||{};if(!c.enabled||!c.productIds?.length)return null;
+ const frequency=['weekly','monthly','quarterly'].includes(c.frequency)?c.frequency:'monthly',today=inventoryDateOnly(new Date()),start=inventoryPeriodStart(today,frequency),windowEnd=new Date(start);windowEnd.setDate(start.getDate()+6);
+ const periodEnd=inventoryPeriodEnd(start,frequency);if(windowEnd>periodEnd)windowEnd.setTime(periodEnd.getTime());
+ const last=inventoryDateOnly(c.lastCompletedAt),completed=!!(last&&last>=start&&last<=periodEnd);
+ return {frequency,start,end:windowEnd,periodEnd,today,active:today>=start&&today<=windowEnd&&!completed,completed};
+}
 function inventoryNextDate(){
- const c=state.inventoryConfig||{};if(!c.enabled||!c.productIds?.length)return null;const today=inventoryDateOnly(new Date());
- if(c.frequency==='custom')return (c.customDates||[]).map(inventoryDateOnly).filter(d=>d&&d>=today).sort((a,b)=>a-b)[0]||null;
- const day=Math.max(1,Math.min(31,Number(c.monthDay)||1));
- const makeMonthlyDate=(year,month)=>new Date(year,month,Math.min(day,new Date(year,month+1,0).getDate()));
- let next=makeMonthlyDate(today.getFullYear(),today.getMonth());
- const last=inventoryDateOnly(c.lastCompletedAt);
- const completedThisScheduledPeriod=last&&last.getFullYear()===today.getFullYear()&&last.getMonth()===today.getMonth()&&last>=next;
- if(next<today||completedThisScheduledPeriod){
-   const y=today.getMonth()===11?today.getFullYear()+1:today.getFullYear(),m=(today.getMonth()+1)%12;next=makeMonthlyDate(y,m);
- }
+ const w=inventoryWindow();if(!w)return null;if(w.active)return w.start;
+ const next=new Date(w.start);
+ if(w.frequency==='weekly')next.setDate(next.getDate()+7);
+ else if(w.frequency==='quarterly')next.setMonth(next.getMonth()+3);
+ else next.setMonth(next.getMonth()+1);
  return next;
 }
-function inventoryDaysUntil(){const n=inventoryNextDate();return n?Math.ceil((n-inventoryDateOnly(new Date()))/86400000):null;}
-function renderInventoryTopbarReminder(){const d=inventoryDaysUntil();if(!state.inventoryDraft&&(d===null||d>5))return '';const t=state.inventoryDraft?'Инвентаризация · продолжить':(d<=0?'Инвентаризация сегодня':'До инвентаризации '+d+' '+(d===1?'день':d<5?'дня':'дней'));return '<button class="tab '+(state.tab==='inventoryWork'?'active':'')+'" style="color:#FFD86B;background:rgba(255,216,107,.1);white-space:nowrap;" onclick="openInventoryWork()">'+t+'</button>';}
+function inventoryDaysUntil(){const w=inventoryWindow();if(w?.active)return 0;const n=inventoryNextDate();return n?Math.ceil((n-inventoryDateOnly(new Date()))/86400000):null;}
+function renderInventoryTopbarReminder(){const w=inventoryWindow();if(!state.inventoryDraft&&!w?.active)return '';return '<button class="tab '+(state.tab==='inventoryWork'?'active':'')+'" style="color:#FFD86B;background:rgba(255,216,107,.1);white-space:nowrap;" onclick="openInventoryWork()">Инвентаризация</button>';}
 function inventoryTrackedProducts(){const ids=new Set(state.inventoryConfig?.productIds||[]);return state.products.filter(p=>ids.has(p.id)&&productTracksStock(p));}
-function setInventoryFrequency(v){state.inventoryConfig.frequency=v==='custom'?'custom':'monthly';render();}
-function addInventoryDate(){
- const input=document.getElementById('inventory-date-picker');const value=input?.value;if(!inventoryDateOnly(value)){flash('Выберите дату');return;}
- const dates=new Set(state.inventoryConfig.customDates||[]);dates.add(value);state.inventoryConfig.customDates=[...dates].sort();render();
-}
-function removeInventoryDate(value){state.inventoryConfig.customDates=(state.inventoryConfig.customDates||[]).filter(x=>x!==value);render();}
+function setInventoryFrequency(v){state.inventoryConfig.frequency=['weekly','monthly','quarterly'].includes(v)?v:'monthly';render();}
 function filterInventoryProducts(value){
  const q=String(value||'').trim().toLocaleLowerCase('ru');document.querySelectorAll('[data-inventory-product-row]').forEach(row=>{row.style.display=!q||String(row.dataset.inventoryProductName||'').includes(q)?'flex':'none';});
 }
 function saveInventorySettings(){
  const productIds=[...document.querySelectorAll('[data-inventory-product]:checked')].map(x=>x.value);
  if(!productIds.length){flash('Выберите хотя бы один товар');return;}
- const frequency=state.inventoryConfig.frequency==='custom'?'custom':'monthly';
- const monthDay=Math.max(1,Math.min(31,Number(document.getElementById('inventory-month-day')?.value||state.inventoryConfig.monthDay||1)));
- const customDates=[...(state.inventoryConfig.customDates||[])].filter(x=>inventoryDateOnly(x)).sort();
- if(frequency==='custom'&&!customDates.length){flash('Добавьте хотя бы одну дату');return;}
- state.inventoryConfig={...state.inventoryConfig,enabled:true,frequency,monthDay,customDates,productIds};
+ const frequency=['weekly','monthly','quarterly'].includes(state.inventoryConfig.frequency)?state.inventoryConfig.frequency:'monthly';
+ state.inventoryConfig={...state.inventoryConfig,enabled:true,frequency,productIds};
+ delete state.inventoryConfig.monthDay;delete state.inventoryConfig.customDates;
  saveKey('inventoryConfig',state.inventoryConfig);render();flash('Настройки инвентаризации сохранены');
 }
 function startInventory(){
  const ps=inventoryTrackedProducts();if(!ps.length){flash('Нет товаров для инвентаризации');return false;}
- state.inventoryDraft={id:uid(),startedAt:Date.now(),scheduledDate:inventoryNextDate()?.getTime()||Date.now(),items:ps.map(p=>({productId:p.id,name:p.name,unit:stockUnit(p),expected:roundStockQty(Number(p.stock)||0),actual:null}))};
+ state.inventoryDraft={id:uid(),startedAt:Date.now(),scheduledDate:(inventoryWindow()?.start||inventoryDateOnly(new Date())).getTime(),items:ps.map(p=>({productId:p.id,name:p.name,unit:stockUnit(p),expected:roundStockQty(Number(p.stock)||0),actual:null}))};
  saveKey('inventoryDraft',state.inventoryDraft);return true;
 }
 function openInventoryWork(){if(!state.inventoryDraft&&!startInventory())return;state.tab='inventoryWork';render();}
@@ -2529,19 +2536,16 @@ function showInventorySummary(){
 function confirmCompleteInventory(){
  const d=state.inventoryDraft;if(!d)return;const completedAt=Date.now(),summary=inventorySummaryData();
  state.inventoryHistory.unshift({...d,completedAt,estimatedLoss:summary.loss,items:d.items.map(x=>({...x}))});state.inventoryConfig.lastCompletedAt=completedAt;
- if(state.inventoryConfig.frequency==='custom'){const done=inventoryDateOnly(d.scheduledDate);state.inventoryConfig.customDates=(state.inventoryConfig.customDates||[]).filter(x=>inventoryDateOnly(x)?.getTime()!==done.getTime());}
  state.inventoryDraft=null;state.tab='pos';saveKey('products',state.products);saveKey('inventoryHistory',state.inventoryHistory);saveKey('inventoryConfig',state.inventoryConfig);saveKey('inventoryDraft',null);closeModal();render();flash('Инвентаризация завершена');
 }
 function renderInventoryScreen(){
- const c=state.inventoryConfig||{};if(!['monthly','custom'].includes(c.frequency))c.frequency='monthly';if(!c.monthDay)c.monthDay=1;
- const tracked=state.products.filter(productTracksStock).sort((a,b)=>a.name.localeCompare(b.name,'ru')),next=inventoryNextDate(),days=inventoryDaysUntil();
+ const c=state.inventoryConfig||{};if(!['weekly','monthly','quarterly'].includes(c.frequency))c.frequency='monthly';
+ const tracked=state.products.filter(productTracksStock).sort((a,b)=>a.name.localeCompare(b.name,'ru')),w=inventoryWindow(),next=inventoryNextDate();
  const rows=tracked.map(p=>`<label data-inventory-product-row data-inventory-product-name="${escapeAttr(String(p.name||'').toLocaleLowerCase('ru'))}" class="list-row" style="cursor:pointer;"><input data-inventory-product type="checkbox" value="${escapeAttr(p.id)}" ${(c.productIds||[]).includes(p.id)?'checked':''} style="width:20px;height:20px;"><div style="flex:1;"><div class="list-row-name">${escapeHtml(p.name)}</div><div class="setting-sub">Остаток: ${stockQtyText(p.stock)} ${unitLabel(stockUnit(p))}</div></div></label>`).join('');
-
- const dates=(c.customDates||[]).map(x=>`<span class="badge" style="display:inline-flex;align-items:center;gap:7px;padding:7px 10px;">${inventoryDateOnly(x)?.toLocaleDateString('ru-RU')||escapeHtml(x)}<button type="button" onclick="removeInventoryDate('${escapeAttr(x)}')" style="font-size:17px;line-height:1;color:inherit;">×</button></span>`).join('');
+ const scheduleText=w?.active?`Окно инвентаризации открыто до ${w.end.toLocaleDateString('ru-RU')} включительно.`:w?.completed?'Инвентаризация в текущем периоде завершена.':next?`Следующее окно начнётся ${next.toLocaleDateString('ru-RU')}.`:'После сохранения настроек окно будет открываться автоматически.';
  return `<div class="screen content-screen ${state.tab==='inventory'?'active':''}"><div class="content-head"><div style="display:flex;align-items:center;gap:12px;"><button class="btn btn-secondary" style="width:auto;padding:10px 16px;" onclick="state.settingsAdminPanel=true;setTab('settings')">← Назад</button><div class="content-title">Инвентаризация</div></div></div><div style="overflow:auto;min-height:0;flex:1;padding-right:4px;">
- <div class="card" style="margin-bottom:16px;"><div style="font-size:17px;font-weight:850;">График</div><div class="setting-sub" style="margin:4px 0 16px;">Следующая инвентаризация: <b>${next?next.toLocaleDateString('ru-RU'):'не назначена'}</b>${days!==null&&days<=5?' · '+(days<=0?'сегодня':'через '+days+' дн.') : ''}</div>
- <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;"><button class="btn ${c.frequency==='monthly'?'btn-primary':'btn-secondary'}" onclick="setInventoryFrequency('monthly')">Каждый месяц</button><button class="btn ${c.frequency==='custom'?'btn-primary':'btn-secondary'}" onclick="setInventoryFrequency('custom')">Назначить даты</button></div>
- ${c.frequency==='monthly'?`<div class="field" style="max-width:260px;margin:0;"><label>День месяца</label><input id="inventory-month-day" type="number" min="1" max="31" value="${escapeAttr(String(c.monthDay||1))}"></div>`:`<div><div style="display:flex;gap:10px;align-items:end;"><div class="field" style="flex:1;margin:0;"><label>Дата инвентаризации</label><input id="inventory-date-picker" type="date"></div><button class="btn btn-secondary" style="width:auto;min-height:44px;" onclick="addInventoryDate()">Добавить дату</button></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">${dates||'<span class="setting-sub">Даты пока не назначены</span>'}</div></div>`}</div>
+ <div class="card" style="margin-bottom:16px;"><div style="font-size:17px;font-weight:850;">График</div><div class="setting-sub" style="margin:4px 0 16px;">${scheduleText} На проведение даётся 7 дней с начала периода.</div>
+ <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;"><button class="btn ${c.frequency==='weekly'?'btn-primary':'btn-secondary'}" onclick="setInventoryFrequency('weekly')">Раз в неделю</button><button class="btn ${c.frequency==='monthly'?'btn-primary':'btn-secondary'}" onclick="setInventoryFrequency('monthly')">Раз в месяц</button><button class="btn ${c.frequency==='quarterly'?'btn-primary':'btn-secondary'}" onclick="setInventoryFrequency('quarterly')">Раз в квартал</button></div></div>
  <div class="card" style="margin-bottom:16px;"><div style="font-size:17px;font-weight:850;">Товары для инвентаризации</div><div class="setting-sub" style="margin:4px 0 12px;">Выберите товары, которые нужно пересчитывать. Товары с остатком ∞ исключены.</div><input type="search" placeholder="Поиск товара" oninput="filterInventoryProducts(this.value)" style="width:100%;padding:11px 14px;border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--ink);font:inherit;margin-bottom:10px;"><div style="max-height:360px;overflow:auto;border-top:1px solid var(--border);">${rows||'<div class="center-note">Нет товаров с учётом остатков</div>'}</div><button class="btn btn-primary" style="width:100%;margin-top:14px;" onclick="saveInventorySettings()">Сохранить настройки</button></div>
  <div class="card"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;"><div style="font-size:17px;font-weight:850;">История</div></div>${state.inventoryHistory.length?state.inventoryHistory.slice(0,50).map(r=>`<div class="list-row"><div><div class="list-row-name">${fmtDate(r.completedAt)}</div><div class="setting-sub">${r.items.length} товаров · расхождений: ${r.items.filter(x=>Number(x.difference)!==0).length} · недостач: ${r.items.filter(x=>Number(x.difference)<0).length}</div></div></div>`).join(''):'<div class="center-note">Инвентаризаций пока не было</div>'}</div></div></div>`;
 }
