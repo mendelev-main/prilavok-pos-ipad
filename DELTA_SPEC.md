@@ -1090,7 +1090,7 @@ ETA нужен состав производства и статусы, а не 
 
 Статусы этого плана выставляются только после фактической проверки. Реальный iPad intentionally оставлен на финальный этап; до него выполняются статические, deterministic и backend/integration проверки.
 
-1. ⬜ **R1 — Сквозной аудит P1–P9.** Проверить цепочку Product prep → Cart → Production Order → Kitchen/Bar → operational snapshot → backend state → ETA → web → terminal production history → calibration analytics. Отдельно: modifiers, SCHEDULED, mixed stations, READY/CANCELLED, offline/stale.
+1. ✅ **R1 — Сквозной аудит P1–P9.** Проверена цепочка Product prep → Cart → Production Order → Kitchen/Bar → operational snapshot → backend state → ETA → web → terminal production history → calibration analytics. Исправлены независимые station states mixed-заказов, исключение READY station из load, difficulty workload semantics, station actuals/history, freshness snapshot и разделение current queue / future reservations без двойного учёта. Modifiers, SCHEDULED, mixed stations, READY/CANCELLED и stale contract сверены статически; runtime/integration остаются в R4–R10.
 2. ⬜ **R2 — Надёжность POS → Backend (P5).** Fresh heartbeat + fresh snapshot, защита от out-of-order snapshot, coalescing/outbox/reconnect. Никогда не использовать stale state для публичного ETA.
 3. ⬜ **R3 — Надёжность Backend → POS web orders (P6).** Durable backend order, local save before ACK, idempotency, reconnect retry pending ACK без обязательного restart, отсутствие дублей.
 4. ⬜ **R4 — Supabase operational storage.** Проверить/применить migration `operational_states`, структуру, RLS/service-role access и timestamps.
