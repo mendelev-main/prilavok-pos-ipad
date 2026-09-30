@@ -1029,16 +1029,17 @@ ETA нужен состав производства и статусы, а не 
 
 Контроль P5: код POS и backend реализован. Перед `✅ DONE` нужно применить миграцию `20260930153000_operational_states.sql` в Supabase и включить сценарии operational channel в единый финальный regression/smoke test (включая разрыв/восстановление сети).
 
-**P6 — Надёжная доставка web-order → POS — ⬜ TODO**
-1. Durable save backend.
-2. Transport states.
-3. ACK только после local commit.
-4. Idempotency.
-5. Missed-order recovery.
-6. Reconnect.
-7. Transport status отдельно от production status.
+**P6 — Надёжная доставка web-order → POS — 🟡 IMPLEMENTATION DONE / FINAL INTEGRATION TEST PENDING**
+1. ✅ Backend durable сохраняет `orders + order_items` в Supabase до доставки через SSE.
+2. ✅ Transport lifecycle разделён: backend `new → accepted`, POS acceptance journal `prepared → local → confirmed`.
+3. ✅ ACK `/api/orders/:id/accept` отправляется только после durable local commit в `parked` и acceptance journal.
+4. ✅ Idempotency: один `webOrderId` не создаёт второй parked order; повторный backend accept возвращает alreadyAccepted.
+5. ✅ Missed-order recovery: SSE всегда выбирает durable backend orders со status=`new`, поэтому reconnect возвращает пропущенные заказы.
+6. ✅ После restart POS восстанавливает acceptance journal и best-effort повторяет незавершённый ACK для уже локально сохранённого заказа.
+7. ✅ Transport status backend/journal не используется как production status; Production Order lifecycle остаётся отдельным.
+8. ✅ SSE теперь проверяет существующий активный `deviceKey`, а не только наличие query parameter.
 
-Контроль P6: reconnect не теряет и не дублирует web-заказы.
+Контроль P6: логика reconnect/idempotency/ACK реализована; перед полным `✅ DONE` остаётся integration regression с реальным backend/iPad.
 
 **P7 — Backend ETA v1 — ⬜ TODO**
 1. `POST /api/eta/estimate`.
