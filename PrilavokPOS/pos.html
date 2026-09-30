@@ -3737,6 +3737,25 @@ function setProductionStatusFromParked(id,status){
   updateProductionStatus(production.id,status);saveKey('parked',state.parked);openParkedModal();
 }
 function activeProductionOrders(){return state.productionOrders.filter(o=>o.status!=='READY'&&o.status!=='CANCELLED').sort((a,b)=>(a.requestedReadyAt||a.queuedAt)-(b.requestedReadyAt||b.queuedAt));}
+function productionHistorySummary(limit=50){
+  return (state.productionHistory||[]).slice(0,limit).map(record=>({productionOrderId:record.productionOrderId,status:record.status,mode:record.mode,criticalStation:record.predictionSnapshot?.criticalStation||null,predictedMinutes:record.predictionSnapshot?.predictedMinutes??null,normativeMinutes:record.normativeSnapshot?.normativeMinutes??null,actualPreparationMinutes:record.actual?.preparationMinutes??null,predictionErrorMinutes:record.predictionErrorMinutes??null,startedAt:record.startedAt||null,readyAt:record.readyAt||null}));
+}
+function runProductionHistoryTests(){
+  const base=Date.UTC(2026,0,1,12,0,0),scheduled={mode:'SCHEDULED',queuedAt:base,startedAt:base+5*60*60000,readyAt:base+5*60*60000+12*60000};
+  const actual=productionActualMetrics(scheduled),checks=[];
+  checks.push({name:'scheduled waiting excluded from preparation duration',ok:actual.preparationMinutes===12,details:JSON.stringify(actual)});
+  checks.push({name:'queue duration remains separately observable',ok:actual.queueMinutes===300,details:JSON.stringify(actual)});
+  const completed={id:'history-test',status:'READY',mode:'ASAP',items:[],queuedAt:base,startedAt:base+60000,readyAt:base+6*60000};
+  const before=state.productionHistory.length,existing=state.productionHistory.find(x=>x.productionOrderId===completed.id);
+  if(!existing){ensureProductionHistoryRecord(completed);ensureProductionHistoryRecord(completed);}
+  const count=state.productionHistory.filter(x=>x.productionOrderId===completed.id).length;
+  checks.push({name:'history is idempotent by productionOrderId',ok:count===1,details:'count='+count});
+  if(!existing){state.productionHistory=state.productionHistory.filter(x=>x.productionOrderId!==completed.id);saveKey('productionHistory',state.productionHistory);}
+  return {ok:checks.every(x=>x.ok),passed:checks.filter(x=>x.ok).length,total:checks.length,checks,historySizeBefore:before};
+}
+window.__runProductionHistoryTests=runProductionHistoryTests;
+window.__productionHistorySummary=productionHistorySummary;
+
 function productionStationItems(order,station){
   const rows=[];
   (order?.items||[]).forEach(item=>{
