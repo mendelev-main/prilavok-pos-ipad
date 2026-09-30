@@ -1465,10 +1465,10 @@ Exact SQL constraints/indexes/migrations are fixed during P1/P2, but uniqueness 
 
 1. ✅ **P1 — Customer foundation.** Реализованы `customers`, unique normalized phone/Telegram, `orders.customer_id`, RLS/server-only access, verified WEB resolve/create и regression test. Live E2E проверка отложена до общего тестового прохода по решению владельца.
 2. ✅ **P2 — Loyalty engine.** Реализованы programs, earning/reward sets, ledger, DB balance projection, threshold/remainder/multiple rewards, server-side reward validation и stable idempotency; unit tests добавлены. Live E2E входит в общий финальный прогон.
-3. 🟡 **P3 — POS customer UX.** Реализованы backend search/create/detail endpoints, выбор/создание клиента в текущем чеке, загрузка progress/rewards и выбор количества reward. Добавлены POS regression tests; до DONE остаётся корректное ценовое применение выбранного подарка и полировка UX.
-4. 🟡 **P4 — Sale finalization.** POS публикует loyalty только из `finalizePayment`; backend применяет earn/grant/redeem с idempotency key, повторная отправка безопасна. Pending sync сохраняется в локальном чеке при недоступности backend; требуется завершить retry/reversal.
-5. ⬜ **P5 — WEB + Telegram.** Resolve/create customer after verified phone, Telegram linkage and loyalty notifications.
-6. ⬜ **P6 — Admin UI.** Customers, customer card/history, loyalty program constructor, manual adjustment/audit.
+3. ✅ **P3 — POS customer UX.** Реализованы поиск/создание/привязка клиента, прогресс/подарки в текущем чеке, выбор reward и отдельная loyalty-компенсация в сумме чека. Добавлены regression tests; визуальная приёмка входит в общий финальный прогон.
+4. ✅ **P4 — Sale finalization.** Loyalty публикуется только после успешной оплаты; earn/grant/redeem idempotent, pending sync повторяется после восстановления сети, полный возврат инициирует idempotent REVERSAL. Regression coverage добавлен; live E2E отложен до общего прогона.
+5. 🟡 **P5 — WEB + Telegram.** Verified WEB checkout уже resolve/create клиента и безопасно связывает подтверждённый Telegram ID; order получает `customer_id`. Loyalty-уведомления Telegram ещё требуется подключить к фактическим ledger events.
+6. 🟡 **P6 — Admin UI.** В Панель администратора добавлены «Клиенты» и «Программа лояльности»: поиск/карточка клиента, progress/rewards, список программ и создание N→reward с товарами. Требуется добавить ledger history, manual adjustment и расширить редактирование earning/reward sets.
 7. ⬜ **P7 — Reliability + analytics readiness.** Reversal/refund, offline rules, concurrency/idempotency tests, regression and analytics events.
 
 **Порядок реализации:** P1 → P2 → P3 → P4 → P5 → P6 → P7. Этап считается DONE только после implementation + regression/acceptance для его критических сценариев.
