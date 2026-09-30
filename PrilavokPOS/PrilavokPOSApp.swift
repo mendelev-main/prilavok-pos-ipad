@@ -114,10 +114,8 @@ final class PrilavokPOSApp: UIResponder, UIApplicationDelegate {
     }
 }
 
-final class POSViewController: UIViewController, WKScriptMessageHandler, PHPickerViewControllerDelegate, WKNavigationDelegate {
+final class POSViewController: UIViewController, WKScriptMessageHandler, PHPickerViewControllerDelegate {
     private var webView: WKWebView!
-    private let startupLabel = UILabel()
-    private var startupWatchdog: DispatchWorkItem?
     private let networkPrinter = BluetoothPrinterManager()
 
     override func loadView() {
@@ -137,29 +135,17 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
         web.scrollView.alwaysBounceHorizontal = false
         web.backgroundColor = .white
         web.isOpaque = true
-        web.navigationDelegate = self
         webView = web
 
         let container = UIView()
         container.backgroundColor = .systemBackground
         container.addSubview(web)
-        startupLabel.text = "M POS · загрузка…"
-        startupLabel.textAlignment = .center
-        startupLabel.font = .systemFont(ofSize: 17, weight: .semibold)
-        startupLabel.textColor = .secondaryLabel
-        startupLabel.backgroundColor = .systemBackground
-        container.addSubview(startupLabel)
-        startupLabel.translatesAutoresizingMaskIntoConstraints = false
         web.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             web.leadingAnchor.constraint(equalTo: container.safeAreaLayoutGuide.leadingAnchor),
             web.trailingAnchor.constraint(equalTo: container.safeAreaLayoutGuide.trailingAnchor),
             web.topAnchor.constraint(equalTo: container.safeAreaLayoutGuide.topAnchor),
-            web.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            startupLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            startupLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            startupLabel.topAnchor.constraint(equalTo: container.topAnchor),
-            startupLabel.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+            web.bottomAnchor.constraint(equalTo: container.bottomAnchor)
         ])
         view = container
     }
@@ -177,52 +163,7 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
             webView.loadHTMLString("<html><body style='font-family:-apple-system;text-align:center;padding:40px'><h2>Ошибка</h2><p>\(message)</p></body></html>", baseURL: nil)
             return
         }
-        // Give WebKit one stable read scope for the complete application bundle.
-        // pos.html loads sibling JS plus Web/js/* resources; allowing only the HTML
-        // parent has produced sandbox-extension failures on physical iPad builds.
-        webView.loadFileURL(url, allowingReadAccessTo: Bundle.main.bundleURL)
-        armStartupWatchdog()
-    }
-
-    private func armStartupWatchdog() {
-        startupWatchdog?.cancel()
-        let work = DispatchWorkItem { [weak self] in
-            guard let self = self else { return }
-            self.webView.evaluateJavaScript("document.getElementById('app')?.innerText?.trim() || ''") { value, error in
-                if let error = error {
-                    self.showStartupFailure("JavaScript не запустился: \(error.localizedDescription)")
-                } else if (value as? String ?? "").isEmpty {
-                    self.showStartupFailure("Интерфейс не запустился. Перезапустите приложение; если ошибка повторится, сообщите этот экран разработчику.")
-                }
-            }
-        }
-        startupWatchdog = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 8, execute: work)
-    }
-
-    private func showStartupFailure(_ message: String) {
-        startupLabel.text = "M POS\n\n" + message
-        startupLabel.numberOfLines = 0
-        startupLabel.textColor = .label
-        startupLabel.isHidden = false
-    }
-
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        webView.evaluateJavaScript("document.getElementById('app')?.innerText?.trim() || ''") { [weak self] value, _ in
-            guard let self = self else { return }
-            if !(value as? String ?? "").isEmpty {
-                self.startupWatchdog?.cancel()
-                self.startupLabel.isHidden = true
-            }
-        }
-    }
-
-    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        showStartupFailure("Не удалось открыть интерфейс: \(error.localizedDescription)")
-    }
-
-    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        showStartupFailure("Не удалось загрузить интерфейс: \(error.localizedDescription)")
+        webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
     }
 
     @objc private func pauseAvailability() {
