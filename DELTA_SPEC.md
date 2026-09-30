@@ -957,193 +957,122 @@ ETA нужен состав производства и статусы, а не 
 
 **Reconnect:** POS получает missed orders идемпотентно и отправляет свежий snapshot; только после этого live ETA снова доступен.
 
-### 29. Этапы реализации
+### 29. Пошаговый план реализации
 
-**P1 — завершить product prep model**
-- `basePrepMinutes`;
-- `none`/no-prep;
-- validation;
-- snapshots в cart/order lines;
-- миграция старых товаров без потери данных.
+Реализация идёт снизу вверх: сначала POS корректно моделирует производство полностью локально, затем появляется неблокирующий transport, и только после этого backend/web используют эти данные.
 
-**P2 — Production State локально**
-- QUEUED/IN_PROGRESS/READY/CANCELLED;
-- timestamps;
-- ASAP/SCHEDULED;
-- requestedReadyAt;
-- корректное определение current/future load;
-- restart persistence.
+**P1 — Данные товара и snapshot строки заказа**
+1. Добавить `basePrepMinutes`.
+2. Сохранить `prepStation` и `prepDifficulty`.
+3. Добавить `none/no-prep`.
+4. Validation и backward-compatible миграцию.
+5. При добавлении товара фиксировать prep snapshot строки.
+6. Фиксировать production contribution модификаторов.
+7. Изменение карточки товара не меняет уже созданную строку.
 
-**P3 — локальный Production Load Engine**
-- station timelines;
-- batch/quantity policy v1;
-- work points;
-- scheduled reservation;
-- deterministic tests;
-- аналитический live UI переводится с временной v0 формулы на engine.
+Контроль P1: всё работает offline, старые товары/чеки не ломаются, backend не нужен.
 
-**P4 — Operational outbox + heartbeat**
-- bounded/coalesced local outbox;
-- authenticated endpoint;
-- retry/backoff;
-- freshness;
-- schema/version;
-- отсутствие блокировки POS.
+**P2 — Локальная модель Production Order**
+1. `QUEUED / IN_PROGRESS / READY / CANCELLED`.
+2. Production timestamps.
+3. `ASAP / SCHEDULED` + `requestedReadyAt`.
+4. Правила попадания локальных/WEB заказов в production queue.
+5. Scheduled-заказ далеко в будущем не входит в current load.
+6. Persistence после restart.
+7. Быстрый POS UI статусов.
 
-**P5 — durable web-order delivery**
-- backend transport states;
-- ACK after local commit;
-- missed-order recovery;
-- idempotency;
-- reconnect tests.
+Контроль P2: restart восстанавливает очередь; READY/CANCELLED не создают load; scheduled отделён от current load.
 
-**P6 — ETA backend v1**
-- public estimate endpoint;
-- freshness gate;
-- station timelines;
-- ranges;
-- `available=false` при stale/missing POS;
-- никакого fallback ETA.
+**P3 — Production Load Engine v1 внутри POS**
+1. Разбиение по станциям.
+2. Work points.
+3. Base duration.
+4. Batch/quantity policy.
+5. Независимые timelines Бара/Кухни.
+6. Current queue.
+7. Future scheduled reservations.
+8. `criticalStation`.
+9. NORMAL/ELEVATED/HIGH.
+10. `delayingStations`.
+11. Hypothetical cart calculation.
+12. Deterministic unit tests.
+13. Перевести live-аналитику с временной v0 формулы на engine.
 
-**P7 — Web UX**
-- ETA в корзине/checkout;
-- customer-relevant NORMAL/ELEVATED/HIGH;
-- возвращать `loadedStations` только для участвующих станций, реально влияющих на ожидание;
-- для одной HIGH станции называть её: «Кухня сейчас сильно загружена» / «Бар сейчас сильно загружен»;
-- если существенная нагрузка одновременно у Бара и Кухни mixed order, сообщать «Сейчас высокая загрузка кухни и бара»;
-- не показывать загрузку станций, не участвующих в корзине;
-- «Не смогли рассчитать примерное время приготовления» при unavailable;
-- scheduled ETA;
-- отдельный ordering availability contract.
+Контроль P3: POS без сети знает фактическую загрузку, задерживающую станцию и прогноз новой корзины. После P3 обязательна проверка на iPad.
 
-**P8 — фактическая аналитика**
-- historical production events;
-- median/P75/P90;
-- predicted vs actual;
-- calibration report;
-- только затем controlled adaptation.
+**P4 — Сбор фактических production timestamps**
+1. История production orders.
+2. Normative prep snapshot.
+3. Actual started/ready.
+4. Load context.
+5. Данные predicted-vs-actual.
 
-### 29A. Порядок практической реализации
+Контроль P4: завершённый заказ даёт пригодные данные для будущей калибровки; scheduled waiting не считается временем приготовления.
 
-Работу вести небольшими вертикальными этапами. После каждого этапа main должен оставаться рабочим на iPad; нельзя одновременно переписывать POS, backend и web.
+**P5 — Неблокирующий POS → backend operational channel**
+1. Device/location identity.
+2. Schema version.
+3. Heartbeat.
+4. Operational snapshot.
+5. Bounded/coalesced outbox.
+6. Короткий timeout.
+7. Retry/backoff.
+8. Self-healing snapshot.
+9. Authentication.
+10. Backend freshness state.
 
-**Шаг 1 — Product preparation model в POS**
-- добавить `basePrepMinutes` в карточку товара;
-- сохранить существующие `prepStation` и `prepDifficulty`;
-- добавить безопасные defaults/migration для старых товаров;
-- validation UI;
-- подготовить `none`/«Без приготовления», если это не ломает текущую маршрутизацию печати;
-- никакой сети на этом шаге.
+Контроль P5: отключение сети никак не меняет кассовую работу; после восстановления backend получает свежий state.
 
-Результат: каждый приготовляемый товар имеет station + difficulty + норматив времени.
+**P6 — Надёжная доставка web-order → POS**
+1. Durable save backend.
+2. Transport states.
+3. ACK только после local commit.
+4. Idempotency.
+5. Missed-order recovery.
+6. Reconnect.
+7. Transport status отдельно от production status.
 
-**Шаг 2 — Prep snapshot в строке заказа**
-- при добавлении товара фиксировать его production-параметры в строке;
-- snapshot выбранных производственных модификаторов;
-- старые сохранённые заказы продолжают открываться;
-- изменение карточки товара не меняет уже созданный заказ.
+Контроль P6: reconnect не теряет и не дублирует web-заказы.
 
-Результат: расчёт воспроизводим и не зависит от будущего редактирования каталога.
+**P7 — Backend ETA v1**
+1. `POST /api/eta/estimate`.
+2. Freshness gate.
+3. Hypothetical cart.
+4. Station timelines.
+5. `criticalStation`.
+6. `delayingStations`.
+7. NORMAL/ELEVATED/HIGH.
+8. min/max range.
+9. `available=false` при stale/missing/incompatible POS.
+10. Никакого fallback ETA.
 
-**Шаг 3 — Локальный Production State**
-- ввести QUEUED/IN_PROGRESS/READY/CANCELLED;
-- timestamps;
-- ASAP/SCHEDULED и requestedReadyAt;
-- определить точный момент попадания локального и web-заказа в production queue;
-- сохранить всё локально и восстановить после restart.
+Контроль P7: без свежего POS backend принципиально не выдаёт минуты.
 
-Результат: POS впервые достоверно знает не просто «отложенные», а фактическую производственную очередь.
+**P8 — Web UX**
+- NORMAL → только диапазон.
+- ELEVATED kitchen → «Сейчас повышенная загрузка кухни».
+- ELEVATED bar → «Сейчас повышенная загрузка бара».
+- HIGH kitchen → «Кухня сейчас сильно загружена» + «Время ожидания увеличено».
+- HIGH bar → «Бар сейчас сильно загружен» + «Время ожидания увеличено».
+- HIGH kitchen+bar → «Сейчас высокая загрузка кухни и бара» + «Время ожидания увеличено».
+- unavailable → «Не смогли рассчитать примерное время приготовления».
+- внутренние work points/heartbeat/iPad state клиенту не показываются.
 
-**Шаг 4 — Production Load Engine v1 только на iPad**
-- чистый локальный модуль;
-- Бар/Кухня отдельно;
-- work points;
-- base duration;
-- quantity/batch policy;
-- scheduled future windows;
-- critical station;
-- NORMAL/ELEVATED/HIGH;
-- loadedStations;
-- unit tests на типовые очереди.
+Контроль P8: сообщение относится именно к корзине пользователя; mixed order называет фактическую задерживающую станцию/станции.
 
-Результат: POS может локально объяснимо рассчитать текущую загрузку и ETA без backend.
+**P9 — Аналитика и калибровка**
+1. Median/P75/P90.
+2. Товар/станция/сложность/размер заказа.
+3. Load buckets.
+4. Predicted vs actual.
+5. Попадание в ETA range.
+6. Рекомендации по `basePrepMinutes`.
+7. Ручное подтверждение корректировок.
+8. Только после достаточной выборки — controlled automatic adaptation.
 
-**Шаг 5 — Обновить POS Analytics**
-- существующий временный блок `qty × difficulty` переключить на новый Engine;
-- показывать нагрузку Бар/Кухня;
-- current active work;
-- scheduled future load;
-- внутренний ETA/диагностику при необходимости;
-- проверить, что analytics render не тормозит кассу.
+Контроль P9: изменения модели основаны на измеряемой истории.
 
-Результат: модель можно проверить глазами на реальных заказах до подключения web.
-
-**Шаг 6 — Operational outbox и heartbeat**
-- bounded local outbox;
-- snapshot coalescing;
-- heartbeat;
-- retry/backoff;
-- короткие timeout;
-- authenticated backend endpoint;
-- backend freshness state;
-- никаких await в критическом POS flow.
-
-Результат: backend знает свежую производственную картину, но POS от него не зависит.
-
-**Шаг 7 — Надёжность backend → POS web-order**
-- durable web-order;
-- delivery event;
-- ACK только после локального commit;
-- idempotency;
-- missed-order recovery;
-- reconnect.
-
-Результат: ETA строится поверх надёжной доставки, а не поверх best-effort SSE.
-
-**Шаг 8 — Backend ETA v1**
-- endpoint estimate;
-- freshness gate;
-- hypothetical cart поверх свежего POS snapshot;
-- station timelines;
-- criticalStation/loadedStations;
-- NORMAL/ELEVATED/HIGH;
-- диапазон ETA;
-- unavailable без fallback при stale POS.
-
-Результат: backend способен ответить web-клиенту, но frontend ещё ничего не рассчитывает сам.
-
-**Шаг 9 — Web UI**
-- запрос ETA при изменении корзины с debounce;
-- повторный расчёт перед подтверждением;
-- NORMAL: только диапазон;
-- ELEVATED/HIGH: назвать конкретно Кухню/Бар/обе станции;
-- unavailable: «Не смогли рассчитать примерное время приготовления»;
-- ETA не является обязательным условием оформления, пока отдельный ordering availability разрешает заказ.
-
-Результат: пользователь получает понятную текущую оценку и причину увеличения ожидания.
-
-**Шаг 10 — Scheduled ETA**
-- выбор времени;
-- future reservations;
-- пересечения scheduled/ASAP;
-- невозможные/перегруженные окна;
-- повторная проверка перед checkout.
-
-**Шаг 11 — История фактического приготовления**
-- сохранять predicted и actual;
-- production events;
-- корректно исключать cancelled/test/bad timestamps;
-- подготовить агрегаты.
-
-**Шаг 12 — Аналитика и калибровка**
-- median/P75/P90;
-- station/product/load/time-of-day;
-- попадание в ETA range;
-- ошибка прогноза;
-- рекомендации изменения нормативов;
-- только после достаточной статистики обсуждать controlled auto-adaptation.
-
-**Контрольная стратегия:** после шагов 1–5 проверить модель полностью локально на физическом iPad. Только после этого подключать operational network. После шагов 6–9 провести end-to-end тест iPad ↔ backend ↔ web, включая offline/reconnect. Это снижает риск того, что новая ETA-функция затронет стабильность кассы.
+**Обязательный порядок:** P1 → P2 → P3 → проверка локального ядра на iPad → P4/P5 → P6 → P7 → P8 → P9. Backend ETA нельзя считать готовым раньше P7, публичный web UX — раньше P8.
 
 ### 30. Acceptance criteria
 
