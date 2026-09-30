@@ -2918,6 +2918,46 @@ function renderInventoryWorkScreen(){
  </div>`;
 }
 
+function fmtAnalyticsMinutes(value){return Number.isFinite(Number(value))?Number(value).toFixed(1).replace('.',',')+' мин':'—'}
+function productionMetricCards(a){
+  return `<div class="grid-3">
+    <div class="stat-box"><div class="label">Заказов в выборке</div><div class="value">${a.sampleSize}</div></div>
+    <div class="stat-box"><div class="label">Медиана приготовления</div><div class="value">${fmtAnalyticsMinutes(a.preparation.median)}</div></div>
+    <div class="stat-box"><div class="label">P90 приготовления</div><div class="value">${fmtAnalyticsMinutes(a.preparation.p90)}</div></div>
+  </div>`;
+}
+function productionGroupRows(group,labeler=x=>x){
+  const rows=Object.entries(group||{});if(!rows.length)return '<div class="center-note">Пока недостаточно данных.</div>';
+  return rows.map(([key,x])=>`<div class="list-row"><div style="flex:1;"><div class="list-row-name">${escapeHtml(labeler(key))}</div><div class="list-row-sub">Наблюдений: ${x.count}</div></div><div style="display:grid;grid-template-columns:repeat(3,90px);gap:8px;text-align:right;font-size:13px;"><span>Median<br><b>${fmtAnalyticsMinutes(x.median)}</b></span><span>P75<br><b>${fmtAnalyticsMinutes(x.p75)}</b></span><span>P90<br><b>${fmtAnalyticsMinutes(x.p90)}</b></span></div></div>`).join('');
+}
+function openPreparationAnalytics(){
+  if(!currentShiftEmployeeIsAdmin()){showAdminOnlyInfo('Время приготовления');return;}
+  const a=productionCalibrationAnalytics();
+  const recs=a.recommendations.length?a.recommendations.map(r=>`<div class="list-row" style="align-items:center;"><div style="flex:1;min-width:0;"><div class="list-row-name">${escapeHtml(r.name||getProduct(r.productId)?.name||'Товар')}</div><div class="list-row-sub">Текущее: ${fmtAnalyticsMinutes(r.currentBasePrepMinutes)} · медиана: ${fmtAnalyticsMinutes(r.observedMedianMinutes)} · ${r.count} изолированных наблюдений</div></div><button class="btn btn-primary" style="width:auto;padding:10px 14px;" onclick="confirmPreparationRecommendation('${escapeAttr(r.productId)}',${Number(r.suggestedBasePrepMinutes)})">Изменить на ${String(r.suggestedBasePrepMinutes).replace('.',',')} мин</button></div>`).join(''):'<div class="center-note">Рекомендаций пока нет. Они появятся после минимум 10 изолированных наблюдений товара и устойчивого отклонения от норматива.</div>';
+  showModal(`<div style="width:min(980px,90vw);max-width:100%;">
+    <div class="modal-title">Время приготовления</div>
+    <div class="settings-note" style="margin-bottom:14px;">Аналитика помогает проверить точность ETA и нормативов. Система ничего не изменяет автоматически.</div>
+    <div style="max-height:72vh;overflow:auto;padding-right:2px;">
+      ${productionMetricCards(a)}
+      <div class="grid-2" style="margin-top:12px;"><div class="stat-box"><div class="label">Median ошибки ETA</div><div class="value">${fmtAnalyticsMinutes(a.etaError.median)}</div></div><div class="stat-box"><div class="label">Попадание в ETA диапазон</div><div class="value">${a.rangeHitRate==null?'—':a.rangeHitRate+'%'}</div></div></div>
+      <div style="margin-top:18px;font-weight:850;">По станциям</div><div style="margin-top:6px;">${productionGroupRows(a.groups.station,x=>x==='kitchen'?'Кухня':'Бар')}</div>
+      <div style="margin-top:18px;font-weight:850;">По загрузке</div><div style="margin-top:6px;">${productionGroupRows(a.groups.load)}</div>
+      <div style="margin-top:18px;font-weight:850;">По размеру заказа</div><div style="margin-top:6px;">${productionGroupRows(a.groups.size,x=>x==='SMALL'?'Маленький':x==='MEDIUM'?'Средний':'Большой')}</div>
+      <div style="margin-top:18px;font-weight:850;">Рекомендации</div><div class="settings-note" style="margin:5px 0 8px;">Для изменения норматива требуется подтверждение администратора и пароль. Mixed/batch заказы не используются для рекомендаций отдельному товару.</div>${recs}
+    </div>
+    <div class="modal-actions"><button class="btn btn-secondary" style="width:100%;" onclick="closeModal()">Закрыть</button></div>
+  </div>`,true);
+}
+function confirmPreparationRecommendation(productId,value){
+  const p=getProduct(productId);if(!p)return;
+  showModal(`<div class="modal-title">Изменить норматив?</div><p>Для «${escapeHtml(p.name)}» изменить базовое время приготовления с <b>${escapeHtml(String(p.basePrepMinutes||0))}</b> на <b>${escapeHtml(String(value))} мин</b>?</p><p class="pe-note">Изменение повлияет только на новые заказы. Уже созданные Production Orders сохраняют свой prep snapshot.</p><div class="field"><label>Пароль администратора</label><input id="prep-recommendation-password" type="password" autocomplete="off"></div><div class="modal-actions"><button class="btn btn-secondary" onclick="openPreparationAnalytics()">Отмена</button><button class="btn btn-primary" onclick="applyPreparationRecommendation('${escapeAttr(productId)}',${Number(value)})">Подтвердить</button></div>`);
+}
+function applyPreparationRecommendation(productId,value){
+  if((document.getElementById('prep-recommendation-password')?.value||'')!=='Rom23061998'){flash('Неверный пароль');return;}
+  if(!currentShiftEmployeeIsAdmin()){showAdminOnlyInfo('Время приготовления');return;}
+  const p=getProduct(productId),minutes=Number(value);if(!p||p.prepStation==='none'||!Number.isFinite(minutes)||minutes<=0){flash('Не удалось применить рекомендацию');return;}
+  p.basePrepMinutes=Math.round(minutes*10)/10;saveKey('products',state.products);operationalStateChanged();closeModal();render();flash('Норматив времени обновлён');
+}
 function openAdminPanel(){
   if(!currentShiftEmployeeIsAdmin()){
     showAdminOnlyInfo('Панель администратора');
@@ -2961,6 +3001,10 @@ function renderAdminPanel(){
       <button class="settings-card" style="text-align:left;cursor:pointer;font:inherit;color:inherit;" onclick="openWarehousePage()">
         <div style="font-size:16px;font-weight:800;">Складской учёт</div>
         <div class="setting-sub" style="margin-top:6px;">Остатки, движение товаров, поставщики и складские отчёты.</div>
+      </button>
+      <button class="settings-card" style="text-align:left;cursor:pointer;font:inherit;color:inherit;" onclick="openPreparationAnalytics()">
+        <div style="font-size:16px;font-weight:800;">Время приготовления</div>
+        <div class="setting-sub" style="margin-top:6px;">Точность ETA, статистика кухни и бара и рекомендации по нормативам.</div>
       </button>
     </div>`;
 }
