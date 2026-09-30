@@ -1100,9 +1100,6 @@ async function loadAll(){
     state.currentOrderSource = currentOrderSession.source || '';
     state.currentWebOrderId = currentOrderSession.webOrderId || '';
     state.currentWebOrderStatus = currentOrderSession.webOrderStatus || '';
-    state.productionMode = currentOrderSession.productionMode==='SCHEDULED'?'SCHEDULED':'ASAP';
-    state.requestedReadyAt = Number(currentOrderSession.requestedReadyAt)||null;
-    state.currentProductionOrderId = currentOrderSession.productionOrderId || '';
     window.__currentOrderKitchenPrinted = !!currentOrderSession.kitchenPrinted;
     window.__currentOrderPrintedItems = Array.isArray(currentOrderSession.printedItems) ? JSON.parse(JSON.stringify(currentOrderSession.printedItems)) : [];
   }
@@ -1288,9 +1285,6 @@ function saveCurrentOrderSession(){
     source: state.currentOrderSource || '',
     webOrderId: state.currentWebOrderId || '',
     webOrderStatus: state.currentWebOrderStatus || '',
-    productionMode: state.productionMode==='SCHEDULED'?'SCHEDULED':'ASAP',
-    requestedReadyAt: Number(state.requestedReadyAt)||null,
-    productionOrderId: state.currentProductionOrderId || '',
     kitchenPrinted: !!window.__currentOrderKitchenPrinted,
     printedItems: JSON.parse(JSON.stringify(window.__currentOrderPrintedItems || [])),
     updatedAt: Date.now()
@@ -1301,7 +1295,7 @@ function saveCurrentOrderSession(){
 }
 
 function clearCurrentOrderSession(){
-  saveKey('currentOrderSession', {items:[],orderLabel:'',orderType:'На месте',customer:{name:'',phone:'',address:''},deliveryFee:0,orderComment:'',source:'',webOrderId:'',webOrderStatus:'',productionMode:'ASAP',requestedReadyAt:null,productionOrderId:'',kitchenPrinted:false,printedItems:[],updatedAt:Date.now()});
+  saveKey('currentOrderSession', {items:[],orderLabel:'',orderType:'На месте',customer:{name:'',phone:'',address:''},deliveryFee:0,orderComment:'',source:'',webOrderId:'',webOrderStatus:'',kitchenPrinted:false,printedItems:[],updatedAt:Date.now()});
 }
 
 function cartTotal(){
@@ -2351,47 +2345,6 @@ function renderInventoryWorkScreen(){
  </div>`;
 }
 
-function fmtAnalyticsMinutes(value){return Number.isFinite(Number(value))?Number(value).toFixed(1).replace('.',',')+' мин':'—'}
-function productionMetricCards(a){
-  return `<div class="grid-3">
-    <div class="stat-box"><div class="label">Заказов в выборке</div><div class="value">${a.sampleSize}</div></div>
-    <div class="stat-box"><div class="label">Медиана приготовления</div><div class="value">${fmtAnalyticsMinutes(a.preparation.median)}</div></div>
-    <div class="stat-box"><div class="label">P90 приготовления</div><div class="value">${fmtAnalyticsMinutes(a.preparation.p90)}</div></div>
-  </div>`;
-}
-function productionGroupRows(group,labeler=x=>x){
-  const rows=Object.entries(group||{});if(!rows.length)return '<div class="center-note">Пока недостаточно данных.</div>';
-  return rows.map(([key,x])=>`<div class="list-row"><div style="flex:1;"><div class="list-row-name">${escapeHtml(labeler(key))}</div><div class="list-row-sub">Наблюдений: ${x.count}</div></div><div style="display:grid;grid-template-columns:repeat(3,90px);gap:8px;text-align:right;font-size:13px;"><span>Median<br><b>${fmtAnalyticsMinutes(x.median)}</b></span><span>P75<br><b>${fmtAnalyticsMinutes(x.p75)}</b></span><span>P90<br><b>${fmtAnalyticsMinutes(x.p90)}</b></span></div></div>`).join('');
-}
-function openPreparationAnalytics(){
-  if(!currentShiftEmployeeIsAdmin()){showAdminOnlyInfo('Время приготовления');return;}
-  const a=productionCalibrationAnalytics();
-  const recs=a.recommendations.length?a.recommendations.map(r=>`<div class="list-row" style="align-items:center;"><div style="flex:1;min-width:0;"><div class="list-row-name">${escapeHtml(r.name||getProduct(r.productId)?.name||'Товар')}</div><div class="list-row-sub">Текущее: ${fmtAnalyticsMinutes(r.currentBasePrepMinutes)} · медиана: ${fmtAnalyticsMinutes(r.observedMedianMinutes)} · ${r.count} изолированных наблюдений</div></div><button class="btn btn-primary" style="width:auto;padding:10px 14px;" onclick="confirmPreparationRecommendation('${escapeAttr(r.productId)}',${Number(r.suggestedBasePrepMinutes)})">Изменить на ${String(r.suggestedBasePrepMinutes).replace('.',',')} мин</button></div>`).join(''):'<div class="center-note">Рекомендаций пока нет. Они появятся после минимум 10 изолированных наблюдений товара и устойчивого отклонения от норматива.</div>';
-  showModal(`<div style="width:min(980px,90vw);max-width:100%;">
-    <div class="modal-title">Время приготовления</div>
-    <div class="settings-note" style="margin-bottom:14px;">Аналитика помогает проверить точность ETA и нормативов. Система ничего не изменяет автоматически.</div>
-    <div style="max-height:72vh;overflow:auto;padding-right:2px;">
-      ${productionMetricCards(a)}
-      <div class="grid-2" style="margin-top:12px;"><div class="stat-box"><div class="label">Median ошибки ETA</div><div class="value">${fmtAnalyticsMinutes(a.etaError.median)}</div><div class="setting-sub">P75: ${fmtAnalyticsMinutes(a.etaError.p75)} · P90: ${fmtAnalyticsMinutes(a.etaError.p90)}</div></div><div class="stat-box"><div class="label">Попадание в ETA диапазон</div><div class="value">${a.rangeHitRate==null?'—':a.rangeHitRate+'%'}</div><div class="setting-sub">Заказов с сохранённым диапазоном: ${a.rangeEligibleCount||0}</div></div></div>
-      <div style="margin-top:18px;font-weight:850;">По станциям</div><div style="margin-top:6px;">${productionGroupRows(a.groups.station,x=>x==='kitchen'?'Кухня':'Бар')}</div>
-      <div style="margin-top:18px;font-weight:850;">По загрузке</div><div style="margin-top:6px;">${productionGroupRows(a.groups.load)}</div>
-      <div style="margin-top:18px;font-weight:850;">По размеру заказа</div><div style="margin-top:6px;">${productionGroupRows(a.groups.size,x=>x==='SMALL'?'Маленький':x==='MEDIUM'?'Средний':'Большой')}</div>
-      <div style="margin-top:18px;font-weight:850;">По сложности</div><div style="margin-top:6px;">${productionGroupRows(a.groups.difficulty,x=>'Уровень '+x)}</div>
-      <div style="margin-top:18px;font-weight:850;">Рекомендации</div><div class="settings-note" style="margin:5px 0 8px;">Для изменения норматива требуется подтверждение администратора и пароль. Mixed/batch заказы не используются для рекомендаций отдельному товару.</div>${recs}
-    </div>
-    <div class="modal-actions"><button class="btn btn-secondary" style="width:100%;" onclick="closeModal()">Закрыть</button></div>
-  </div>`,true);
-}
-function confirmPreparationRecommendation(productId,value){
-  const p=getProduct(productId);if(!p)return;
-  showModal(`<div class="modal-title">Изменить норматив?</div><p>Для «${escapeHtml(p.name)}» изменить базовое время приготовления с <b>${escapeHtml(String(p.basePrepMinutes||0))}</b> на <b>${escapeHtml(String(value))} мин</b>?</p><p class="pe-note">Изменение повлияет только на новые заказы. Уже созданные Production Orders сохраняют свой prep snapshot.</p><div class="field"><label>Пароль администратора</label><input id="prep-recommendation-password" type="password" autocomplete="off"></div><div class="modal-actions"><button class="btn btn-secondary" onclick="openPreparationAnalytics()">Отмена</button><button class="btn btn-primary" onclick="applyPreparationRecommendation('${escapeAttr(productId)}',${Number(value)})">Подтвердить</button></div>`);
-}
-function applyPreparationRecommendation(productId,value){
-  if((document.getElementById('prep-recommendation-password')?.value||'')!=='Rom23061998'){flash('Неверный пароль');return;}
-  if(!currentShiftEmployeeIsAdmin()){showAdminOnlyInfo('Время приготовления');return;}
-  const p=getProduct(productId),minutes=Number(value);if(!p||p.prepStation==='none'||!Number.isFinite(minutes)||minutes<=0){flash('Не удалось применить рекомендацию');return;}
-  p.basePrepMinutes=Math.round(minutes*10)/10;saveKey('products',state.products);operationalStateChanged();closeModal();render();flash('Норматив времени обновлён');
-}
 function openAdminPanel(){
   if(!currentShiftEmployeeIsAdmin()){
     showAdminOnlyInfo('Панель администратора');
@@ -3093,8 +3046,6 @@ function openOrderSettings(){
     <div class="field"><label>Тип заказа</label><div class="radio-row">
       ${['На месте','С собой','Доставка'].map(t=>`<button class="radio-opt ${state.orderType===t?'selected':''}" onclick="setOrderType('${t}')">${t}</button>`).join('')}
     </div></div>
-    <div class="field"><label>Приготовление</label><div class="radio-row"><button class="radio-opt ${state.productionMode!=='SCHEDULED'?'selected':''}" onclick="setProductionMode('ASAP')">Как можно скорее</button><button class="radio-opt ${state.productionMode==='SCHEDULED'?'selected':''}" onclick="setProductionMode('SCHEDULED')">К определённому времени</button></div></div>
-    ${state.productionMode==='SCHEDULED'?`<div class="field"><label>Готовность к</label><input id="requested-ready-at" type="datetime-local" value="${state.requestedReadyAt?localDateTimeInputValue(state.requestedReadyAt):''}"><div class="settings-note">Будущий заказ не учитывается в текущей загрузке слишком рано.</div></div>`:''}
     <div class="field"><label>Название / подпись чека</label><input id="order-label" value="${escapeAttr(state.orderLabel)}" placeholder="Например: Иван · стол 4"></div>
     <div class="field"><label>Имя клиента</label><input id="customer-name" value="${escapeAttr(state.customer.name)}" placeholder="Необязательно"></div>
     <div class="field"><label>Телефон</label><input id="customer-phone" inputmode="tel" value="${escapeAttr(state.customer.phone)}" placeholder="Необязательно"></div>
@@ -3105,16 +3056,9 @@ function openOrderSettings(){
       <div class="field" style="margin-top:12px;"><label>Итого заказа</label><div style="font-size:24px;font-weight:800;">${fullMoney(cartTotal())}</div></div>`:''}
     <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button class="btn btn-primary" onclick="saveOrderSettings()">Сохранить</button></div>`);
 }
-function localDateTimeInputValue(ts){const d=new Date(Number(ts));if(!Number.isFinite(d.getTime()))return '';const pad=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes());}
-function setProductionMode(mode){state.productionMode=mode==='SCHEDULED'?'SCHEDULED':'ASAP';if(state.productionMode==='ASAP')state.requestedReadyAt=null;saveCurrentOrderSession();openOrderSettings();}
 function setOrderType(t){ state.orderType=t; if(t!=='Доставка') state.deliveryFee=0; saveCurrentOrderSession(); render(); openOrderSettings(); }
 function selectDeliveryFee(amount){ state.deliveryFee=Number(amount)||0; saveCurrentOrderSession(); render(); openOrderSettings(); }
 function saveOrderSettings(){
-  if(state.productionMode==='SCHEDULED'){
-    const raw=document.getElementById('requested-ready-at')?.value||'',ts=raw?new Date(raw).getTime():NaN;
-    if(!Number.isFinite(ts)||ts<=Date.now()){flash('Укажите будущее время готовности');return;}
-    state.requestedReadyAt=ts;
-  }else state.requestedReadyAt=null;
   state.orderLabel=(document.getElementById('order-label')?.value||'').trim();
   state.customer.name=(document.getElementById('customer-name')?.value||'').trim();
   state.customer.phone=(document.getElementById('customer-phone')?.value||'').trim();
@@ -3308,7 +3252,6 @@ function resumeParked(id){
   state.cart=JSON.parse(JSON.stringify(o.items)); state.orderLabel=o.orderLabel||''; state.orderType=o.orderType||'На месте';
   state.customer=Object.assign({name:'',phone:'',address:''},o.customer||{}); state.deliveryFee=Number(o.deliveryFee||0);
   state.orderComment=o.comment||''; state.currentOrderSource=o.source||''; state.currentWebOrderId=o.webOrderId||''; state.currentWebOrderStatus=o.webOrderStatus||'';
-  state.productionMode=o.productionMode==='SCHEDULED'?'SCHEDULED':'ASAP';state.requestedReadyAt=Number(o.requestedReadyAt)||null;state.currentProductionOrderId=o.productionOrderId||'';
   window.__currentOrderKitchenPrinted=!!o.kitchenPrinted;
   window.__currentOrderPrintedItems=Array.isArray(o.printedItems) ? JSON.parse(JSON.stringify(o.printedItems)) : (o.kitchenPrinted ? kitchenPrintedSnapshot(o.items) : []);
   saveCurrentOrderSession();
@@ -3317,7 +3260,6 @@ function resumeParked(id){
 }
 
 function deleteParked(id){
-  const deleting=state.parked.find(x=>x.id===id);cancelProductionForOrder(deleting);
   state.parked = state.parked.filter(x=>x.id!==id);
   saveKey('parked', state.parked);
   openParkedModal();
@@ -4477,7 +4419,7 @@ function openProductModal(id){
 }
 function productEditorSnapshot(){
   const value=id=>document.getElementById(id)?.value??'';
-  return JSON.stringify({purchaseUnit:value('pf-purchase-unit'),packSize:value('pf-pack-size'),purchaseContentUnit:value('pf-purchase-content-unit'),sku:value('pf-sku'),note:value('pf-note'),unit:window._pmUnit,minimum:value('pf-min-stock'),name:value('pf-name'),category:value('pf-category'),symbol:value('pf-symbol'),price:value('pf-price'),prepStation:value('pf-prep-station'),prepDifficulty:value('pf-prep-difficulty'),basePrepMinutes:value('pf-base-prep-minutes'),type:window._pmType,
+  return JSON.stringify({purchaseUnit:value('pf-purchase-unit'),packSize:value('pf-pack-size'),purchaseContentUnit:value('pf-purchase-content-unit'),sku:value('pf-sku'),note:value('pf-note'),unit:window._pmUnit,minimum:value('pf-min-stock'),name:value('pf-name'),category:value('pf-category'),symbol:value('pf-symbol'),price:value('pf-price'),type:window._pmType,
     cost:window._pmType==='simple'?value('pf-cost'):null,stock:window._pmType==='simple'?value('pf-stock'):null,
     noStock:window._pmType==='simple'?!!document.getElementById('pf-no-stock')?.checked:false,
     components:window._pmType==='composite'?window._pmComponents:[],modifierGroups:window._pmModifierGroups||[],recipeYield:window._pmType==='composite'?Number(document.getElementById('pf-recipe-yield')?.value||window._pmRecipeYield||1):null,recipeUnit:window._pmType==='composite'?(document.getElementById('pf-recipe-unit')?.value||window._pmRecipeUnit||'piece'):null,online:window._pmOnline,image:window._pmImageData,removeImage:window._pmRemoveImage});
