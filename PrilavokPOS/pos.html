@@ -2586,6 +2586,23 @@ function fixInventoryItem(id){
  x.expected=roundStockQty(Number(p.stock)||0);x.actual=roundStockQty(Number(x.actual));x.difference=roundStockQty(x.actual-x.expected);x.fixedAt=Date.now();p.stock=x.actual;
  saveKey('products',state.products);saveKey('inventoryDraft',d);render();flash('Остаток зафиксирован');
 }
+function requestCancelInventory(){
+ if(!state.inventoryDraft)return;
+ if(!currentShiftEmployeeIsAdmin()){flash('Отменить инвентаризацию может только администратор');return;}
+ showModal(`<div class="modal-title">Отменить инвентаризацию?</div>
+   <div class="center-note" style="padding:4px 0 14px;text-align:left;">Текущая инвентаризация будет отменена. Введённые и зафиксированные в ней данные не будут сохранены.</div>
+   <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Нет, продолжить</button><button class="btn btn-danger" onclick="confirmCancelInventory()">Да, отменить</button></div>`,true);
+}
+function confirmCancelInventory(){
+ if(!currentShiftEmployeeIsAdmin()){closeModal();flash('Отменить инвентаризацию может только администратор');return;}
+ if(!state.inventoryDraft){closeModal();return;}
+ state.inventoryDraft=null;
+ saveKey('inventoryDraft',null);
+ closeModal();
+ state.tab='inventory';
+ render();
+ flash('Инвентаризация отменена');
+}
 function pauseInventory(){saveKey('inventoryDraft',state.inventoryDraft);state.tab='pos';render();flash('Инвентаризация сохранена. Можно продолжить позже');}
 function completeInventory(){
  const d=state.inventoryDraft;if(!d)return;if(d.items.some(x=>!x.fixedAt)){flash('Сначала зафиксируйте остаток каждого товара');return;}
@@ -2640,7 +2657,7 @@ function renderInventoryWorkScreen(){
    return `<div class="list-row" style="align-items:center;gap:16px;padding-top:14px;padding-bottom:14px;"><div style="flex:1;min-width:0;"><div class="list-row-name">${escapeHtml(x.name)}</div>${before}</div>${control}</div>`;
  }).join('');
  return `<div class="screen content-screen ${state.tab==='inventoryWork'?'active':''}">
-   <div class="content-head"><div><div class="content-title">${d.type==='adhoc'?'Внеплановая инвентаризация':'Инвентаризация'}</div><div class="setting-sub">Зафиксировано: ${fixed} из ${d.items.length}</div></div></div>
+   <div class="content-head" style="align-items:center;"><div><div class="content-title">${d.type==='adhoc'?'Внеплановая инвентаризация':'Инвентаризация'}</div><div class="setting-sub">Зафиксировано: ${fixed} из ${d.items.length}</div></div>${isAdmin?'<button class="btn btn-danger" style="width:auto;padding:10px 16px;" onclick="requestCancelInventory()">Отменить инвентаризацию</button>':''}</div>
    <div style="display:flex;flex-direction:column;min-height:0;flex:1;">
      <div class="card" style="flex:1;min-height:0;overflow:auto;padding-top:4px;">${rows||'<div class="center-note">Нет товаров для пересчёта</div>'}</div>
      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;padding-top:14px;flex:0 0 auto;">
