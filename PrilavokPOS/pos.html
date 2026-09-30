@@ -1129,13 +1129,6 @@ async function loadAll(){
     if(typeof p.sortOrder !== 'number'){ maxOrder += 1; p.sortOrder = maxOrder; needSave = true; }
     if(typeof p.availableOnline !== 'boolean'){ p.availableOnline = true; needSave = true; }
     if(typeof p.imageUrl !== 'string'){ p.imageUrl = ''; needSave = true; }
-    if(p.prepStation!=='bar' && p.prepStation!=='kitchen' && p.prepStation!=='none'){ p.prepStation='kitchen'; needSave=true; }
-    if(!Number.isInteger(p.prepDifficulty) || p.prepDifficulty<1 || p.prepDifficulty>5){ p.prepDifficulty=1; needSave=true; }
-    if(p.prepStation==='none'){
-      if(Number(p.basePrepMinutes||0)!==0){p.basePrepMinutes=0;needSave=true;}
-    }else if(!Number.isFinite(Number(p.basePrepMinutes)) || Number(p.basePrepMinutes)<=0){
-      p.basePrepMinutes=5; needSave=true;
-    }
   }
   if(needSave) saveKey('products', state.products);
   syncCategoryOrder();
