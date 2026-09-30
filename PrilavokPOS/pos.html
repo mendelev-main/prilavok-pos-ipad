@@ -1010,12 +1010,10 @@ async function saveKey(key, value){
   catch(e){ markStorageBroken(e); }
 }
 async function loadAll(){
-  window.__posStartupStage='storage-check';
   if(!hasCloudStorage && !testLocalStorage()){
     markStorageBroken('localStorage test write failed');
   }
   storageCheckedOnce = true;
-  window.__posStartupStage='storage-read';
   const [products, shifts, employees, orders, parked, demandOverload, operationalOutbox, operationalRevision, receivings, suppliers, purchaseOrders, discounts, layout, printer, theme, company, deliveryRates, telegram, network, currentOrderSession, hallTables, bookings, webEvents, posNavigation, inventoryConfig, inventoryHistory, inventoryDraft] = await Promise.all([
     loadKey('products', null),
     loadKey('shifts', []),
@@ -1045,30 +1043,28 @@ async function loadAll(){
     loadKey('inventoryHistory', []),
     loadKey('inventoryDraft', null)
   ]);
-  window.__posStartupStage='normalize';
-  state.products = Array.isArray(products) ? products.filter(p=>p && typeof p==='object') : (products === null ? seedProducts() : []);
-  state.shifts = Array.isArray(shifts) ? shifts : [];
+  state.products = products === null ? seedProducts() : products;
+  state.shifts = shifts;
   state.employees = Array.isArray(employees) ? employees : [];
   state.employees.forEach(e=>{ e.role = e.role==='admin' ? 'admin' : 'employee'; });
-  state.orders = Array.isArray(orders) ? orders : [];
+  state.orders = orders;
   state.parked = Array.isArray(parked) ? parked : [];
   state.demandOverload = demandOverload === true;
   state.operationalOutbox = Array.isArray(operationalOutbox) ? operationalOutbox.slice(-2) : [];
   state.operationalRevision = Math.max(0,Number(operationalRevision)||0);
-  state.receivings = Array.isArray(receivings) ? receivings : [];
+  state.receivings = receivings;
   state.suppliers = Array.isArray(suppliers) ? suppliers : [];
   state.purchaseOrders = Array.isArray(purchaseOrders) ? purchaseOrders : [];
   state.purchaseOrderSupplierId = '';
   state.purchaseOrderCart = [];
   state.discounts = Array.isArray(discounts) ? discounts : [];
   state.receivingCart = [];
-  const safeLayout = layout && typeof layout==='object' && !Array.isArray(layout) ? layout : {};
-  state.categoryOrder = Array.isArray(safeLayout.categoryOrder) ? safeLayout.categoryOrder.filter(c=>typeof c==='string') : [];
-  state.categoryColors = safeLayout.categoryColors && typeof safeLayout.categoryColors==='object' && !Array.isArray(safeLayout.categoryColors) ? safeLayout.categoryColors : {};
-  state.categorySymbols = safeLayout.categorySymbols && typeof safeLayout.categorySymbols==='object' && !Array.isArray(safeLayout.categorySymbols) ? safeLayout.categorySymbols : {};
-  state.categoryOnline = safeLayout.categoryOnline && typeof safeLayout.categoryOnline==='object' && !Array.isArray(safeLayout.categoryOnline) ? safeLayout.categoryOnline : {};
+  state.categoryOrder = (layout && layout.categoryOrder) || [];
+  state.categoryColors = (layout && layout.categoryColors) || {};
+  state.categorySymbols = (layout && layout.categorySymbols) || {};
+  state.categoryOnline = (layout && layout.categoryOnline) || {};
   state.categoryOrder.forEach(c=>{ if(typeof state.categoryOnline[c] !== 'boolean') state.categoryOnline[c]=true; });
-  state.layoutTiles = Array.isArray(safeLayout.tiles) ? safeLayout.tiles : [];
+  state.layoutTiles = Array.isArray(layout?.tiles) ? layout.tiles : [];
   state.posNavigation=normalizePosNavigation(posNavigation);
   state.posFolder='';
   state.posPath = null;
@@ -1092,7 +1088,6 @@ async function loadAll(){
   if(!state.bookingDate) state.bookingDate = localDateString(new Date());
   if(!state.hallTables.length) saveKey('hallTables', state.hallTables);
 
-  window.__posStartupStage='restore-session';
   // Восстанавливаем незавершённый текущий заказ после перезапуска приложения.
   // Сохраняются позиции, количество, комментарии/скидки и параметры заказа.
   if(currentOrderSession && Array.isArray(currentOrderSession.items)){
@@ -1112,7 +1107,6 @@ async function loadAll(){
   state.theme = theme === 'dark' ? 'dark' : 'light';
   applyTheme();
 
-  window.__posStartupStage='normalize-products';
   // Валюта приложения: белорусский рубль. Старые данные сохраняются без пересчёта сумм.
   state.currency = 'Br';
 
@@ -1138,19 +1132,15 @@ async function loadAll(){
     );
   }
 
-  // First paint must never wait for network-backed WEB acceptance recovery.
-  // Open the local POS immediately; recovery continues best-effort in background.
-  window.__posStartupStage='first-render';
+  await recoverWebAcceptanceJournal();
   state.loaded = true;
   render();
-  window.__posStartupStage='background-services';
   startWebOrderEvents();
   startAvailabilitySchedule();
   queueOperationalHeartbeat();
   queueOperationalSnapshot();
   void flushOperationalOutbox();
   startOperationalSchedule();
-  void recoverWebAcceptanceJournal().catch(e=>console.warn('WEB acceptance recovery:',e));
 }
 // поддерживаем список категорий в актуальном виде: новые — в конец, пустые — не теряем сразу
 function syncCategoryOrder(){
@@ -1750,10 +1740,331 @@ function exportWarehousePDF(documentsOnly=false){
   }catch(e){flash(e.message);}
 }
 
-function startWebOrderEvents(){const n=networkConfigFromState();if(!n.deviceKey||!n.backendUrl||!window.EventSource)return;try{state.webEventsSource?.close();}catch(e){}const source=new EventSource(n.backendUrl.replace(/\/+$/,'')+'/api/orders/events?deviceKey='+encodeURIComponent(n.deviceKey));state.webEventsSource=source;source.onopen=()=>{void recoverWebAcceptanceJournal();};source.onmessage=(ev)=>{try{const d=JSON.parse(ev.data||'{}');if(d.type!=='orders')return;const oldList=state.webEvents.slice();const oldIds=new Set(oldList.map(x=>x.id));const incoming=(d.orders||[]).map(normalizeWebOrder);const merged=[...incoming];oldList.forEach(x=>{if(!merged.some(y=>y.id===x.id))merged.push(x);});const next=merged.filter(x=>x.status==='new').sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));const changed=next.length!==oldList.length || next.some((x,i)=>{const y=oldList[i];return !y || y.id!==x.id || y.status!==x.status || x.total!==y.total || x.updated_at!==y.updated_at;});state.webEvents=next;if(changed)saveKey('webEvents',state.webEvents);if(incoming.some(x=>!oldIds.has(x.id))){flash('🔔 Новый заказ с сайта');render();}}catch(e){}};source.onerror=()=>{};}
+function renderAnalyticsScreen(){
+  const d=analyticsData();
+  const today=localDateString(new Date());
+  const from=state.analyticsFrom||today;
+  const to=state.analyticsTo||today;
+  const topProducts=d.products.slice(0,10);
+  const admin=currentShiftEmployeeIsAdmin();
+  const paymentTotal=d.cash+d.card;
+  const adminKpis=admin?`<div class="analytics-kpis" style="margin-bottom:14px;">
+      <div class="analytics-kpi"><div class="k-label">Выручка</div><div class="k-value">${money(d.revenue)}</div></div>
+      <div class="analytics-kpi"><div class="k-label">Заказов</div><div class="k-value">${d.orders.length}</div></div>
+      <div class="analytics-kpi"><div class="k-label">Средний чек</div><div class="k-value">${money(d.avg)}</div></div>
+      <div class="analytics-kpi"><div class="k-label">Валовая прибыль</div><div class="k-value">${money(d.profit)}</div></div>
+      <div class="analytics-kpi"><div class="k-label">Стоимость остатков товаров</div><div class="k-value">${money(inventoryCostValue())}</div></div>
+    </div>`:'';
+  return `<div class="screen content-screen ${state.tab==='analytics'?'active':''}">
+    <div class="card" style="margin-bottom:14px;">
+      <div class="analytics-filters">
+        <div class="analytics-period-head"><div><div class="analytics-period-title">Период аналитики</div><div class="analytics-period-sub">Выберите готовый период или задайте даты вручную.</div></div></div>
+        <div class="analytics-period-layout">
+          <div class="analytics-date-fields">
+            <div class="analytics-filter"><label>От</label><input aria-label="Дата начала" type="date" value="${from}" onchange="setAnalyticsDate('from',this.value)"></div>
+            <div class="analytics-filter"><label>До</label><input aria-label="Дата окончания" type="date" value="${to}" onchange="setAnalyticsDate('to',this.value)"></div>
+          </div>
+          <div class="analytics-presets-wrap"><div class="analytics-presets-label">Быстрый период</div><div class="analytics-presets">
+            <button class="btn ${analyticsPresetIsActive(1,from,to)?'analytics-preset-active':''}" onclick="setAnalyticsPreset(1)">Сегодня</button>
+            <button class="btn ${analyticsPresetIsActive(7,from,to)?'analytics-preset-active':''}" onclick="setAnalyticsPreset(7)">7 дней</button>
+            <button class="btn ${analyticsPresetIsActive(30,from,to)?'analytics-preset-active':''}" onclick="setAnalyticsPreset(30)">30 дней</button>
+          </div></div>
+        </div>
+      </div>
+    </div>
+    ${adminKpis}
+    <div class="analytics-grid-2" style="margin-bottom:14px;">
+      <div class="analytics-card"><div class="analytics-title">Продажи сотрудников</div><div class="analytics-sub">${admin?'Выручка по сотруднику за выбранный период':'Продажи по сотруднику за выбранный период'}</div>${admin?renderHbars(d.employees,true):renderHbars(d.employees,false)}</div>
+      <div class="analytics-card"><div class="analytics-title">Способы оплаты</div><div class="analytics-sub">Распределение оплат</div>${renderAnalyticsBars([{name:'Наличные',value:d.cash},{name:'Карта',value:d.card}],{format:'money',percentTotal:paymentTotal,percentOnly:!admin})}</div>
+    </div>
+    <div class="analytics-grid-2">
+      <div class="analytics-card"><div class="analytics-title">Продажи по категориям</div><div class="analytics-sub">Количество проданных товаров</div>${renderAnalyticsBars(d.categories.map(x=>({name:x.name,value:x.qty})),{format:'qty'})}</div>
+      <div class="analytics-card"><div class="analytics-title">Топ товаров</div><div class="analytics-sub">По количеству продаж за выбранный период</div>${renderAnalyticsBars(topProducts.map(x=>({name:x.name,value:x.qty})),{format:'qty'})}</div>
+    </div>
+  </div>`;
+}
+
+function bookingDateTime(date,time){
+  return `${date}T${time||'00:00'}:00`;
+}
+function bookingOverlap(startA,endA,startB,endB){
+  return startA < endB && endA > startB;
+}
+function bookingWindow(dateOverride=null,timeOverride=null,durationOverride=null){
+  const date=dateOverride || state.bookingDate || localDateString(new Date());
+  const time=timeOverride || state.bookingTime || '19:00';
+  const duration=Number(durationOverride || state.bookingDuration || 120);
+  const start=new Date(bookingDateTime(date,time));
+  const end=new Date(start.getTime() + duration*60000);
+  return {date,time,duration,start,end};
+}
+function tableBookings(tableId, date){
+  return state.bookings.filter(b=>b.tableId===tableId && b.date===date && b.status!=='cancelled')
+    .sort((a,b)=>String(a.startAt).localeCompare(String(b.startAt)));
+}
+function tableBusyAt(tableId,start,end){
+  return state.bookings.some(b=>b.tableId===tableId && b.status!=='cancelled' && bookingOverlap(start,end,new Date(b.startAt),new Date(b.endAt)));
+}
+function hallTableLabel(t){ return t.name || `Стол ${t.number||''}`.trim(); }
+function saveHall(){ saveKey('hallTables',state.hallTables); }
+function saveBookings(){ saveKey('bookings',state.bookings); }
+function ensureBookingDate(){ if(!state.bookingDate) state.bookingDate=localDateString(new Date()); }
+function openCreateHallTableModal(shape){
+  const normalized=shape==='rectangle'?'rectangle':'square';
+  const nextNumber=Math.max(0,...state.hallTables.map(t=>Number(t.number)||0))+1;
+  showModal(`<div class="modal-title">${normalized==='square'?'Квадратный стол':'Прямоугольный стол'}</div>
+    <div class="settings-note">Задайте название стола. Его можно будет использовать для быстрого поиска брони.</div>
+    <div class="field"><label>Название стола</label><input id="new-hall-table-name" value="Стол ${nextNumber}" maxlength="30" autofocus></div>
+    <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal();openHallEditMenu()">Отмена</button><button class="btn btn-primary" onclick="createHallTable('${normalized}')">Добавить стол</button></div>`);
+}
+function createHallTable(shape){
+  const normalized=shape==='rectangle'?'rectangle':'square';
+  const n=Math.max(0,...state.hallTables.map(t=>Number(t.number)||0))+1;
+  const name=(document.getElementById('new-hall-table-name')?.value||'').trim();
+  if(!name){flash('Введите название стола');return;}
+  const col=(n-1)%4, row=Math.floor((n-1)/4)%5;
+  const table={id:uid(),number:n,name,shape:normalized,rotation:0,x:7+col*23,y:8+row*17};
+  state.hallTables.push(table); state.selectedHallTableId=table.id; saveHall(); closeModal(); render(); flash('Стол добавлен');
+}
+function addHallTable(shape){ openCreateHallTableModal(shape); }
+function deleteHallTable(id){
+  const t=state.hallTables.find(x=>x.id===id); if(!t) return;
+  showModal(`<div class="modal-title">Удалить ${escapeHtml(hallTableLabel(t))}?</div><div class="settings-note">Все бронирования этого стола также будут удалены.</div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button class="btn" style="background:var(--danger-soft);color:var(--danger);border:1px solid var(--danger);" onclick="confirmDeleteHallTable('${id}')">Удалить</button></div>`);
+}
+function confirmDeleteHallTable(id){
+  state.hallTables=state.hallTables.filter(t=>t.id!==id); state.bookings=state.bookings.filter(b=>b.tableId!==id); if(state.selectedHallTableId===id) state.selectedHallTableId=null; saveHall(); saveBookings(); closeModal(); render();
+}
+function rotateHallTable(id,delta){
+  const t=state.hallTables.find(x=>x.id===id); if(!t)return;
+  t.rotation=((Number(t.rotation)||0)+delta+360)%360;
+  saveHall(); closeModal(); render();
+}
+function saveHallTableEdits(id){
+  const t=state.hallTables.find(x=>x.id===id); if(!t)return;
+  const name=(document.getElementById('edit-hall-table-name')?.value||'').trim();
+  if(!name){flash('Введите название стола');return;}
+  t.name=name;
+  saveHall(); closeModal(); render(); flash('Стол изменён');
+}
+function openHallTableEditModal(id){
+  const t=state.hallTables.find(x=>x.id===id); if(!t)return;
+  showModal(`<div class="modal-title">Редактирование стола</div>
+    <div class="settings-note">Измените название, ориентацию или удалите стол.</div>
+    <div class="field"><label>Название стола</label><input id="edit-hall-table-name" value="${escapeAttr(hallTableLabel(t))}" maxlength="30" autofocus></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+      <button class="btn btn-secondary" onclick="rotateHallTable('${id}',-90)">↶ Повернуть</button>
+      <button class="btn btn-secondary" onclick="rotateHallTable('${id}',90)">↷ Повернуть</button>
+    </div>
+    <button class="btn booking-danger" style="width:100%;margin-top:10px;" onclick="deleteHallTable('${id}')">Удалить стол</button>
+    <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button class="btn btn-primary" onclick="saveHallTableEdits('${id}')">Сохранить</button></div>`);
+}
+function selectHallTable(id){
+  state.selectedHallTableId=id;
+  render();
+}
+function handleHallTableClick(e,id){
+  if(state._hallSuppressClick){state._hallSuppressClick=false;return;}
+  if(state.hallEditMode){openHallTableEditModal(id);return;}
+  selectHallTable(id);
+}
+function enableHallEditMode(){
+  state.hallEditMode=true;
+  state._hallDrag=null;
+  closeModal();
+  render();
+  flash('Режим редактирования включён');
+}
+function finishHallEditMode(){
+  state.hallEditMode=false;
+  state._hallDrag=null;
+  closeModal();
+  render();
+  flash('Режим редактирования выключен');
+}
+function openHallEditMenu(){
+  showModal(`<div class="modal-title">Редактирование карты</div>
+    <div class="settings-note" style="margin-bottom:14px;">Добавьте стол или включите режим редактирования. В обычном режиме столы не перемещаются.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <button class="btn" onclick="addHallTable('square')">＋ Квадратный стол</button>
+      <button class="btn" onclick="addHallTable('rectangle')">＋ Прямоугольный стол</button>
+    </div>
+    ${state.hallEditMode
+      ? `<button class="btn btn-secondary" style="width:100%;margin-top:10px;" onclick="finishHallEditMode()">Завершить редактирование</button>`
+      : `<button class="btn btn-secondary" style="width:100%;margin-top:10px;" onclick="enableHallEditMode()">Редактировать карту</button>`}`);
+}
+function setBookingDate(v){ state.bookingDate=v; render(); }
+function setBookingTime(v){ state.bookingTime=v||'19:00'; refreshBookingTimeSummary(); }
+function setBookingDuration(v){ state.bookingDuration=Number(v)||120; refreshBookingTimeSummary(); }
+function bookingStatusForTable(t){ const date=state.bookingDate || localDateString(new Date()); return tableBookings(t.id,date).length>0; }
+function startBookingForSelected(){
+  const t=state.hallTables.find(x=>x.id===state.selectedHallTableId); if(!t){flash('Выберите стол на карте');return;}
+  const w=bookingWindow();
+  showModal(`<div class="modal-title">Новое бронирование</div>
+    <div class="settings-note">${escapeHtml(hallTableLabel(t))} · ${escapeHtml(w.date)}</div>
+    <div class="grid-2 booking-time-fields">
+      <div class="field"><label>Время начала</label><input id="booking-time-input" type="time" value="${escapeAttr(w.time)}" onchange="setBookingTime(this.value)"></div>
+      <div class="field"><label>Длительность</label><select id="booking-duration-input" onchange="setBookingDuration(this.value)">${[30,60,90,120,150,180,240].map(m=>`<option value="${m}" ${m===Number(w.duration)?'selected':''}>${m<60?m+' мин':Math.floor(m/60)+' ч'+(m%60?' '+m%60+' мин':'')}</option>`).join('')}</select></div>
+    </div>
+    <div class="booking-time-summary">Бронь: <strong id="booking-time-summary">${escapeHtml(w.time)}–${escapeHtml(new Date(w.end).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}))}</strong></div>
+    <div class="field"><label>Имя гостя</label><input id="booking-name-input" placeholder="Имя"></div>
+    <div class="field"><label>Телефон</label><input id="booking-phone-input" placeholder="Телефон"></div>
+    <div class="field"><label>Количество гостей</label>
+      <div class="booking-guests-stepper">
+        <button type="button" onclick="changeBookingGuests(-1)">−</button>
+        <span id="booking-guests-value">2</span>
+        <button type="button" onclick="changeBookingGuests(1)">+</button>
+      </div>
+      <input id="booking-guests-input" type="hidden" value="2">
+    </div>
+    <div class="field"><label>Комментарий</label><textarea id="booking-note-input" rows="3" placeholder="Пожелания гостя"></textarea></div>
+    <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button class="btn btn-primary" onclick="saveNewBooking('${t.id}')">Забронировать</button></div>`);
+}
+function changeBookingGuests(delta){
+  const input=document.getElementById('booking-guests-input');
+  const out=document.getElementById('booking-guests-value');
+  const current=Math.max(1,Math.min(30,Number(input?.value||2)));
+  const next=Math.max(1,Math.min(30,current+Number(delta||0)));
+  if(input) input.value=String(next);
+  if(out) out.textContent=String(next);
+}
+function changeEditBookingGuests(id,delta){
+  const input=document.getElementById('edit-booking-guests');
+  const out=document.getElementById('edit-booking-guests-value');
+  const current=Math.max(1,Math.min(30,Number(input?.value||2)));
+  const next=Math.max(1,Math.min(30,current+Number(delta||0)));
+  if(input) input.value=String(next);
+  if(out) out.textContent=String(next);
+}
+function refreshBookingTimeSummary(){
+  const time=document.getElementById('booking-time-input')?.value || state.bookingTime || '19:00';
+  const duration=Number(document.getElementById('booking-duration-input')?.value || state.bookingDuration || 120);
+  const w=bookingWindow(state.bookingDate,time,duration);
+  const out=document.getElementById('booking-time-summary');
+  if(out) out.textContent=`${time}–${w.end.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}`;
+}
+function saveNewBooking(tableId){
+  const name=(document.getElementById('booking-name-input')?.value||'').trim();
+  const phone=(document.getElementById('booking-phone-input')?.value||'').trim();
+  const guests=Math.max(1,Number(document.getElementById('booking-guests-input')?.value||2));
+  const note=(document.getElementById('booking-note-input')?.value||'').trim();
+  const time=(document.getElementById('booking-time-input')?.value||state.bookingTime||'19:00');
+  const duration=Number(document.getElementById('booking-duration-input')?.value||state.bookingDuration||120);
+  const w=bookingWindow(state.bookingDate,time,duration);
+  if(!name){flash('Введите имя гостя');return;}
+  if(tableBusyAt(tableId,w.start,w.end)){flash('На выбранное время стол уже забронирован');return;}
+  state.bookingTime=time; state.bookingDuration=duration;
+  state.bookings.push({id:uid(),tableId,date:w.date,startAt:w.start.toISOString(),endAt:w.end.toISOString(),guestName:name,phone,guests,note,status:'confirmed',createdAt:Date.now()});
+  saveBookings(); closeModal(); render(); flash('Бронирование создано');
+}
+function cancelBooking(id){
+  const b=state.bookings.find(x=>x.id===id); if(!b)return;
+  b.status='cancelled'; saveBookings(); render(); flash('Бронирование отменено');
+}
+function editBooking(id){
+  const b=state.bookings.find(x=>x.id===id); if(!b)return;
+  const st=new Date(b.startAt); const en=new Date(b.endAt); const mins=Math.max(30,Math.round((en-st)/60000));
+  const time=st.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
+  showModal(`<div class="modal-title">Бронирование</div>
+    <div class="grid-2 booking-time-fields">
+      <div class="field"><label>Время начала</label><input id="edit-booking-time" type="time" value="${escapeAttr(time)}"></div>
+      <div class="field"><label>Длительность</label><select id="edit-booking-duration">${[30,60,90,120,150,180,240].map(m=>`<option value="${m}" ${m===mins?'selected':''}>${m<60?m+' мин':Math.floor(m/60)+' ч'+(m%60?' '+m%60+' мин':'')}</option>`).join('')}</select></div>
+    </div>
+    <div class="field"><label>Имя гостя</label><input id="edit-booking-name" value="${escapeAttr(b.guestName||'')}"></div>
+    <div class="field"><label>Телефон</label><input id="edit-booking-phone" value="${escapeAttr(b.phone||'')}"></div>
+    <div class="field"><label>Количество гостей</label>
+      <div class="booking-guests-stepper">
+        <button type="button" onclick="changeEditBookingGuests('${id}',-1)">−</button>
+        <span id="edit-booking-guests-value">${Number(b.guests||2)}</span>
+        <button type="button" onclick="changeEditBookingGuests('${id}',1)">+</button>
+      </div>
+      <input id="edit-booking-guests" type="hidden" value="${Number(b.guests||2)}">
+    </div>
+    <div class="field"><label>Комментарий</label><textarea id="edit-booking-note" rows="3">${escapeHtml(b.note||'')}</textarea></div>
+    <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Закрыть</button><button class="btn btn-primary" onclick="saveEditedBooking('${id}')">Сохранить</button></div>`);
+}
+function saveEditedBooking(id){
+  const b=state.bookings.find(x=>x.id===id); if(!b)return;
+  const newTime=(document.getElementById('edit-booking-time')?.value||new Date(b.startAt).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}));
+  const mins=Math.max(30,Number(document.getElementById('edit-booking-duration')?.value||120));
+  const stOld=new Date(b.startAt);
+  const date=b.date || localDateString(stOld);
+  const w=bookingWindow(date,newTime,mins);
+  if(state.bookings.some(x=>x.id!==id && x.tableId===b.tableId && x.status!=='cancelled' && bookingOverlap(w.start,w.end,new Date(x.startAt),new Date(x.endAt)))){flash('На выбранное время стол уже забронирован');return;}
+  b.guestName=(document.getElementById('edit-booking-name')?.value||'').trim(); b.phone=(document.getElementById('edit-booking-phone')?.value||'').trim(); b.guests=Math.max(1,Number(document.getElementById('edit-booking-guests')?.value||2)); b.note=(document.getElementById('edit-booking-note')?.value||'').trim(); b.date=date; b.startAt=w.start.toISOString(); b.endAt=w.end.toISOString(); if(!b.guestName){flash('Введите имя гостя');return;} saveBookings(); closeModal(); render();
+}
+function hallPointerStart(e,el){
+  if(!state.hallEditMode) return;
+  e.preventDefault(); e.stopPropagation(); const t=state.hallTables.find(x=>x.id===el.dataset.id); if(!t)return;
+  const map=document.getElementById('bookingsMap'); if(!map)return;
+  state._hallDrag={id:t.id,startX:e.clientX,startY:e.clientY,origX:t.x,origY:t.y,mapW:map.clientWidth,mapH:map.clientHeight,moved:false};
+  el.setPointerCapture?.(e.pointerId);
+}
+function hallPointerMove(e,el){
+  if(!state.hallEditMode) return;
+  const d=state._hallDrag; if(!d)return; e.preventDefault(); e.stopPropagation();
+  const dxPx=e.clientX-d.startX, dyPx=e.clientY-d.startY;
+  if(Math.abs(dxPx)+Math.abs(dyPx)>5)d.moved=true;
+  const t=state.hallTables.find(x=>x.id===d.id); if(!t)return;
+  const dx=dxPx/d.mapW*100, dy=dyPx/d.mapH*100;
+  t.x=Math.max(0,Math.min(94,d.origX+dx)); t.y=Math.max(0,Math.min(88,d.origY+dy));
+  el.style.left=t.x+'%'; el.style.top=t.y+'%';
+}
+function hallPointerEnd(e){
+  const d=state._hallDrag; if(!d)return;
+  if(!state.hallEditMode){state._hallDrag=null;return;}
+  const id=d.id;
+  const moved=d.moved;
+  state._hallDrag=null;
+  if(moved){
+    saveHall();
+    state._hallSuppressClick=true;
+    render();
+    return;
+  }
+  state._hallSuppressClick=true;
+  openHallTableEditModal(id);
+}
+function renderBookingCard(b,t){
+  const st=new Date(b.startAt), en=new Date(b.endAt);
+  const time=`${st.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}–${en.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}`;
+  return `<div class="booking-card" onclick="editBooking('${b.id}')"><div class="booking-card-top"><div class="booking-card-name">${escapeHtml(b.guestName)}</div><span class="booking-badge">${escapeHtml(hallTableLabel(t))}</span></div><div class="booking-card-meta">${time} · ${Number(b.guests||1)} ${Number(b.guests||1)===1?'гость':'гостей'}${b.phone?' · '+escapeHtml(b.phone):''}</div>${b.note?`<div class="booking-card-note">${escapeHtml(b.note)}</div>`:''}<div style="display:flex;justify-content:flex-end;margin-top:8px;"><button class="btn booking-danger" style="min-height:34px;padding:7px 10px;font-size:11px;" onclick="event.stopPropagation();cancelBooking('${b.id}')">Отменить</button></div></div>`;
+}
+function renderBookingsScreen(){
+  ensureBookingDate();
+  const selected=state.hallTables.find(t=>t.id===state.selectedHallTableId) || state.hallTables[0] || null;
+  const date=state.bookingDate || localDateString(new Date());
+  const selectedBookings=selected ? tableBookings(selected.id,date) : [];
+  const busy=selectedBookings.length>0;
+  return `<div class="screen bookings-screen ${state.tab==='bookings'?'active':''}">
+    <div class="bookings-layout">
+      <div class="bookings-map-card">
+        <div class="bookings-map-toolbar">
+          <button class="bookings-edit-btn" title="Редактировать карту" onclick="openHallEditMenu()">✎</button>
+        </div>
+        <div class="bookings-map-wrap" id="bookingsMap">
+          ${state.hallTables.length?state.hallTables.map(t=>{const tb=bookingStatusForTable(t);return `<div class="hall-table ${t.shape} ${Number(t.rotation||0)?'rotated':''} ${state.selectedHallTableId===t.id?'selected':''} ${tb?'booked':'available'} ${state.hallEditMode?'editing':''}" data-id="${t.id}" style="left:${t.x}%;top:${t.y}%;transform:rotate(${Number(t.rotation||0)}deg)${state.selectedHallTableId===t.id?' scale(1.015)':''};" onclick="handleHallTableClick(event,'${t.id}')" onpointerdown="hallPointerStart(event,this)" onpointermove="hallPointerMove(event,this)" onpointerup="hallPointerEnd(event)" onpointercancel="hallPointerEnd(event)"><div><div class="hall-table-name">${escapeHtml(hallTableLabel(t))}</div><div class="hall-table-meta">${tb?'Существуют брони':'Свободен'}</div></div></div>`;}).join(''):`<div class="bookings-map-hint">Пока нет столов.<br>Откройте редактирование карты кнопкой ✎ и добавьте стол.</div>`}
+        </div>
+      </div>
+      <div class="bookings-side-card">
+        <div class="booking-side-head"><div class="booking-side-title">Карточка стола</div><div class="booking-side-sub">Выберите дату — карта и список броней обновятся автоматически.</div>${selected?`<div class="booking-selected-table"><strong>${escapeHtml(hallTableLabel(selected))}</strong><span class="booking-mini">${selected.shape==='square'?'Квадратный':'Прямоугольный'}</span></div>`:''}</div>
+        <div class="booking-filters" style="grid-template-columns:1fr;">
+          <div class="booking-field"><label>Дата</label><div class="booking-date-wrap"><input type="date" value="${date}" onchange="setBookingDate(this.value)"></div></div>
+        </div>
+        ${selected?`<div class="booking-check"><span class="booking-check-label">${escapeHtml(date)} · броней: ${selectedBookings.length}</span><span class="booking-status ${busy?'busy':'free'}">${busy?'ЕСТЬ БРОНЬ':'СВОБОДЕН'}</span></div>`:''}
+        <div class="booking-list">${selected? (selectedBookings.length?selectedBookings.map(b=>renderBookingCard(b,selected)).join(''):'<div class="booking-list-empty">На выбранную дату у этого стола броней нет.</div>'):'<div class="booking-list-empty">Выберите стол на карте.</div>'}</div>
+        <div class="booking-side-actions">${selected?`<button class="bookings-tool booking-primary" onclick="startBookingForSelected()">Забронировать</button><div class="booking-mini" style="display:flex;align-items:center;justify-content:center;">${selectedBookings.length} ${selectedBookings.length===1?'бронь':'брони'} на дату</div>`:`<button class="bookings-tool booking-primary" disabled>Забронировать</button><div></div>`}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+
+function normalizeWebOrder(raw){return {id:raw.id,external_id:raw.external_id,status:raw.status||'new',order_type:raw.order_type||'На месте',customer_name:raw.customer_name||'',phone:raw.phone||'',address:raw.address||'',comment:raw.comment||'',total:Number(raw.total||0),delivery_fee:Number(raw.delivery_fee||0),created_at:raw.created_at||new Date().toISOString(),order_items:Array.isArray(raw.order_items)?raw.order_items:[]};}
+function startWebOrderEvents(){const n=networkConfigFromState();if(!n.deviceKey||!n.backendUrl||!window.EventSource)return;try{state.webEventsSource?.close();}catch(e){}const source=new EventSource(n.backendUrl.replace(/\/+$/,'')+'/api/orders/events?deviceKey='+encodeURIComponent(n.deviceKey));state.webEventsSource=source;source.onmessage=(ev)=>{try{const d=JSON.parse(ev.data||'{}');if(d.type!=='orders')return;const oldList=state.webEvents.slice();const oldIds=new Set(oldList.map(x=>x.id));const incoming=(d.orders||[]).map(normalizeWebOrder);const merged=[...incoming];oldList.forEach(x=>{if(!merged.some(y=>y.id===x.id))merged.push(x);});const next=merged.filter(x=>x.status==='new').sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));const changed=next.length!==oldList.length || next.some((x,i)=>{const y=oldList[i];return !y || y.id!==x.id || y.status!==x.status || x.total!==y.total || x.updated_at!==y.updated_at;});state.webEvents=next;if(changed)saveKey('webEvents',state.webEvents);if(incoming.some(x=>!oldIds.has(x.id))){flash('🔔 Новый заказ с сайта');render();}}catch(e){}};source.onerror=()=>{};}
+function webOrderDate(o){return fmtDate(new Date(o.created_at).getTime());}
 function openWebEventsModal(){const list=state.webEvents.slice().sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));showModal(`<div class="modal-title">События</div>${list.length?list.map(o=>`<div class="list-row" style="cursor:pointer;" onclick="openWebOrder('${escapeAttr(o.id)}')"><div style="flex:1;min-width:0;"><div class="list-row-name">Заказ с сайта ${escapeHtml(o.external_id||'')}</div><div class="list-row-sub">${escapeHtml(o.customer_name||'Клиент')} · ${fullMoney(o.total)} · ${webOrderDate(o)}</div></div><div style="font-size:22px;">›</div></div>`).join(''):`<div class="center-note">Новых событий нет</div>`}<div class="modal-actions"><button class="btn btn-secondary" style="width:100%;" onclick="closeModal()">Закрыть</button></div>`);}
 function openWebOrder(id){const o=state.webEvents.find(x=>x.id===id);if(!o)return;showModal(`<div class="modal-title">Заказ с сайта ${escapeHtml(o.external_id||'')}</div><div class="setting-sub" style="margin-bottom:14px;">${escapeHtml(o.customer_name||'Клиент')}${o.phone?' · '+escapeHtml(o.phone):''}</div>${(o.order_items||[]).map(i=>`<div class="receipt-line"><span>${escapeHtml(i.product_name)} × ${Number(i.quantity||0)}</span><span>${fullMoney(Number(i.price||0)*Number(i.quantity||0))}</span></div>`).join('')}${o.delivery_fee?`<div class="receipt-line"><span>Доставка</span><span>${fullMoney(o.delivery_fee)}</span></div>`:''}<div class="receipt-total"><span>Итого</span><span>${fullMoney(o.total)}</span></div><div style="margin-top:14px;font-size:13px;line-height:1.55;color:var(--muted);">${o.address?`<div><b>Адрес:</b> ${escapeHtml(o.address)}</div>`:''}${o.comment?`<div><b>Комментарий:</b> ${escapeHtml(o.comment)}</div>`:''}<div><b>Тип:</b> ${escapeHtml(o.order_type||'На месте')}</div></div><div class="modal-actions"><button class="btn btn-secondary" onclick="openWebEventsModal()">Назад</button><button class="btn btn-primary" onclick="acceptWebOrder('${escapeAttr(o.id)}')">Взять в работу</button></div>`);}
-let webAcceptBusy=false,webAcceptanceRecoveryBusy=false;
+let webAcceptBusy=false;
 function webOrderCartItems(o){
   if(!Array.isArray(o.order_items)||!o.order_items.length)throw new Error('В заказе нет товаров');
   return o.order_items.map(i=>{
@@ -1762,46 +2073,20 @@ function webOrderCartItems(o){
     if(matches.length!==1)throw new Error('Товар не найден или неоднозначен: '+i.product_name);
     const p=matches[0],qty=Number(i.quantity),price=Number(i.price??p.price);
     if(!Number.isFinite(qty)||qty<=0||!Number.isFinite(price)||price<0)throw new Error('Некорректная позиция: '+p.name);
-    return {productId:p.id,name:p.name,price,qty,comment:i.comment||'',category:p.category||'',selectedModifiers:JSON.parse(JSON.stringify(i.selectedModifiers||[]))};
+    return {productId:p.id,name:p.name,price,qty,comment:i.comment||'',category:p.category||''};
   });
 }
-async function confirmWebAcceptance(id,record,journal){
-  if(record?.stage==='confirmed')return true;
-  const n=networkConfigFromState();if(!n.backendUrl||!n.deviceKey)return false;
-  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),5000);
-  try{
-    const r=await fetch(n.backendUrl.replace(/\/+$/,'')+'/api/orders/'+encodeURIComponent(id)+'/accept',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Key':n.deviceKey},body:'{}',cache:'no-store',signal:controller.signal});
-    const d=await r.json().catch(()=>null);if(!r.ok)throw new Error(d?.error||('HTTP '+r.status));
-    record.stage='confirmed';record.confirmedAt=Date.now();await window.PrilavokCore.Storage.set('webOrderAcceptances',journal);return true;
-  }catch(e){return false;}finally{clearTimeout(timeout);}
-}
 async function recoverWebAcceptanceJournal(){
-  if(webAcceptanceRecoveryBusy)return false;
-  webAcceptanceRecoveryBusy=true;
-  try{
   const journal=await loadKey('webOrderAcceptances',{});
-  const records=Object.entries(journal||{});
-  let changed=false;
-  for(const [id,record] of records){
-    if(!record?.parked)continue;
-    const local=state.parked.find(p=>p.webOrderId===record.parked.webOrderId);
-    if(record.stage==='prepared'&&local){record.stage='local';changed=true;}
+  const pending=Object.values(journal||{}).filter(x=>x?.stage==='prepared'&&state.parked.some(p=>p.webOrderId===x.parked?.webOrderId));
+  if(!pending.length)return;
+  pending.forEach(x=>{x.stage='local';});
+  try{await window.PrilavokCore.Storage.set('webOrderAcceptances',journal);}
+  catch(e){
+    // Keep an unpublished intent recoverable; do not expose it twice after a restart.
+    const ids=new Set(pending.map(x=>x.parked.webOrderId));
+    state.parked=state.parked.filter(p=>!ids.has(p.webOrderId));markStorageBroken(e);
   }
-  if(changed){try{await window.PrilavokCore.Storage.set('webOrderAcceptances',journal);}catch(e){markStorageBroken(e);return;}}
-  // ACK recovery is best-effort and only happens for records already durably committed locally.
-  for(const [id,record] of records.filter(([,r])=>r?.stage==='local')){
-    const local=state.parked.some(p=>p.webOrderId===record.parked?.webOrderId);
-    if(local){
-      const confirmed=await confirmWebAcceptance(id,record,journal);
-      if(confirmed){
-        const before=state.webEvents.length;
-        state.webEvents=state.webEvents.filter(event=>event?.id!==id);
-        if(state.webEvents.length!==before)await window.PrilavokCore.Storage.set('webEvents',state.webEvents);
-      }
-    }
-  }
-  return true;
-  }finally{webAcceptanceRecoveryBusy=false;}
 }
 async function acceptWebOrder(id){
   if(webAcceptBusy)return;
@@ -1850,8 +2135,12 @@ async function acceptWebOrder(id){
       }
     }
     if(record.stage!=='confirmed'){
-      const confirmed=await confirmWebAcceptance(id,record,journal);
-      if(!confirmed)throw new Error('Заказ сохранён локально, подтверждение backend будет повторено после восстановления связи');
+      const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),30000);
+      try{
+        const r=await fetch(n.backendUrl.replace(/\/+$/,'')+'/api/orders/'+encodeURIComponent(id)+'/accept',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Key':n.deviceKey},body:'{}',cache:'no-store',signal:controller.signal});
+        const d=await r.json().catch(()=>null);if(!r.ok)throw new Error(d?.error||('HTTP '+r.status));
+      }finally{clearTimeout(timeout);}
+      record.stage='confirmed';await window.PrilavokCore.Storage.set('webOrderAcceptances',journal);
     }
     const events=state.webEvents.filter(x=>x.id!==id);
     await window.PrilavokCore.Storage.set('webEvents',events);state.webEvents=events;
@@ -1868,13 +2157,82 @@ async function markCurrentWebOrderReady(){
   try{
     const r=await fetch(n.backendUrl.replace(/\/+$/,'')+'/api/orders/'+encodeURIComponent(id)+'/ready',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Key':n.deviceKey},body:'{}',cache:'no-store'});
     const d=await r.json().catch(()=>null); if(!r.ok)throw new Error(d?.error||('HTTP '+r.status));
-    state.currentWebOrderStatus='ready';saveCurrentOrderSession();render();flash('Веб-заказ отмечен как готовый');
+    state.currentWebOrderStatus='ready'; saveCurrentOrderSession(); render(); flash('Веб-заказ отмечен как готовый');
   }catch(e){flash('Не удалось отметить заказ готовым: '+(e?.message||'Ошибка сети'));}
 }
 
 function testWebOrder(){const n=networkConfigFromState();fetch(n.backendUrl.replace(/\/+$/,'')+'/api/orders/test',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Key':n.deviceKey},body:'{}',cache:'no-store'}).then(async r=>{const d=await r.json().catch(()=>null);if(!r.ok)throw new Error(d?.error||('HTTP '+r.status));flash('Тестовый заказ отправлен');}).catch(()=>flash('Не удалось создать тестовый заказ'));}
 
-
+function networkConfigFromState(){
+  return state.network || {backendUrl:'https://prilavok-backend-production.up.railway.app',deviceKey:'',deviceName:'M POS iPad',lastSyncAt:null,lastSyncStatus:''};
+}
+function saveNetworkSettings(){
+  if(!currentShiftEmployeeIsAdmin()){ flash('Сетевые конфигурации доступны только администратору'); return false; }
+  const url=(document.getElementById('network-backend-url')?.value||'').trim().replace(/\/+$/,'');
+  const deviceName=(document.getElementById('network-device-name')?.value||'').trim() || 'M POS iPad';
+  if(!/^https:\/\//i.test(url)){ flash('Адрес backend должен начинаться с https://'); return false; }
+  const n=networkConfigFromState();
+  n.backendUrl=url;
+  n.deviceName=deviceName;
+  if(!n.deviceKey) n.deviceKey=(crypto?.randomUUID ? crypto.randomUUID() : ('dev_'+uid()+'_'+uid()));
+  state.network=n;
+  saveKey('network',n);
+  return true;
+}
+async function testBackendConnection(){
+  if(!saveNetworkSettings()) return;
+  const n=networkConfigFromState();
+  try{
+    const r=await fetch(n.backendUrl+'/health',{method:'GET',cache:'no-store'});
+    const data=await r.json().catch(()=>null);
+    if(!r.ok || !data?.ok) throw new Error(data?.error||('HTTP '+r.status));
+    state.network.lastSyncStatus='Связь с backend работает.';
+    saveKey('network',state.network);
+    render();
+    flash('Backend подключён');
+  }catch(e){
+    state.network.lastSyncStatus='Ошибка связи: '+(e?.message||'неизвестная ошибка');
+    saveKey('network',state.network);
+    render();
+    flash('Не удалось подключиться к backend');
+  }
+}
+// Authorized exception: availability only, every ten minutes in a visible POS.
+const AVAILABILITY_INTERVAL=10*60*1000;
+let availabilityTimer=null,availabilityBusy=false,availabilityController=null,availabilityListening=false;
+function buildAvailabilityItems(products){
+  const byId=new Map(products.map(p=>[p.id,p]));
+  return products.map(p=>{
+    const qty=availableStock(p,id=>byId.get(id));
+    return {externalId:String(p.id),quantity:qty===Infinity?null:(Number.isFinite(qty)?Math.max(0,qty):0)};
+  }).sort((a,b)=>a.externalId.localeCompare(b.externalId));
+}
+async function publishAvailability(){
+  if(availabilityBusy||document.hidden||window._availabilityAppActive===false||!state.loaded||storageBroken)return false;
+  availabilityBusy=true;
+  let timeout;
+  try{
+    let failed=false;const onError=()=>{failed=true;};const storage=window.PrilavokCore.Storage;
+    // Derive from completed storage writes, never from an unsaved editor or state.
+    const [products,network,previous]=await Promise.all([storage.get('products',null,onError),storage.get('network',null,onError),storage.get('webAvailabilityRevision',0,onError)]);
+    if(failed||!Array.isArray(products)||!network?.backendUrl||!network.deviceKey)return false;
+    if(!Number.isSafeInteger(previous)||previous<0)return false;
+    const items=buildAvailabilityItems(products);
+    const revision=Math.max(Date.now(),previous+1);
+    if(!Number.isSafeInteger(revision))return false;
+    await storage.set('webAvailabilityRevision',revision);
+    if(document.hidden||window._availabilityAppActive===false)return false;
+    availabilityController=new AbortController();timeout=setTimeout(()=>availabilityController?.abort(),30000);
+    const r=await fetch(network.backendUrl.replace(/\/+$/,'')+'/api/availability/snapshot',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Key':network.deviceKey},body:JSON.stringify({version:1,revision,sampledAt:new Date().toISOString(),items}),cache:'no-store',signal:availabilityController.signal});
+    return r.ok;
+  }catch(e){return false;}
+  finally{clearTimeout(timeout);availabilityController=null;availabilityBusy=false;}
+}
+function onAvailabilityAppState(active){
+  window._availabilityAppActive=active;
+  if(!active){clearTimeout(availabilityTimer);availabilityTimer=null;availabilityController?.abort();}
+  else if(state.loaded)startAvailabilitySchedule();
+}
 /* ============================= OPERATIONAL CHANNEL V1 ============================= */
 const OPERATIONAL_SCHEMA_VERSION=1,OPERATIONAL_INTERVAL=15000,OPERATIONAL_TIMEOUT=2500,OPERATIONAL_MAX_BACKOFF=60000;
 let operationalTimer=null,operationalBusy=false,operationalFailures=0,operationalListening=false,operationalController=null;
@@ -2032,6 +2390,650 @@ function onAvailabilityAppState(active){
   if(!active){clearTimeout(availabilityTimer);availabilityTimer=null;availabilityController?.abort();}
   else if(state.loaded)startAvailabilitySchedule();
 }
+function startAvailabilitySchedule(){
+  clearTimeout(availabilityTimer);availabilityTimer=null;
+  if(!availabilityListening){
+    document.addEventListener('visibilitychange',()=>{
+      if(document.hidden){clearTimeout(availabilityTimer);availabilityTimer=null;availabilityController?.abort();}
+      else startAvailabilitySchedule();
+    });availabilityListening=true;
+  }
+  if(document.hidden||window._availabilityAppActive===false)return;
+  availabilityTimer=setTimeout(async()=>{await publishAvailability();startAvailabilitySchedule();},AVAILABILITY_INTERVAL);
+}
+
+function buildMenuSyncPayload(){
+  const categoryNames=[];
+  const addCat=(name)=>{ const n=String(name||'').trim(); if(n && !categoryNames.includes(n)) categoryNames.push(n); };
+  (state.categoryOrder||[]).forEach(addCat);
+  (state.products||[]).forEach(p=>addCat(p.category||'Без категории'));
+  const categories=categoryNames.map((name,index)=>({
+    externalId:'category:'+name,
+    name,
+    color:(state.categoryColors||{})[name]||'',
+    sortOrder:index,
+    isActive:(state.categoryOnline||{})[name]!==false
+  }));
+  const products=(state.products||[]).map((p,index)=>({
+    externalId:String(p.id),
+    name:String(p.name||''),
+    description:String(p.description||''),
+    price:Number(p.price||0),
+    category:String(p.category||'Без категории'),
+    sortOrder:Number.isFinite(Number(p.sortOrder)) ? Number(p.sortOrder) : index,
+    isActive:true,
+    availableOnline:(p.availableOnline!==false) && (state.categoryOnline[String(p.category||'Без категории').trim() || 'Без категории']!==false),
+    imageUrl:String(p.imageUrl||'')
+  })).filter(p=>p.name);
+  return {deviceKey:networkConfigFromState().deviceKey,deviceName:networkConfigFromState().deviceName,categories,products};
+}
+async function syncMenuToBackend(){
+  if(!saveNetworkSettings()) return;
+  const n=networkConfigFromState();
+  const payload=buildMenuSyncPayload();
+  const status=document.getElementById('network-sync-status');
+  if(status) status.textContent='Синхронизация…';
+  try{
+    const r=await fetch(n.backendUrl+'/api/menu/sync',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-Device-Key':n.deviceKey},
+      body:JSON.stringify(payload),
+      cache:'no-store'
+    });
+    const data=await r.json().catch(()=>null);
+    if(!r.ok) throw new Error(data?.error||('HTTP '+r.status));
+    state.network.lastSyncAt=Date.now();
+    state.network.lastSyncStatus=`Синхронизировано: ${Number(data?.categories||0)} категорий, ${Number(data?.products||0)} товаров.`;
+    saveKey('network',state.network);
+    render();
+    flash('Меню успешно синхронизировано');
+    void publishAvailability();
+  }catch(e){
+    state.network.lastSyncStatus='Ошибка синхронизации: '+(e?.message||'неизвестная ошибка');
+    saveKey('network',state.network);
+    render();
+    flash('Ошибка синхронизации меню');
+  }
+}
+
+function renderNetworkScreen(){
+  const admin = currentShiftEmployeeIsAdmin();
+  if(!admin) return `<div class="screen content-screen"></div>`;
+  const t = state.telegram || {};
+  const p = state.printer || {};
+  const configured = !!(p.ip || '').trim();
+  return `
+  <div class="screen content-screen ${state.tab==='network'?'active':''}">
+    <div class="content-head" style="align-items:center;"><div style="display:flex;align-items:center;gap:12px;"><button class="btn btn-secondary" style="width:auto;padding:10px 16px;" onclick="state.settingsAdminPanel=true;setTab('settings')">← Назад</button><div class="content-title">Сетевые конфигурации</div></div></div>
+    <div class="settings-grid">
+      <div class="settings-card">
+        <div style="font-size:16px;font-weight:800;margin-bottom:4px;">Синхронизация меню</div>
+        <div class="setting-sub">Передаёт текущее меню с iPad в M POS Backend. Повторная синхронизация обновляет существующие товары без создания дубликатов.</div>
+        <div class="field" style="margin-top:18px;">
+          <label>Адрес backend</label>
+          <input id="network-backend-url" value="${escapeAttr((state.network?.backendUrl||'https://prilavok-backend-production.up.railway.app').replace(/\/$/,''))}" placeholder="https://...railway.app" inputmode="url" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>Название устройства</label>
+          <input id="network-device-name" value="${escapeAttr(state.network?.deviceName||'M POS iPad')}" placeholder="M POS iPad">
+        </div>
+        <div class="setting-row">
+          <div>
+            <div class="setting-title">Устройство</div>
+            <div class="setting-sub">Уникальный ключ создаётся автоматически на этом iPad.</div>
+          </div>
+          <div style="font-size:12px;color:var(--muted);max-width:210px;text-align:right;word-break:break-all;">${escapeHtml(state.network?.deviceKey||'создаётся…')}</div>
+        </div>
+        <div class="settings-note" style="margin-top:14px;">
+          В синхронизацию входят категории и товары из локальной кассы. Сейчас все синхронизированные товары публикуются в онлайн-меню.
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-primary" onclick="syncMenuToBackend()">Синхронизировать меню</button>
+          <button class="btn btn-secondary" onclick="testBackendConnection()">Проверить связь</button><button class="btn btn-outline" onclick="testWebOrder()">Создать тестовый веб-заказ</button>
+        </div>
+        <div id="network-sync-status" class="settings-note" style="margin-top:14px;">${escapeHtml(state.network?.lastSyncStatus||'Синхронизация ещё не выполнялась.')}${state.network?.lastSyncAt ? ' · '+escapeHtml(fmtDate(state.network.lastSyncAt)) : ''}</div>
+      </div>
+      <div class="settings-card">
+        <div style="font-size:16px;font-weight:800;margin-bottom:4px;">Чековый принтер</div>
+        <div class="setting-sub">Xprinter XP-N160II · Ethernet / LAN</div>
+        <div class="field" style="margin-top:18px;"><label>IP-адрес принтера</label>
+          <input id="printer-ip" value="${escapeAttr(p.ip||'')}" inputmode="decimal" placeholder="Например: 192.168.1.100">
+        </div>
+        <div class="grid-2">
+          <div class="field"><label>Порт</label><input id="printer-port" type="number" value="${Number(p.port)||9100}" inputmode="numeric"></div>
+          <div class="field"><label>Модель</label><input value="Xprinter XP-N160II" disabled></div>
+        </div>
+        <div class="setting-row">
+          <div><div class="setting-title">Использовать принтер</div><div class="setting-sub">Сохранять настройки сетевого принтера.</div></div>
+          <label class="switch"><input id="printer-enabled" type="checkbox" ${p.enabled?'checked':''}><span></span></label>
+        </div>
+        <div class="setting-row">
+          <div><div class="setting-title">Автоматически печатать после оплаты</div><div class="setting-sub">После успешной оплаты чек сразу передаётся в модуль печати.</div></div>
+          <label class="switch"><input id="printer-auto" type="checkbox" ${p.autoPrint?'checked':''}><span></span></label>
+        </div>
+        <div class="printer-status"><span class="dot ${configured && p.enabled?'on':'off'}"></span>${configured && p.enabled ? escapeHtml(p.ip)+':'+(Number(p.port)||9100) : 'Принтер не настроен'}</div>
+        <div class="settings-note" style="margin-top:14px;">
+          XP-N160II подключается к локальной сети по Wi‑Fi или Ethernet. M POS на iPad печатает напрямую через нативный сетевой модуль приложения: TCP/9100 + ESC/POS. Отдельный компьютер или драйвер для печати чеков не требуется.
+        </div>
+        <div style="font-weight:800;font-size:14px;margin-top:18px;margin-bottom:6px;">Как подключить</div>
+        <div class="setting-sub" style="line-height:1.6;">1. Подключите принтер к той же локальной сети, что и iPad (Wi‑Fi или Ethernet).
+        <br>2. Узнайте IP принтера через self-test.
+        <br>3. Укажите IP и порт 9100 здесь.
+        <br>4. Проверьте подключение кнопкой «Проверить».
+        <br>5. При включённой автопечати чек будет автоматически передаваться в модуль печати после оплаты.</div>
+        <div class="modal-actions">
+          <button class="btn btn-primary" onclick="savePrinterSettings()">Сохранить настройки</button>
+          <button class="btn btn-secondary" onclick="testPrinterConnection()">Проверить</button>
+        </div>
+      </div>
+      <div class="settings-card">
+        <div style="font-size:16px;font-weight:800;margin-bottom:4px;">Telegram</div>
+        <div class="setting-sub">Подключение рабочего Telegram-бота для уведомлений в группу.</div>
+        <div class="field" style="margin-top:18px;">
+          <label>Токен бота</label>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input id="telegram-token" type="password" value="${escapeAttr(t.botToken||'')}" placeholder="Токен от @BotFather" autocomplete="off" style="flex:1;">
+            <button class="btn btn-secondary" style="width:auto;white-space:nowrap;" onclick="toggleTelegramToken()">Показать</button>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="field"><label>ID рабочей группы</label><input id="telegram-chat-id" value="${escapeAttr(t.chatId||'')}" placeholder="Например: -1001234567890" inputmode="text"></div>
+          <div class="field"><label>ID темы · необязательно</label><input id="telegram-thread-id" value="${escapeAttr(t.threadId||'')}" placeholder="Например: 123" inputmode="numeric"></div>
+        </div>
+        <div class="setting-row">
+          <div><div class="setting-title">Включить Telegram</div><div class="setting-sub">Если выключено, приложение не отправляет уведомления.</div></div>
+          <label class="switch"><input id="telegram-enabled" type="checkbox" ${t.enabled?'checked':''}><span></span></label>
+        </div>
+        <div class="setting-row">
+          <div><div class="setting-title">Смена открыта</div><div class="setting-sub">Отправлять сообщение после успешного открытия смены.</div></div>
+          <label class="switch"><input id="telegram-shift-opened" type="checkbox" ${t.notifyShiftOpened!==false?'checked':''}><span></span></label>
+        </div>
+        <div class="setting-row">
+          <div><div class="setting-title">Смена закрыта</div><div class="setting-sub">Отправлять в группу чек-отчёт о закрытой смене в виде изображения.</div></div>
+          <label class="switch"><input id="telegram-shift-closed" type="checkbox" ${t.notifyShiftClosed!==false?'checked':''}><span></span></label>
+        </div>
+        <div class="setting-row">
+          <div><div class="setting-title">Ежемесячный складской отчёт</div><div class="setting-sub">При первом открытии смены в новом месяце отправлять PDF «Складской учёт» за весь предыдущий календарный месяц. Повторно за тот же месяц отчёт не отправляется.</div></div>
+          <label class="switch"><input id="telegram-monthly-warehouse" type="checkbox" ${t.notifyMonthlyWarehouse===true?'checked':''}><span></span></label>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-primary" onclick="saveTelegramSettings()">Сохранить</button>
+          <button class="btn btn-secondary" onclick="testTelegramConnection()">Проверить подключение</button>
+        </div>
+        <div id="telegram-status" class="settings-note" style="margin-top:14px;">${t.enabled && t.botToken && t.chatId ? 'Telegram настроен. Выполните проверку подключения.' : 'Telegram пока не настроен.'}</div>
+      </div>
+    </div>
+  </div>`;
+}
+function toggleTelegramToken(){
+  const input=document.getElementById('telegram-token');
+  const btn=event?.currentTarget;
+  if(!input) return;
+  const show=input.type==='password'; input.type=show?'text':'password'; if(btn) btn.textContent=show?'Скрыть':'Показать';
+}
+function saveTelegramSettings(){
+  if(!currentShiftEmployeeIsAdmin()){ flash('Сетевые конфигурации доступны только администратору'); return; }
+  state.telegram={
+    enabled:!!document.getElementById('telegram-enabled')?.checked,
+    botToken:(document.getElementById('telegram-token')?.value||'').trim(),
+    chatId:(document.getElementById('telegram-chat-id')?.value||'').trim(),
+    threadId:(document.getElementById('telegram-thread-id')?.value||'').trim(),
+    notifyShiftOpened:!!document.getElementById('telegram-shift-opened')?.checked,
+    notifyShiftClosed:!!document.getElementById('telegram-shift-closed')?.checked,
+    notifyMonthlyWarehouse:!!document.getElementById('telegram-monthly-warehouse')?.checked,
+    lastMonthlyWarehouseSent:state.telegram?.lastMonthlyWarehouseSent||''
+  };
+  saveKey('telegram',state.telegram); render(); flash('Настройки Telegram сохранены');
+}
+function telegramConfigFromState(){
+  const t=state.telegram||{};
+  return {enabled:!!t.enabled,botToken:String(t.botToken||''),chatId:String(t.chatId||''),threadId:String(t.threadId||''),notifyShiftOpened:t.notifyShiftOpened!==false,notifyShiftClosed:t.notifyShiftClosed!==false,notifyMonthlyWarehouse:t.notifyMonthlyWarehouse===true,lastMonthlyWarehouseSent:String(t.lastMonthlyWarehouseSent||'')};
+}
+function telegramNativeRequest(action, extra={}){
+  const cfg=telegramConfigFromState();
+  if(!cfg.enabled || !cfg.botToken || !cfg.chatId) return false;
+  if(window.webkit?.messageHandlers?.telegram){
+    window.webkit.messageHandlers.telegram.postMessage({...cfg,action,...extra});
+    return true;
+  }
+  return false;
+}
+function testTelegramConnection(){
+  if(!currentShiftEmployeeIsAdmin()){flash('Сетевые конфигурации доступны только администратору');return;}
+  const token=(document.getElementById('telegram-token')?.value||'').trim();
+  const chatId=(document.getElementById('telegram-chat-id')?.value||'').trim();
+  const threadId=(document.getElementById('telegram-thread-id')?.value||'').trim();
+  if(!token){flash('Введите токен бота');return;}
+  if(!chatId){flash('Введите ID рабочей группы');return;}
+  const status=document.getElementById('telegram-status'); if(status) status.textContent='Проверяем подключение…';
+  if(window.webkit?.messageHandlers?.telegram){
+    window.webkit.messageHandlers.telegram.postMessage({action:'test',botToken:token,chatId,threadId});
+  } else {
+    if(status) status.textContent='Проверка доступна в установленном приложении на iPad.';
+  }
+}
+window.onTelegramResult=function(result){
+  if(result?.ok){ flash(result.message||'Telegram подключён'); if(state.tab==='network'){ const el=document.getElementById('telegram-status'); if(el) el.textContent=result.message||'Telegram подключён.'; } }
+  else { flash(result?.message||'Не удалось подключиться к Telegram'); const el=document.getElementById('telegram-status'); if(el) el.textContent=result?.message||'Не удалось подключиться к Telegram.'; }
+};
+function sendTelegramShiftOpened(shift){
+  const t=telegramConfigFromState();
+  if(!t.enabled || !t.notifyShiftOpened || !t.botToken || !t.chatId) return;
+  const date=new Date(shift.openedAt||Date.now()).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  const text=`🟢 <b>Смена открыта</b>\n👤 Сотрудник: ${escapeHtml(shift.employeeName||'Сотрудник')}\n🕐 Время: ${date}`;
+  if(window.webkit?.messageHandlers?.telegram){
+    window.webkit.messageHandlers.telegram.postMessage({...t,action:'send',text});
+  }
+}
+function buildShiftReportPayload(shift){
+  const orders=shiftOrders(shift.id).slice().sort((a,b)=>(a.timestamp||0)-(b.timestamp||0));
+  const t=shiftTotals(shift.id);
+  const expected=(Number(shift.openingCash)||0)+t.cash+t.netMovements;
+  const counted=Number(shift.countedCash)||0;
+  return {
+    id:shift.id, employeeName:shift.employeeName||'', employeePhone:shift.employeePhone||'',
+    openedAt:shift.openedAt||0, closedAt:shift.closedAt||0,
+    openingCash:Number(shift.openingCash)||0, countedCash:counted, expectedCash:expected, difference:counted-expected,
+    cash:Number(t.cash)||0, card:Number(t.card)||0, total:Number(t.total)||0, count:Number(t.count)||0,
+    deposits:Number(t.deposits)||0, withdrawals:Number(t.withdrawals)||0, netMovements:Number(t.netMovements)||0,
+    currency:state.currency,
+    establishmentName:state.company?.establishmentName || '',
+    cashMovements:t.movements.map(m=>({type:m.type||'',subtype:m.subtype||'',amount:Number(m.amount)||0,timestamp:m.timestamp||0,note:m.note||''})),
+    orders:orders.map(o=>({timestamp:o.timestamp||0,total:Number(o.total)||0,method:o.method||'',orderLabel:o.orderLabel||'',orderType:o.orderType||'',items:(o.items||[]).map(i=>({name:i.name||i.productName||'Товар',qty:Number(i.qty)||0,price:Number(i.price)||0}))}))
+  };
+}
+function sendTelegramShiftClosed(shift){
+  const t=telegramConfigFromState();
+  if(!t.enabled || !t.notifyShiftClosed || !t.botToken || !t.chatId) return;
+  if(window.webkit?.messageHandlers?.telegram){
+    window.webkit.messageHandlers.telegram.postMessage({...t,action:'sendShiftCloseReport',report:buildShiftReportPayload(shift)});
+  }
+}
+
+function previousCalendarMonthRange(now=new Date()){
+  const firstCurrent=new Date(now.getFullYear(),now.getMonth(),1);
+  const lastPrevious=new Date(firstCurrent); lastPrevious.setDate(0);
+  const firstPrevious=new Date(lastPrevious.getFullYear(),lastPrevious.getMonth(),1);
+  const key=firstPrevious.getFullYear()+'-'+String(firstPrevious.getMonth()+1).padStart(2,'0');
+  return {key,from:localDateString(firstPrevious),to:localDateString(lastPrevious)};
+}
+function maybeSendMonthlyWarehouseReport(){
+  const t=telegramConfigFromState();
+  if(!t.enabled || !t.notifyMonthlyWarehouse || !t.botToken || !t.chatId) return;
+  if(!currentShiftEmployeeIsAdmin()) return;
+  if(!window.webkit?.messageHandlers?.telegram) return;
+  try{
+    const period=previousCalendarMonthRange();
+    if(t.lastMonthlyWarehouseSent===period.key) return;
+    const payload=warehouseExportPayload(warehouseReport(period.from,period.to));
+    window.webkit.messageHandlers.telegram.postMessage({...t,action:'sendMonthlyWarehouseReport',periodKey:period.key,report:payload});
+  }catch(e){ console.error('Не удалось подготовить ежемесячный складской отчёт:',e); }
+}
+window.onTelegramMonthlyWarehouseResult=function(result){
+  if(result?.ok && result.periodKey){
+    state.telegram.lastMonthlyWarehouseSent=String(result.periodKey);
+    saveKey('telegram',state.telegram);
+    flash(result.message||'Ежемесячный складской отчёт отправлен в Telegram');
+  }else if(result?.message){
+    flash(result.message);
+  }
+};
+
+function openAppearanceModal(){
+  showModal(`<div class="modal-title">Внешний вид</div>
+    <div class="field"><label>Тема приложения</label><div style="display:flex;gap:10px;">
+      <button class="btn ${state.theme==='light'?'btn-primary':'btn-secondary'}" style="flex:1;min-height:46px;" onclick="setTheme('light');closeModal()">☀️ Светлая</button>
+      <button class="btn ${state.theme==='dark'?'btn-primary':'btn-secondary'}" style="flex:1;min-height:46px;" onclick="setTheme('dark');closeModal()">🌙 Тёмная</button>
+    </div></div>`);
+}
+
+function employeeDisplayName(name){
+  const parts=String(name||'').trim().split(/\s+/).filter(Boolean);
+  if(parts.length<2)return parts[0]||'';
+  return parts[0]+' '+parts.slice(1,3).map(part=>part.split('-').filter(Boolean).map(piece=>Array.from(piece)[0].toLocaleUpperCase('ru')+'.').join('-')).join(' ');
+}
+
+
+
+function inventoryDateOnly(value){if(!value)return null;const d=value instanceof Date?new Date(value):new Date(String(value).length===10?value+'T00:00:00':value);if(Number.isNaN(d.getTime()))return null;return new Date(d.getFullYear(),d.getMonth(),d.getDate());}
+function inventoryPeriodStart(date=new Date(),frequency=state.inventoryConfig?.frequency){
+ const d=inventoryDateOnly(date)||inventoryDateOnly(new Date());
+ if(frequency==='weekly'){const day=(d.getDay()+6)%7;const start=new Date(d);start.setDate(d.getDate()-day);return start;}
+ if(frequency==='quarterly')return new Date(d.getFullYear(),Math.floor(d.getMonth()/3)*3,1);
+ return new Date(d.getFullYear(),d.getMonth(),1);
+}
+function inventoryPeriodEnd(start,frequency=state.inventoryConfig?.frequency){
+ const s=inventoryDateOnly(start);if(!s)return null;
+ if(frequency==='weekly'){const e=new Date(s);e.setDate(e.getDate()+6);return e;}
+ if(frequency==='quarterly')return new Date(s.getFullYear(),s.getMonth()+3,0);
+ return new Date(s.getFullYear(),s.getMonth()+1,0);
+}
+function inventoryWindow(){
+ const c=state.inventoryConfig||{};if(!c.enabled||!c.productIds?.length)return null;
+ const frequency=['weekly','monthly','quarterly'].includes(c.frequency)?c.frequency:'monthly',today=inventoryDateOnly(new Date()),start=inventoryPeriodStart(today,frequency),windowEnd=new Date(start);windowEnd.setDate(start.getDate()+6);
+ const periodEnd=inventoryPeriodEnd(start,frequency);if(windowEnd>periodEnd)windowEnd.setTime(periodEnd.getTime());
+ const last=inventoryDateOnly(c.lastCompletedAt),completed=!!(last&&last>=start&&last<=periodEnd);
+ return {frequency,start,end:windowEnd,periodEnd,today,active:today>=start&&today<=windowEnd&&!completed,completed};
+}
+function inventoryNextDate(){
+ const w=inventoryWindow();if(!w)return null;if(w.active)return w.start;
+ const next=new Date(w.start);
+ if(w.frequency==='weekly')next.setDate(next.getDate()+7);
+ else if(w.frequency==='quarterly')next.setMonth(next.getMonth()+3);
+ else next.setMonth(next.getMonth()+1);
+ return next;
+}
+function inventoryDaysUntil(){const w=inventoryWindow();if(w?.active)return 0;const n=inventoryNextDate();return n?Math.ceil((n-inventoryDateOnly(new Date()))/86400000):null;}
+function renderInventoryTopbarReminder(){const w=inventoryWindow();if(!state.inventoryDraft&&!w?.active)return '';return '<button class="tab '+(state.tab==='inventoryWork'?'active':'')+'" style="color:#FFD86B;background:rgba(255,216,107,.1);white-space:nowrap;" onclick="openInventoryWork()">Инвентаризация</button>';}
+function inventoryTrackedProducts(){const ids=new Set(state.inventoryConfig?.productIds||[]);return state.products.filter(p=>ids.has(p.id)&&productTracksStock(p));}
+function setInventoryFrequency(v){state.inventoryConfig.frequency=['weekly','monthly','quarterly'].includes(v)?v:'monthly';render();}
+function filterInventoryProducts(value){
+ const q=String(value||'').trim().toLocaleLowerCase('ru');document.querySelectorAll('[data-inventory-product-row]').forEach(row=>{row.style.display=!q||String(row.dataset.inventoryProductName||'').includes(q)?'flex':'none';});
+}
+function saveInventorySettings(){
+ const productIds=[...document.querySelectorAll('[data-inventory-product]:checked')].map(x=>x.value);
+ if(!productIds.length){flash('Выберите хотя бы один товар');return;}
+ const frequency=['weekly','monthly','quarterly'].includes(state.inventoryConfig.frequency)?state.inventoryConfig.frequency:'monthly';
+ state.inventoryConfig={...state.inventoryConfig,enabled:true,frequency,productIds};
+ delete state.inventoryConfig.monthDay;delete state.inventoryConfig.customDates;
+ saveKey('inventoryConfig',state.inventoryConfig);render();flash('Настройки инвентаризации сохранены');
+}
+function startInventory(type='scheduled'){
+ const ps=inventoryTrackedProducts();if(!ps.length){flash('Нет товаров для инвентаризации');return false;}
+ state.inventoryDraft={id:uid(),type,startedAt:Date.now(),scheduledDate:type==='adhoc'?Date.now():(inventoryWindow()?.start||inventoryDateOnly(new Date())).getTime(),items:ps.map(p=>({productId:p.id,name:p.name,unit:stockUnit(p),expected:roundStockQty(Number(p.stock)||0),actual:null}))};
+ saveKey('inventoryDraft',state.inventoryDraft);return true;
+}
+function openInventoryWork(){if(!state.inventoryDraft&&!startInventory('scheduled'))return;state.tab='inventoryWork';render();}
+function startAdhocInventory(){
+ if(state.inventoryDraft){state.tab='inventoryWork';render();flash('Сначала завершите текущую инвентаризацию');return;}
+ if(!startInventory('adhoc'))return;state.tab='inventoryWork';render();
+}
+function updateInventoryActual(id,v){const x=state.inventoryDraft?.items.find(i=>i.productId===id);if(!x||x.fixedAt)return;const n=Number(String(v).replace(',','.'));x.actual=Number.isFinite(n)&&n>=0?roundStockQty(n):null;saveKey('inventoryDraft',state.inventoryDraft);}
+function fixInventoryItem(id){
+ const d=state.inventoryDraft,x=d?.items.find(i=>i.productId===id);if(!x||x.fixedAt)return;
+ if(x.actual===null||!Number.isFinite(Number(x.actual))){flash('Введите остаток товара');return;}
+ const p=getProduct(x.productId);if(!productTracksStock(p)){flash('Для товара недоступен учёт остатков');return;}
+ x.expected=roundStockQty(Number(p.stock)||0);x.actual=roundStockQty(Number(x.actual));x.difference=roundStockQty(x.actual-x.expected);x.fixedAt=Date.now();p.stock=x.actual;
+ saveKey('products',state.products);saveKey('inventoryDraft',d);render();flash('Остаток зафиксирован');
+}
+function requestCancelInventory(){
+ if(!state.inventoryDraft)return;
+ if(!currentShiftEmployeeIsAdmin()){flash('Отменить инвентаризацию может только администратор');return;}
+ showModal(`<div class="modal-title">Отменить инвентаризацию?</div>
+   <div class="center-note" style="padding:4px 0 14px;text-align:left;">Текущая инвентаризация будет отменена. Введённые и зафиксированные в ней данные не будут сохранены.</div>
+   <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Нет, продолжить</button><button class="btn btn-danger" onclick="confirmCancelInventory()">Да, отменить</button></div>`,true);
+}
+function confirmCancelInventory(){
+ if(!currentShiftEmployeeIsAdmin()){closeModal();flash('Отменить инвентаризацию может только администратор');return;}
+ if(!state.inventoryDraft){closeModal();return;}
+ state.inventoryDraft=null;
+ saveKey('inventoryDraft',null);
+ closeModal();
+ state.tab='inventory';
+ render();
+ flash('Инвентаризация отменена');
+}
+function pauseInventory(){saveKey('inventoryDraft',state.inventoryDraft);state.tab='pos';render();flash('Инвентаризация сохранена. Можно продолжить позже');}
+function completeInventory(){
+ const d=state.inventoryDraft;if(!d)return;if(d.items.some(x=>!x.fixedAt)){flash('Сначала зафиксируйте остаток каждого товара');return;}
+ showInventorySummary();
+}
+function inventorySummaryData(){
+ const d=state.inventoryDraft;if(!d)return {rows:[],loss:0,shortages:0,surpluses:0};
+ let loss=0,shortages=0,surpluses=0;
+ const rows=d.items.map(x=>{const p=getProduct(x.productId),difference=roundStockQty(Number(x.difference||0)),cost=Number(p?.cost)||0,lossAmount=difference<0?Math.abs(difference)*cost:0;if(difference<0)shortages++;if(difference>0)surpluses++;loss+=lossAmount;return {...x,difference,cost,lossAmount};});
+ return {rows,loss,shortages,surpluses};
+}
+function showInventorySummary(){
+ const d=state.inventoryDraft;if(!d)return;
+ const summary=inventorySummaryData();
+ const changed=summary.rows.filter(x=>x.difference!==0);
+ showModal(`<div class="modal-title">Сводка инвентаризации</div>
+   <div class="grid-3" style="margin-bottom:14px;">
+     <div class="stat-box"><div class="label">Недостачи</div><div class="value">${summary.shortages}</div></div>
+     <div class="stat-box"><div class="label">Излишки</div><div class="value">${summary.surpluses}</div></div>
+     <div class="stat-box"><div class="label">Примерный убыток</div><div class="value">${money(summary.loss)}</div></div>
+   </div>
+   <div style="max-height:46vh;overflow:auto;border-top:1px solid var(--border);">
+     ${changed.length?changed.map(x=>`<div class="list-row"><div style="flex:1;min-width:0;"><div class="list-row-name">${escapeHtml(x.name)}</div><div class="setting-sub">Было: ${stockQtyText(x.expected)} ${unitLabel(x.unit)} · Стало: ${stockQtyText(x.actual)} ${unitLabel(x.unit)}</div></div><div style="text-align:right;"><div style="font-weight:850;color:${x.difference<0?'var(--danger)':'var(--accent)'};">${x.difference>0?'+':''}${stockQtyText(x.difference)} ${unitLabel(x.unit)}</div>${x.lossAmount>0?`<div class="setting-sub">≈ −${money(x.lossAmount)}</div>`:''}</div></div>`).join(''):'<div class="center-note">Расхождений нет</div>'}
+   </div>
+   <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Вернуться</button><button class="btn btn-primary" onclick="confirmCompleteInventory()">Завершить инвентаризацию</button></div>`,true);
+}
+function confirmCompleteInventory(){
+ const d=state.inventoryDraft;if(!d)return;const completedAt=Date.now(),summary=inventorySummaryData();
+ state.inventoryHistory.unshift({...d,completedAt,estimatedLoss:summary.loss,items:d.items.map(x=>({...x}))});if(d.type!=='adhoc')state.inventoryConfig.lastCompletedAt=completedAt;
+ state.inventoryDraft=null;state.tab='pos';saveKey('products',state.products);saveKey('inventoryHistory',state.inventoryHistory);saveKey('inventoryConfig',state.inventoryConfig);saveKey('inventoryDraft',null);closeModal();render();flash('Инвентаризация завершена');
+}
+function renderInventoryScreen(){
+ const c=state.inventoryConfig||{};if(!['weekly','monthly','quarterly'].includes(c.frequency))c.frequency='monthly';
+ const tracked=state.products.filter(productTracksStock).sort((a,b)=>a.name.localeCompare(b.name,'ru')),w=inventoryWindow(),next=inventoryNextDate();
+ const rows=tracked.map(p=>`<label data-inventory-product-row data-inventory-product-name="${escapeAttr(String(p.name||'').toLocaleLowerCase('ru'))}" class="list-row" style="cursor:pointer;"><input data-inventory-product type="checkbox" value="${escapeAttr(p.id)}" ${(c.productIds||[]).includes(p.id)?'checked':''} style="width:20px;height:20px;"><div style="flex:1;"><div class="list-row-name">${escapeHtml(p.name)}</div><div class="setting-sub">Остаток: ${stockQtyText(p.stock)} ${unitLabel(stockUnit(p))}</div></div></label>`).join('');
+ const scheduleText=w?.active?`Окно инвентаризации открыто до ${w.end.toLocaleDateString('ru-RU')} включительно.`:w?.completed?'Инвентаризация в текущем периоде завершена.':next?`Следующее окно начнётся ${next.toLocaleDateString('ru-RU')}.`:'После сохранения настроек окно будет открываться автоматически.';
+ return `<div class="screen content-screen ${state.tab==='inventory'?'active':''}"><div class="content-head"><div style="display:flex;align-items:center;gap:12px;"><button class="btn btn-secondary" style="width:auto;padding:10px 16px;" onclick="state.settingsAdminPanel=true;setTab('settings')">← Назад</button><div class="content-title">Инвентаризация</div></div></div><div style="overflow:auto;min-height:0;flex:1;padding-right:4px;">
+ <div class="card" style="margin-bottom:16px;"><div style="font-size:17px;font-weight:850;">График</div><div class="setting-sub" style="margin:4px 0 8px;">${scheduleText} На проведение даётся 7 дней с начала периода.</div><div style="font-size:15px;font-weight:800;margin-bottom:16px;">Следующая инвентаризация: ${next?next.toLocaleDateString('ru-RU'):'—'}</div>
+ <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px;"><button class="btn ${c.frequency==='weekly'?'btn-primary':'btn-secondary'}" onclick="setInventoryFrequency('weekly')">Раз в неделю</button><button class="btn ${c.frequency==='monthly'?'btn-primary':'btn-secondary'}" onclick="setInventoryFrequency('monthly')">Раз в месяц</button><button class="btn ${c.frequency==='quarterly'?'btn-primary':'btn-secondary'}" onclick="setInventoryFrequency('quarterly')">Раз в квартал</button></div><button class="btn btn-secondary" style="width:100%;" onclick="startAdhocInventory()">Внеплановая инвентаризация</button></div>
+ <div class="card" style="margin-bottom:16px;"><div style="font-size:17px;font-weight:850;">Товары для инвентаризации</div><div class="setting-sub" style="margin:4px 0 12px;">Выберите товары, которые нужно пересчитывать. Товары с остатком ∞ исключены.</div><input type="search" placeholder="Поиск товара" oninput="filterInventoryProducts(this.value)" style="width:100%;padding:11px 14px;border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--ink);font:inherit;margin-bottom:10px;"><div style="max-height:360px;overflow:auto;border-top:1px solid var(--border);">${rows||'<div class="center-note">Нет товаров с учётом остатков</div>'}</div><button class="btn btn-primary" style="width:100%;margin-top:14px;" onclick="saveInventorySettings()">Сохранить настройки</button></div>
+ <div class="card"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;"><div style="font-size:17px;font-weight:850;">История</div></div>${state.inventoryHistory.length?state.inventoryHistory.slice(0,50).map(r=>`<div class="list-row"><div><div class="list-row-name">${fmtDate(r.completedAt)}${r.type==='adhoc'?' · Внеплановая':''}</div><div class="setting-sub">${r.items.length} товаров · расхождений: ${r.items.filter(x=>Number(x.difference)!==0).length} · недостач: ${r.items.filter(x=>Number(x.difference)<0).length}</div></div></div>`).join(''):'<div class="center-note">Инвентаризаций пока не было</div>'}</div></div></div>`;
+}
+
+function renderInventoryWorkScreen(){
+ const d=state.inventoryDraft;
+ if(!d)return `<div class="screen content-screen ${state.tab==='inventoryWork'?'active':''}"><div class="center-note" style="margin:auto;">Нет активной инвентаризации.</div></div>`;
+ const isAdmin=currentShiftEmployeeIsAdmin(),fixed=d.items.filter(x=>!!x.fixedAt).length;
+ const rows=d.items.map(x=>{
+   const unit=unitLabel(x.unit),done=!!x.fixedAt,p=getProduct(x.productId),currentExpected=done?roundStockQty(Number(x.expected)||0):roundStockQty(Number(p?.stock)||0),diff=roundStockQty(Number(x.difference||0)),diffText=diff>0?'+'+stockQtyText(diff):stockQtyText(diff);
+   const before=done?`<div class="setting-sub" style="margin-top:5px;">Расчётный остаток: ${stockQtyText(currentExpected)} ${unit}</div><div style="margin-top:5px;font-weight:800;color:${diff<0?'#D95C54':diff>0?'#42A66B':'var(--muted)'};">Разница: ${diffText} ${unit}</div>`:(isAdmin?`<div class="setting-sub">Учётный остаток: ${stockQtyText(currentExpected)} ${unit}</div>`:'');
+   const control=done?`<div style="min-width:190px;text-align:right;"><div class="setting-sub">Зафиксированный остаток</div><div style="font-size:18px;font-weight:850;margin-top:4px;">${stockQtyText(x.actual)} ${unit}</div></div>`:`<div style="width:230px;"><div class="setting-sub" style="margin-bottom:5px;">Остаток, ${escapeHtml(unit)}</div><div style="display:flex;gap:8px;"><input type="number" min="0" step="0.001" inputmode="decimal" value="${x.actual===null?'':escapeAttr(String(x.actual))}" placeholder="0" style="min-width:0;flex:1;padding:11px 12px;border:1px solid var(--border);border-radius:11px;background:var(--surface);color:var(--ink);font:inherit;" onchange="updateInventoryActual('${escapeAttr(x.productId)}',this.value)"><button class="btn btn-primary" style="width:auto;padding:0 14px;" onclick="fixInventoryItem('${escapeAttr(x.productId)}')">Фиксировать</button></div></div>`;
+   return `<div class="list-row" style="align-items:center;gap:16px;padding-top:14px;padding-bottom:14px;"><div style="flex:1;min-width:0;"><div class="list-row-name">${escapeHtml(x.name)}</div>${before}</div>${control}</div>`;
+ }).join('');
+ return `<div class="screen content-screen ${state.tab==='inventoryWork'?'active':''}">
+   <div class="content-head" style="align-items:center;"><div><div class="content-title">${d.type==='adhoc'?'Внеплановая инвентаризация':'Инвентаризация'}</div><div class="setting-sub">Зафиксировано: ${fixed} из ${d.items.length}</div></div>${isAdmin?'<button class="btn btn-danger" style="width:auto;padding:10px 16px;" onclick="requestCancelInventory()">Отменить инвентаризацию</button>':''}</div>
+   <div style="display:flex;flex-direction:column;min-height:0;flex:1;">
+     <div class="card" style="flex:1;min-height:0;overflow:auto;padding-top:4px;">${rows||'<div class="center-note">Нет товаров для пересчёта</div>'}</div>
+     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;padding-top:14px;flex:0 0 auto;">
+       <button class="btn btn-secondary" style="min-height:50px;" onclick="pauseInventory()">Продолжить позже</button>
+       <button class="btn btn-primary" style="min-height:50px;" onclick="completeInventory()">Завершить инвентаризацию</button>
+     </div>
+   </div>
+ </div>`;
+}
+
+function openAdminPanel(){
+  if(!currentShiftEmployeeIsAdmin()){
+    showAdminOnlyInfo('Панель администратора');
+    return;
+  }
+  state.settingsAdminPanel=true;
+  render();
+}
+function closeAdminPanel(){
+  state.settingsAdminPanel=false;
+  render();
+}
+function openCompanyDetailsModal(){
+  if(!currentShiftEmployeeIsAdmin()){
+    showAdminOnlyInfo('Реквизиты организации');
+    return;
+  }
+  openCompanyEditModal();
+}
+function renderAdminPanel(){
+  return `
+    <div class="content-head" style="align-items:center;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <button class="btn btn-secondary" style="width:auto;padding:10px 16px;" onclick="closeAdminPanel()">← Назад</button>
+        <div class="content-title">Панель администратора</div>
+      </div>
+    </div>
+    <div class="settings-grid">
+      <button class="settings-card" style="text-align:left;cursor:pointer;font:inherit;color:inherit;" onclick="setTab('network')">
+        <div style="font-size:16px;font-weight:800;">Сетевые настройки</div>
+        <div class="setting-sub" style="margin-top:6px;">Синхронизация, подключение принтера и сетевые конфигурации.</div>
+      </button>
+      <button class="settings-card" style="text-align:left;cursor:pointer;font:inherit;color:inherit;" onclick="openCompanyDetailsModal()">
+        <div style="font-size:16px;font-weight:800;">Реквизиты организации</div>
+        <div class="setting-sub" style="margin-top:6px;">Название заведения, юридическое лицо, адрес и адрес доставки.</div>
+      </button>
+      <button class="settings-card" style="text-align:left;cursor:pointer;font:inherit;color:inherit;" onclick="setTab('inventory')">
+        <div style="font-size:16px;font-weight:800;">Инвентаризация</div>
+        <div class="setting-sub" style="margin-top:6px;">График пересчёта, список товаров, проведение и история.</div>
+      </button>
+      <button class="settings-card" style="text-align:left;cursor:pointer;font:inherit;color:inherit;" onclick="openWarehousePage()">
+        <div style="font-size:16px;font-weight:800;">Складской учёт</div>
+        <div class="setting-sub" style="margin-top:6px;">Остатки, движение товаров, поставщики и складские отчёты.</div>
+      </button>
+    </div>`;
+}
+function renderSettingsScreen(){
+  if(state.settingsAdminPanel && currentShiftEmployeeIsAdmin()){
+    return `
+    <div class="screen content-screen ${state.tab==='settings'?'active':''}">
+      ${renderAdminPanel()}
+    </div>`;
+  }
+  state.settingsAdminPanel=false;
+  return `
+  <div class="screen content-screen ${state.tab==='settings'?'active':''}">
+    <div class="content-head">
+      <div class="content-title">Настройки</div>
+      <div class="settings-theme-toggle" title="Светлая / тёмная тема">
+        <span class="theme-icon sun" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42"></path></svg></span>
+        <label class="theme-switch" aria-label="Переключить тему">
+          <input type="checkbox" ${state.theme==='dark'?'checked':''} onchange="setTheme(this.checked?'dark':'light')">
+          <span class="theme-switch-track"></span>
+        </label>
+        <span class="theme-icon moon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z"></path></svg></span>
+      </div>
+    </div>
+    <button class="btn btn-primary" style="width:100%;min-height:54px;margin-bottom:10px;font-size:16px;font-weight:850;" onclick="openAdminPanel()">Панель администратора</button>
+    <button class="btn" style="width:100%;min-height:54px;margin-bottom:16px;font-size:16px;font-weight:850;background:#F2C94C;border-color:#E0B638;color:#2B2412;" onclick="setTab('products')">Товары</button>
+    <div class="settings-grid">
+      <div class="settings-card">
+        <div class="settings-section-head"><div style="font-size:16px;font-weight:800;">Сотрудники</div><button class="settings-plus-btn" title="Добавить сотрудника" onclick="openEmployeeModal()">+</button></div>
+        <div class="setting-sub">Сотрудники выбираются при открытии кассовой смены. Введите ФИО и номер телефона.</div>
+        <div style="margin-top:14px;">${state.employees.length ? state.employees.slice().sort((a,b)=>a.name.localeCompare(b.name,'ru')).map(e=>`<div class="employee-settings-row"><div class="employee-settings-person"><div class="list-row-name" title="${escapeAttr(e.name)}">${escapeHtml(employeeDisplayName(e.name))}</div><div class="list-row-sub">${escapeHtml(e.phone||'Телефон не указан')}</div></div><div class="employee-settings-role">${e.role==='admin'?'<span class="admin-badge">АДМИНИСТРАТОР</span>':''}</div><button class="btn btn-secondary employee-settings-edit" onclick="openEmployeeModal(${escapeAttr(JSON.stringify(e.id))})">Изменить</button>${e.role==='admin'?`<button class="icon-btn employee-settings-action" aria-label="Информация об администраторе" onclick="showEmployeeAdminInfo(${escapeAttr(JSON.stringify(e.id))})">i</button>`:`<button class="icon-btn danger employee-settings-action" aria-label="Удалить сотрудника" onclick="deleteEmployee(${escapeAttr(JSON.stringify(e.id))})">✕</button>`}</div>`).join('') : '<div class="center-note">Сотрудников пока нет.</div>'}</div>
+      </div>
+      <div class="settings-card">
+        <div class="settings-section-head"><div style="font-size:16px;font-weight:800;">Поставщики и товары</div><button class="settings-plus-btn" title="Добавить поставщика" onclick="openSupplierModal()">+</button></div>
+        <div class="setting-sub">Здесь настраиваются поставщики и товары, которые закреплены за каждым поставщиком.</div>
+        <div style="margin-top:14px;">${state.suppliers.length ? state.suppliers.slice().sort((a,b)=>a.name.localeCompare(b.name,'ru')).map(s=>`<div class="list-row"><div style="flex:1;min-width:0;"><div class="list-row-name">${escapeHtml(s.name)}</div><div class="list-row-sub">${Array.isArray(s.productIds)?s.productIds.length:0} закрепл. товаров</div></div><button class="btn btn-secondary" style="width:auto;padding:8px 12px;" onclick="openSupplierModal('${escapeAttr(s.id)}')">Товары</button>${canEditCompanySettings()?`<button class="icon-btn danger" title="Удалить поставщика" onclick="deleteSupplier('${escapeAttr(s.id)}')">✕</button>`:''}</div>`).join('') : '<div class="center-note">Поставщиков пока нет.</div>'}</div>
+      </div>
+      <div class="settings-card">
+        <div class="settings-section-head"><div style="font-size:16px;font-weight:800;">Стоимость доставки</div>${canEditCompanySettings()?`<button class="settings-plus-btn" title="Добавить стоимость доставки" onclick="openDeliveryRateModal()">+</button>`:`<button class="settings-plus-btn settings-info-btn" title="Только для администратора" onclick="showAdminOnlyInfo('Стоимость доставки')">i</button>`}</div>
+        <div class="setting-sub">Настройте варианты стоимости. При выборе «Доставка» кассир сможет выбрать один из них.</div>
+        <div style="margin-top:14px;">${state.deliveryRates.length ? state.deliveryRates.map(r=>`<div class="list-row"><div style="flex:1;min-width:0;"><div class="list-row-name">${escapeHtml(r.name)}</div><div class="list-row-sub">${money(r.amount)}</div></div>${canEditCompanySettings()?`<button class="btn btn-secondary" style="width:auto;padding:8px 12px;" onclick="openDeliveryRateModal('${escapeAttr(r.id)}')">Изменить</button><button class="icon-btn danger" onclick="deleteDeliveryRate('${escapeAttr(r.id)}')">✕</button>`:''}</div>`).join('') : '<div class="center-note">Варианты доставки пока не добавлены.</div>'}</div>
+      </div>
+      <div class="settings-card">
+        <div class="settings-section-head"><div style="font-size:16px;font-weight:800;">Скидки</div>${canEditCompanySettings()?`<button class="settings-plus-btn" title="Добавить скидку" onclick="openDiscountModal()">+</button>`:`<button class="settings-plus-btn settings-info-btn" title="Только для администратора" onclick="showAdminOnlyInfo('Скидки')">i</button>`}</div>
+        <div class="setting-sub">Создайте варианты скидок, которые можно будет назначать отдельному товару в текущем заказе.</div>
+        <div style="margin-top:14px;">${state.discounts.length ? state.discounts.map(d=>`<div class="list-row"><div style="flex:1;"><div class="list-row-name">${escapeHtml(d.name)}</div><div class="list-row-sub">${d.type==='percent'?Number(d.value)+'%':'Фиксированная скидка '+money(d.value)}</div></div>${canEditCompanySettings()?`<button class="icon-btn danger" onclick="deleteDiscount('${escapeAttr(d.id)}')">✕</button>`:''}</div>`).join('') : '<div class="center-note">Скидок пока нет.</div>'}</div>
+      </div>
+    </div>
+  </div>`;
+}
+function showAdminOnlyInfo(sectionName){
+  showModal(`<div class="modal-title">${escapeHtml(sectionName)}</div>
+    <div class="settings-note" style="font-size:15px;line-height:1.5;">Настраивать этот раздел могут только сотрудники с правами администратора.</div>
+    <div class="modal-actions"><button class="btn btn-primary" onclick="closeModal()">Понятно</button></div>`);
+}
+function openDeliveryRateModal(id){
+  const editing=(state.deliveryRates||[]).find(r=>r.id===id);
+  showModal(`<div class="modal-title">${editing?'Изменить стоимость доставки':'Новая стоимость доставки'}</div>
+    <div class="field"><label>Название</label><input id="delivery-rate-name" value="${escapeAttr(editing?.name||'')}" placeholder="Например: По городу"></div>
+    <div class="field"><label>Стоимость, Br</label><input id="delivery-rate-amount" type="number" min="0" step="0.01" inputmode="decimal" value="${editing?Number(editing.amount):''}" placeholder="Например: 5"></div>
+    <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button class="btn btn-primary" onclick="saveDeliveryRate('${escapeAttr(id||'')}')">Сохранить</button></div>`);
+}
+function saveDeliveryRate(id){
+  const name=(document.getElementById('delivery-rate-name')?.value||'').trim();
+  const amount=parseFloat(document.getElementById('delivery-rate-amount')?.value);
+  if(!name){flash('Введите название');return;}
+  if(!Number.isFinite(amount)||amount<0){flash('Введите корректную стоимость');return;}
+  if(id){ const r=state.deliveryRates.find(x=>x.id===id); if(r){r.name=name;r.amount=amount;} }
+  else state.deliveryRates.push({id:uid(),name,amount});
+  saveKey('deliveryRates',state.deliveryRates); closeModal(); render();
+}
+function deleteDeliveryRate(id){
+  state.deliveryRates=state.deliveryRates.filter(r=>r.id!==id);
+  if(state.orderType==='Доставка' && !state.deliveryRates.some(r=>Number(r.amount)===Number(state.deliveryFee))) state.deliveryFee=0;
+  saveKey('deliveryRates',state.deliveryRates); render();
+}
+
+function openDiscountModal(){
+  showModal(`<div class="modal-title">Новая скидка</div>
+    <div class="field"><label>Название</label><input id="df-name" placeholder="Например: Скидка сотрудника"></div>
+    <div class="field"><label>Тип скидки</label><select id="df-type"><option value="percent">Процент</option><option value="fixed">Фиксированная сумма</option></select></div>
+    <div class="field"><label>Размер скидки</label><input id="df-value" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Например: 10"></div>
+    <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button class="btn btn-primary" onclick="saveDiscount()">Добавить</button></div>`, true);
+}
+function saveDiscount(){
+  const name=(document.getElementById('df-name')?.value||'').trim();
+  const type=document.getElementById('df-type')?.value==='fixed'?'fixed':'percent';
+  const value=parseFloat(document.getElementById('df-value')?.value);
+  if(!name){flash('Введите название скидки');return;}
+  if(!(value>0)){flash('Укажите размер скидки');return;}
+  if(type==='percent' && value>100){flash('Процент не может быть больше 100%');return;}
+  state.discounts.push({id:uid(),name,type,value}); saveKey('discounts',state.discounts); closeModal(); render(); flash('Скидка добавлена');
+}
+function deleteDiscount(id){
+  state.discounts=state.discounts.filter(d=>d.id!==id);
+  state.cart.forEach(i=>{if(i.discountId===id)i.discountId='';});
+  saveKey('discounts',state.discounts); render();
+}
+function canEditCompanySettings(){
+  const shift=currentShift();
+  if(!shift) return false;
+  const employee=state.employees.find(e=>e.id===shift.employeeId);
+  return employee?.role==='admin';
+}
+function openCompanyEditModal(){
+  if(!canEditCompanySettings()){
+    flash('Изменять реквизиты может только администратор при открытой им смене');
+    return;
+  }
+  showModal(`
+    <div class="modal-title">Изменить реквизиты</div>
+    <div class="field"><label>Название заведения</label><input id="company-establishment-name" value="${escapeAttr(state.company.establishmentName||'')}" placeholder="Например: Кафе «Прилавок»"></div>
+    <div class="field"><label>Юридическое лицо</label><input id="company-legal-name" value="${escapeAttr(state.company.legalName||'')}" placeholder="Например: ООО «Прилавок»"></div>
+    <div class="field"><label>Адрес</label><textarea id="company-address" rows="3" placeholder="Юридический / фактический адрес">${escapeHtml(state.company.address||'')}</textarea></div>
+    <div class="field"><label>Адрес доставки</label><textarea id="company-delivery-address" rows="3" placeholder="Куда поставщику доставлять заказ">${escapeHtml(state.company.deliveryAddress||'')}</textarea></div>
+    <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button class="btn btn-primary" onclick="saveCompanySettings()">Сохранить</button></div>
+  `);
+}
+function saveCompanySettings(){
+  if(!canEditCompanySettings()){
+    closeModal();
+    flash('Изменять реквизиты может только администратор при открытой им смене');
+    return;
+  }
+  state.company={
+    establishmentName:(document.getElementById('company-establishment-name')?.value||'').trim(),
+    legalName:(document.getElementById('company-legal-name')?.value||'').trim(),
+    address:(document.getElementById('company-address')?.value||'').trim(),
+    deliveryAddress:(document.getElementById('company-delivery-address')?.value||'').trim()
+  };
+  saveKey('company',state.company);
+  closeModal();
+  render();
+  flash('Реквизиты сохранены');
+}
+function savePrinterSettings(){
+  const ip=(document.getElementById('printer-ip')?.value||'').trim();
+  const port=parseInt(document.getElementById('printer-port')?.value,10)||9100;
+  state.printer={...state.printer,ip,port,enabled:!!document.getElementById('printer-enabled')?.checked,autoPrint:!!document.getElementById('printer-auto')?.checked};
+  saveKey('printer',state.printer); render(); flash('Настройки принтера сохранены');
+}
+function testPrinterConnection(){
+  const ip=(document.getElementById('printer-ip')?.value||'').trim();
+  const port=parseInt(document.getElementById('printer-port')?.value,10)||9100;
+  if(!ip){ flash('Введите IP-адрес принтера'); return; }
+  const handler=window.webkit?.messageHandlers?.printer;
+  if(!handler){ flash('Сетевая печать доступна только в приложении на iPad'); return; }
+  flash('Отправляем пробную печать…');
+  handler.postMessage({action:'print',order:{__networkPrinterIp:ip,__networkPrinterPort:port,__networkTest:true}});
+}
+function setTab(t){ state.tab = t; render(); }
+
+
 function startAvailabilitySchedule(){
   clearTimeout(availabilityTimer);availabilityTimer=null;
   if(!availabilityListening){
@@ -6042,18 +7044,7 @@ document.addEventListener('touchmove',function(e){
 },{capture:true,passive:true});
 
 /* ============================= INIT ============================= */
-window.addEventListener('error',function(e){
-  const app=document.getElementById('app');
-  if(app && !state.loaded) app.innerHTML='<div class="center-note" style="margin:auto;padding:32px;text-align:center;">Не удалось запустить M POS.<br><small>'+escapeHtml(e?.message||'Ошибка JavaScript')+'</small></div>';
-});
-if(document.getElementById('app')){
-  render();
-  loadAll().catch(function(e){
-    console.error('M POS startup:',e);
-    const app=document.getElementById('app');
-    if(app) app.innerHTML='<div class="center-note" style="margin:auto;padding:32px;text-align:center;">Не удалось загрузить данные M POS.<br><small>'+escapeHtml((window.__posStartupStage||'startup')+': '+(e?.message||String(e)||'Ошибка запуска'))+'</small></div>';
-  });
-}
+loadAll();
 </script>
 <script src="network-printer.js"></script>
 </body>
