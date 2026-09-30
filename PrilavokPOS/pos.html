@@ -1132,7 +1132,8 @@ async function loadAll(){
     );
   }
 
-  await recoverWebAcceptanceJournal();
+  // First paint must never wait for network-backed WEB acceptance recovery.
+  // Open the local POS immediately; recovery continues best-effort in background.
   state.loaded = true;
   render();
   startWebOrderEvents();
@@ -1141,6 +1142,7 @@ async function loadAll(){
   queueOperationalSnapshot();
   void flushOperationalOutbox();
   startOperationalSchedule();
+  void recoverWebAcceptanceJournal().catch(e=>console.warn('WEB acceptance recovery:',e));
 }
 // поддерживаем список категорий в актуальном виде: новые — в конец, пустые — не теряем сразу
 function syncCategoryOrder(){
@@ -1809,8 +1811,8 @@ async function acceptWebOrder(id){
       const existing=state.parked.find(p=>p.webOrderId===id);
       const rawType=String(o.order_type||'').trim().toLocaleLowerCase('ru');
       const orderType=(rawType==='delivery'||rawType==='доставка')?'Доставка':((rawType==='pickup'||rawType==='самовывоз'||rawType==='с собой')?'С собой':(o.order_type||'На месте'));
-      const acceptedAt=Date.now(),requestedReadyAt=webRequestedReadyAt(o),productionMode=requestedReadyAt?'SCHEDULED':'ASAP';
-      journal[id]={stage:existing?'local':'prepared',parked:existing||{id:uid(),receiptDisplayNumber:'#'+String(o.external_id||o.id||'—'),items:cartItems,total:Number(o.total||0),subtotal:Number(o.total||0)-Number(o.delivery_fee||0),deliveryFee:Number(o.delivery_fee||0),orderLabel:'Веб '+(o.external_id||''),orderType,customer:{name:o.customer_name||'',phone:o.phone||'',address:o.address||''},comment:o.comment||'',source:'web',webOrderId:o.id,webOrderStatus:'accepted',productionMode,requestedReadyAt,timestamp:acceptedAt,createdAt:acceptedAt,kitchenPrinted:false,printedItems:[]}};
+      const acceptedAt=Date.now();
+      journal[id]={stage:existing?'local':'prepared',parked:existing||{id:uid(),receiptDisplayNumber:'#'+String(o.external_id||o.id||'—'),items:cartItems,total:Number(o.total||0),subtotal:Number(o.total||0)-Number(o.delivery_fee||0),deliveryFee:Number(o.delivery_fee||0),orderLabel:'Веб '+(o.external_id||''),orderType,customer:{name:o.customer_name||'',phone:o.phone||'',address:o.address||''},comment:o.comment||'',source:'web',webOrderId:o.id,webOrderStatus:'accepted',timestamp:acceptedAt,createdAt:acceptedAt,kitchenPrinted:false,printedItems:[]}};
       await window.PrilavokCore.Storage.set('webOrderAcceptances',journal);
     }
     const record=journal[id];
