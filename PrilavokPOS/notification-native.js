@@ -83,7 +83,6 @@
       try { response = await fetch(n.backendUrl.replace(/\/+$/,'')+'/api/orders/'+encodeURIComponent(parked.webOrderId)+'/ready',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Key':n.deviceKey},body:'{}',cache:'no-store',signal:controller.signal}); }
       finally { clearTimeout(timeout); }
       const data=await response.json().catch(()=>null); if(!response.ok) throw new Error(data?.error||('HTTP '+response.status));
-      window.setProductionStatusFromParked?.(parkedId,'READY');
       const next=state.parked.map(x=>x.id===parkedId?{...x,webReadyAt:Date.now(),webOrderStatus:'ready'}:x);
       await window.PrilavokCore.Storage.set('parked',next); state.parked=next; window.openParkedModal(); flash('Заказ отмечен как готов');
     } catch(e) { flash('Не удалось изменить статус: '+(e?.message||'ошибка сети')); window.openParkedModal(); }
