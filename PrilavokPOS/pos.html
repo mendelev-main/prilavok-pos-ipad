@@ -2411,14 +2411,14 @@ function operationalStateChanged(){
   if(!operationalBusy&&!document.hidden)void flushOperationalOutbox();
 }
 function runOperationalChannelTests(){
-  const original=state.operationalOutbox,checks=[];state.operationalOutbox=[];
+  const originalOutbox=state.operationalOutbox,originalRevision=state.operationalRevision,checks=[];state.operationalOutbox=[];
   operationalCoalesce('snapshot',{n:1},1000);operationalCoalesce('snapshot',{n:2},1001);operationalCoalesce('heartbeat',{n:1},1002);operationalCoalesce('heartbeat',{n:2},1003);
   checks.push({name:'outbox coalesces to at most snapshot + heartbeat',ok:state.operationalOutbox.length===2,details:JSON.stringify(state.operationalOutbox.map(x=>x.type))});
   checks.push({name:'latest snapshot wins',ok:state.operationalOutbox.find(x=>x.type==='snapshot')?.payload?.n===2});
   const revisionBefore=state.operationalRevision;queueOperationalSnapshot(1004);const rev1=state.operationalOutbox.find(x=>x.type==='snapshot')?.payload?.revision;queueOperationalSnapshot(1005);const rev2=state.operationalOutbox.find(x=>x.type==='snapshot')?.payload?.revision;checks.push({name:'snapshot revision is monotonic',ok:Number(rev2)===Number(rev1)+1&&Number(rev1)>revisionBefore});
   checks.push({name:'backoff is bounded',ok:operationalBackoffMs(100)<=OPERATIONAL_MAX_BACKOFF});
   const types=new Set(state.operationalOutbox.map(x=>x.type));checks.push({name:'heartbeat does not evict pending snapshot',ok:types.has('snapshot')&&types.has('heartbeat')&&state.operationalOutbox.length<=2});
-  state.operationalOutbox=original;saveKey('operationalOutbox',state.operationalOutbox);
+  state.operationalOutbox=originalOutbox;state.operationalRevision=originalRevision;saveKey('operationalOutbox',state.operationalOutbox);saveKey('operationalRevision',state.operationalRevision);
   return {ok:checks.every(x=>x.ok),passed:checks.filter(x=>x.ok).length,total:checks.length,checks};
 }
 window.__runOperationalChannelTests=runOperationalChannelTests;
@@ -3979,6 +3979,17 @@ function runProductionHistoryTests(){
 }
 window.__runProductionHistoryTests=runProductionHistoryTests;
 window.__productionHistorySummary=productionHistorySummary;
+
+function runProductionDeterministicTests(){
+  const suites=[
+    ['load-engine',runProductionLoadEngineTests],
+    ['station-state',runProductionStationStateTests],
+    ['history',runProductionHistoryTests],
+    ['operational-channel',runOperationalChannelTests]
+  ].map(([name,run])=>{try{return {name,...run()};}catch(error){return {name,ok:false,passed:0,total:1,checks:[{name:'suite execution',ok:false,details:String(error?.stack||error)}]};}});
+  return {ok:suites.every(x=>x.ok),passed:suites.reduce((n,x)=>n+(x.passed||0),0),total:suites.reduce((n,x)=>n+(x.total||0),0),suites};
+}
+window.__runProductionDeterministicTests=runProductionDeterministicTests;
 
 function productionStationItems(order,station){
   const rows=[];
