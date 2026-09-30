@@ -1797,6 +1797,11 @@ function productionStationWork(items){
   for(const row of Object.values(result)){row.workPoints=Math.round(row.workPoints*100)/100;row.durationMinutes=Math.round(row.durationMinutes*100)/100;row.qty=Math.round(row.qty*100)/100;}
   return result;
 }
+function productionOrderRemainingWork(order){
+  const work=productionStationWork(order?.items||[]);
+  for(const station of PRODUCTION_STATIONS){const status=order?.stationStates?.[station]?.status;if(status==='READY'||status==='CANCELLED')work[station]={station,workPoints:0,durationMinutes:0,qty:0};}
+  return work;
+}
 function productionLoadLevel(waitMinutes){
   const n=Math.max(0,Number(waitMinutes)||0);
   if(n>=30)return 'HIGH';
@@ -1819,7 +1824,7 @@ function productionFindSlot(startAt,durationMinutes,reservations){
 function calculateProductionLoad(options={}){
   const now=Number(options.now)||Date.now(),orders=Array.isArray(options.orders)?options.orders:state.productionOrders||[],hypotheticalItems=Array.isArray(options.hypotheticalItems)?options.hypotheticalItems:[];
   const timelines={bar:{station:'bar',currentCursorAt:now,reservations:[],workPoints:0,currentOrders:0},kitchen:{station:'kitchen',currentCursorAt:now,reservations:[],workPoints:0,currentOrders:0}};
-  const active=orders.filter(o=>o&&o.status!=='READY'&&o.status!=='CANCELLED').map(o=>({order:o,work:productionStationWork(o.items||[])}));
+  const active=orders.filter(o=>o&&o.status!=='READY'&&o.status!=='CANCELLED').map(o=>({order:o,work:productionOrderRemainingWork(o)}));
   const current=[],future=[];
   for(const entry of active){
     const start=productionOrderReservationStart(entry.order,entry.work);
@@ -1864,6 +1869,8 @@ function runProductionLoadEngineTests(){
   check('far scheduled order does not create current wait',r.stations.kitchen.waitMinutes===0&&r.stations.kitchen.futureReservations===1,JSON.stringify(r.stations.kitchen));
   r=calculateProductionLoad({now,orders:[order('ready',[item('kitchen',20)],{status:'READY'}),order('cancelled',[item('bar',20)],{status:'CANCELLED'})],hypotheticalItems:[item('kitchen',5),item('bar',5)]});
   check('ready and cancelled excluded',r.stations.kitchen.waitMinutes===0&&r.stations.bar.waitMinutes===0,JSON.stringify(r.stations));
+  r=calculateProductionLoad({now,orders:[order('partial',[item('bar',12),item('kitchen',20)],{status:'IN_PROGRESS',stationStates:{bar:{status:'READY'},kitchen:{status:'IN_PROGRESS'}}})],hypotheticalItems:[item('bar',5),item('kitchen',5)]});
+  check('completed station of mixed order stops creating load',r.stations.bar.waitMinutes===0&&r.stations.kitchen.waitMinutes>0,JSON.stringify(r.stations));
   const one=productionStationWork([item('kitchen',10,1)]).kitchen.durationMinutes,many=productionStationWork([item('kitchen',10,3)]).kitchen.durationMinutes;
   check('batch policy grows sub-linearly',many>one&&many<one*3,`one=${one}, many=${many}`);
   const low=productionStationWork([item('kitchen',10,1,1)]).kitchen,hard=productionStationWork([item('kitchen',10,1,5)]).kitchen;
@@ -2331,7 +2338,7 @@ let operationalTimer=null,operationalBusy=false,operationalFailures=0,operationa
 function buildOperationalSnapshot(now=Date.now()){
   const load=calculateProductionLoad({now}),active=(state.productionOrders||[]).filter(o=>o&&o.status!=='READY'&&o.status!=='CANCELLED');
   const prepCatalog=(state.products||[]).map(p=>({productId:String(p.id),prep:productPrepSnapshot(p)})).sort((a,b)=>a.productId.localeCompare(b.productId));
-  return {schemaVersion:OPERATIONAL_SCHEMA_VERSION,engineVersion:PRODUCTION_ENGINE_VERSION,sampledAt:new Date(now).toISOString(),device:{key:state.network?.deviceKey||'',name:state.network?.deviceName||'M POS iPad'},production:{activeOrders:active.length,stations:load.stations,level:load.level,criticalStation:load.criticalStation},scheduled:active.filter(o=>o.mode==='SCHEDULED'&&o.requestedReadyAt).map(o=>({productionOrderId:o.id,requestedReadyAt:o.requestedReadyAt,status:o.status,work:productionStationWork(o.items||[])})).sort((a,b)=>a.requestedReadyAt-b.requestedReadyAt),prepCatalog:{version:1,items:prepCatalog}};
+  return {schemaVersion:OPERATIONAL_SCHEMA_VERSION,engineVersion:PRODUCTION_ENGINE_VERSION,sampledAt:new Date(now).toISOString(),device:{key:state.network?.deviceKey||'',name:state.network?.deviceName||'M POS iPad'},production:{activeOrders:active.length,stations:load.stations,level:load.level,criticalStation:load.criticalStation},scheduled:active.filter(o=>o.mode==='SCHEDULED'&&o.requestedReadyAt).map(o=>({productionOrderId:o.id,requestedReadyAt:o.requestedReadyAt,status:o.status,stationStates:o.stationStates||{},work:productionOrderRemainingWork(o)})).sort((a,b)=>a.requestedReadyAt-b.requestedReadyAt),prepCatalog:{version:1,items:prepCatalog}};
 }
 function operationalCoalesce(type,payload,now=Date.now()){
   const item={id:uid(),type,schemaVersion:OPERATIONAL_SCHEMA_VERSION,createdAt:now,attempts:0,nextAttemptAt:now,payload};
