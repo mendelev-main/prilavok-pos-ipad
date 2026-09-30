@@ -3794,7 +3794,7 @@ function productionActualMetrics(order){
 function productionLoadContextFor(order,at=Date.now()){
   const others=(state.productionOrders||[]).filter(x=>x.id!==order.id);
   const estimate=calculateProductionLoad({now:at,orders:others,hypotheticalItems:order.items||[]});
-  return {capturedAt:at,engineVersion:estimate.version,criticalStation:estimate.criticalStation,delayingStations:[...estimate.delayingStations],loadedStations:[...estimate.loadedStations],level:estimate.level,predictedMinutes:estimate.estimatedMinutes,stations:JSON.parse(JSON.stringify(estimate.stations))};
+  const predictedMinutes=estimate.estimatedMinutes,predictedReadyAt=predictedMinutes==null?null:at+Number(predictedMinutes)*60000;return {capturedAt:at,engineVersion:estimate.version,criticalStation:estimate.criticalStation,delayingStations:[...estimate.delayingStations],loadedStations:[...estimate.loadedStations],level:estimate.level,predictedMinutes,predictedReadyAt,stations:JSON.parse(JSON.stringify(estimate.stations))};
 }
 function ensureProductionHistoryRecord(order){
   if(!order||!['READY','CANCELLED'].includes(order.status))return null;
@@ -3802,7 +3802,11 @@ function ensureProductionHistoryRecord(order){
   if(existing)return existing;
   const actual=productionActualMetrics(order),normative=order.normativeSnapshot||productionNormativeSnapshot(order),prediction=order.predictionSnapshot||null;
   const record={version:1,id:uid(),productionOrderId:order.id,sourceType:order.sourceType||'',sourceOrderId:order.sourceOrderId||'',webOrderId:order.webOrderId||'',orderLabel:order.orderLabel||'',status:order.status,mode:order.mode,requestedReadyAt:order.requestedReadyAt||null,items:productionItemsSnapshot(order.items||[]),queuedAt:order.queuedAt||null,startedAt:order.startedAt||null,readyAt:order.readyAt||null,cancelledAt:order.cancelledAt||null,completedAt:order.readyAt||order.cancelledAt||Date.now(),normativeSnapshot:JSON.parse(JSON.stringify(normative)),predictionSnapshot:prediction?JSON.parse(JSON.stringify(prediction)):null,actual,scheduledWaitingExcluded:order.mode==='SCHEDULED'};
-  if(record.status==='READY'&&actual.preparationMinutes!==null&&prediction?.predictedMinutes!=null)record.predictionErrorMinutes=Math.round((actual.preparationMinutes-Number(prediction.predictedMinutes))*100)/100;
+  if(record.status==='READY'){
+    if(actual.preparationMinutes!==null&&normative?.normativeMinutes!=null)record.preparationErrorMinutes=Math.round((actual.preparationMinutes-Number(normative.normativeMinutes))*100)/100;
+    const predictedReadyAt=Number(prediction?.predictedReadyAt)||(prediction?.capturedAt&&prediction?.predictedMinutes!=null?Number(prediction.capturedAt)+Number(prediction.predictedMinutes)*60000:null);
+    if(record.readyAt&&predictedReadyAt)record.etaErrorMinutes=Math.round(((Number(record.readyAt)-predictedReadyAt)/60000)*100)/100;
+  }
   state.productionHistory.unshift(record);saveKey('productionHistory',state.productionHistory);return record;
 }
 function updateProductionStatus(id,status){
@@ -3830,7 +3834,7 @@ function setProductionStatusFromParked(id,status){
 }
 function activeProductionOrders(){return state.productionOrders.filter(o=>o.status!=='READY'&&o.status!=='CANCELLED').sort((a,b)=>(a.requestedReadyAt||a.queuedAt)-(b.requestedReadyAt||b.queuedAt));}
 function productionHistorySummary(limit=50){
-  return (state.productionHistory||[]).slice(0,limit).map(record=>({productionOrderId:record.productionOrderId,status:record.status,mode:record.mode,criticalStation:record.predictionSnapshot?.criticalStation||null,predictedMinutes:record.predictionSnapshot?.predictedMinutes??null,normativeMinutes:record.normativeSnapshot?.normativeMinutes??null,actualPreparationMinutes:record.actual?.preparationMinutes??null,predictionErrorMinutes:record.predictionErrorMinutes??null,startedAt:record.startedAt||null,readyAt:record.readyAt||null}));
+  return (state.productionHistory||[]).slice(0,limit).map(record=>({productionOrderId:record.productionOrderId,status:record.status,mode:record.mode,criticalStation:record.predictionSnapshot?.criticalStation||null,predictedMinutes:record.predictionSnapshot?.predictedMinutes??null,normativeMinutes:record.normativeSnapshot?.normativeMinutes??null,actualPreparationMinutes:record.actual?.preparationMinutes??null,etaErrorMinutes:record.etaErrorMinutes??null,preparationErrorMinutes:record.preparationErrorMinutes??null,startedAt:record.startedAt||null,readyAt:record.readyAt||null}));
 }
 function runProductionHistoryTests(){
   const base=Date.UTC(2026,0,1,12,0,0),scheduled={mode:'SCHEDULED',queuedAt:base,startedAt:base+5*60*60000,readyAt:base+5*60*60000+12*60000};
