@@ -913,6 +913,7 @@ let state = {
   parked: [],
   productionOrders: [],
   productionHistory: [],
+  demandOverload: false,
   operationalOutbox: [],
   operationalRevision: 0,
   receivings: [],
@@ -1018,7 +1019,7 @@ async function loadAll(){
     markStorageBroken('localStorage test write failed');
   }
   storageCheckedOnce = true;
-  const [products, shifts, employees, orders, parked, productionOrders, productionHistory, operationalOutbox, operationalRevision, receivings, suppliers, purchaseOrders, discounts, layout, printer, theme, company, deliveryRates, telegram, network, currentOrderSession, hallTables, bookings, webEvents, posNavigation, inventoryConfig, inventoryHistory, inventoryDraft] = await Promise.all([
+  const [products, shifts, employees, orders, parked, productionOrders, productionHistory, demandOverload, operationalOutbox, operationalRevision, receivings, suppliers, purchaseOrders, discounts, layout, printer, theme, company, deliveryRates, telegram, network, currentOrderSession, hallTables, bookings, webEvents, posNavigation, inventoryConfig, inventoryHistory, inventoryDraft] = await Promise.all([
     loadKey('products', null),
     loadKey('shifts', []),
     loadKey('employees', []),
@@ -1026,6 +1027,7 @@ async function loadAll(){
     loadKey('parked', []),
     loadKey('productionOrders', []),
     loadKey('productionHistory', []),
+    loadKey('demandOverload', false),
     loadKey('operationalOutbox', []),
     loadKey('operationalRevision', 0),
     loadKey('receivings', []),
@@ -1056,6 +1058,7 @@ async function loadAll(){
   state.parked = Array.isArray(parked) ? parked : [];
   state.productionOrders = (Array.isArray(productionOrders) ? productionOrders : []).map(normalizeProductionOrder).filter(Boolean);
   state.productionHistory = Array.isArray(productionHistory) ? productionHistory : [];
+  state.demandOverload = demandOverload === true;
   state.operationalOutbox = Array.isArray(operationalOutbox) ? operationalOutbox.slice(-2) : [];
   state.operationalRevision = Math.max(0,Number(operationalRevision)||0);
   state.receivings = receivings;
@@ -2353,10 +2356,16 @@ function testWebOrder(){const n=networkConfigFromState();fetch(n.backendUrl.repl
 const OPERATIONAL_SCHEMA_VERSION=1,OPERATIONAL_INTERVAL=15000,OPERATIONAL_TIMEOUT=2500,OPERATIONAL_MAX_BACKOFF=60000;
 let operationalTimer=null,operationalBusy=false,operationalFailures=0,operationalListening=false,operationalController=null;
 function buildOperationalSnapshot(now=Date.now()){
-  const load=calculateProductionLoad({now}),active=(state.productionOrders||[]).filter(o=>o&&o.status!=='READY'&&o.status!=='CANCELLED'),currentOnly=active.filter(o=>{const work=productionOrderRemainingWork(o),start=productionOrderReservationStart(o,work);return start===null||start<=now;}),currentQueueLoad=calculateProductionLoad({now,orders:currentOnly});
-  const prepCatalog=(state.products||[]).map(p=>({productId:String(p.id),prep:productPrepSnapshot(p)})).sort((a,b)=>a.productId.localeCompare(b.productId));
-  return {schemaVersion:OPERATIONAL_SCHEMA_VERSION,engineVersion:PRODUCTION_ENGINE_VERSION,sampledAt:new Date(now).toISOString(),device:{key:state.network?.deviceKey||'',name:state.network?.deviceName||'M POS iPad'},production:{activeOrders:active.length,stations:load.stations,currentQueueMinutes:Object.fromEntries(PRODUCTION_STATIONS.map(st=>[st,currentQueueLoad.stations[st].waitMinutes])),level:load.level,criticalStation:load.criticalStation},scheduled:active.filter(o=>o.mode==='SCHEDULED'&&o.requestedReadyAt).map(o=>({productionOrderId:o.id,requestedReadyAt:o.requestedReadyAt,status:o.status,stationStates:o.stationStates||{},work:productionOrderRemainingWork(o)})).sort((a,b)=>a.requestedReadyAt-b.requestedReadyAt),prepCatalog:{version:1,items:prepCatalog}};
+  return {schemaVersion:OPERATIONAL_SCHEMA_VERSION,engineVersion:PRODUCTION_ENGINE_VERSION,sampledAt:new Date(now).toISOString(),device:{key:state.network?.deviceKey||'',name:state.network?.deviceName||'M POS iPad'},demand:{overload:state.demandOverload===true}};
 }
+function setDemandOverload(value){
+  state.demandOverload=value===true;
+  saveKey('demandOverload',state.demandOverload);
+  operationalStateChanged();
+  render();
+  flash(state.demandOverload?'Повышенный спрос включён':'Обычная загрузка');
+}
+
 function operationalCoalesce(type,payload,now=Date.now()){
   const item={id:uid(),type,schemaVersion:OPERATIONAL_SCHEMA_VERSION,createdAt:now,attempts:0,nextAttemptAt:now,payload};
   state.operationalOutbox=(state.operationalOutbox||[]).filter(x=>x.type!==type);
@@ -3033,10 +3042,6 @@ function renderAdminPanel(){
         <div style="font-size:16px;font-weight:800;">Складской учёт</div>
         <div class="setting-sub" style="margin-top:6px;">Остатки, движение товаров, поставщики и складские отчёты.</div>
       </button>
-      <button class="settings-card" style="text-align:left;cursor:pointer;font:inherit;color:inherit;" onclick="openPreparationAnalytics()">
-        <div style="font-size:16px;font-weight:800;">Время приготовления</div>
-        <div class="setting-sub" style="margin-top:6px;">Точность ETA, статистика кухни и бара и рекомендации по нормативам.</div>
-      </button>
     </div>`;
 }
 function renderSettingsScreen(){
@@ -3386,7 +3391,7 @@ function renderPosScreen(shift){
         </div>
         <div class="pos-actions-left">
           <button class="park-btn ${editing?'chip active':''}" onclick="toggleEditMode()" title="Настроить рабочую зону">${editing?'✓ Готово':'✎ Раскладка'}</button>
-          <button class="park-btn" onclick="openProductionModal()" ${editing?'disabled':''}>Производство ${activeProductionOrders().length?`<span class="park-badge">${activeProductionOrders().length}</span>`:''}</button>
+          <button class="park-btn ${state.demandOverload?'active':''}" onclick="setDemandOverload(!state.demandOverload)" ${editing?'disabled':''} title="Сообщить гостям о повышенном спросе">${state.demandOverload?'Повышенный спрос':'Обычная загрузка'}</button>
           <button class="park-btn" onclick="openParkedModal()" ${editing?'disabled':''}>Отложенные ${parkCount?`<span class="park-badge">${parkCount}</span>`:''}</button>
         </div>
       </div>
