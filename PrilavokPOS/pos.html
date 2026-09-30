@@ -3934,7 +3934,7 @@ function productionCalibrationAnalytics(records=state.productionHistory||[]){
   const rangeHits=ready.filter(r=>{const p=r.predictionSnapshot;if(!p||!r.readyAt||!p.capturedAt)return false;const actual=(Number(r.readyAt)-Number(p.capturedAt))/60000,min=Number(p.rangeMinMinutes),max=Number(p.rangeMaxMinutes);return Number.isFinite(min)&&Number.isFinite(max)&&actual>=min&&actual<=max;});
   const groups={station:{},difficulty:{},size:{},load:{}};
   const add=(bucket,key,value)=>{if(!Number.isFinite(value))return;(bucket[key]||(bucket[key]=[])).push(value);};
-  ready.forEach(r=>{const f=productionHistoryFeatures(r),v=Number(r.actual.preparationMinutes);f.stations.forEach(st=>add(groups.station,st,v));add(groups.difficulty,String(Math.max(1,Math.min(5,Math.round(f.avgDifficulty||1)))),v);add(groups.size,f.sizeBucket,v);add(groups.load,f.loadBucket,v);});
+  ready.forEach(r=>{const f=productionHistoryFeatures(r),v=Number(r.actual.preparationMinutes);f.stations.forEach(st=>{const stationV=Number(r.stationActuals?.[st]?.preparationMinutes);add(groups.station,st,Number.isFinite(stationV)?stationV:v);});add(groups.difficulty,String(Math.max(1,Math.min(5,Math.round(f.avgDifficulty||1)))),v);add(groups.size,f.sizeBucket,v);add(groups.load,f.loadBucket,v);});
   const summarize=obj=>Object.fromEntries(Object.entries(obj).map(([k,v])=>[k,{count:v.length,median:productionPercentile(v,.5),p75:productionPercentile(v,.75),p90:productionPercentile(v,.9)}]));
   const productSamples={};
   // Product calibration uses only isolated single-product, qty=1 observations.
@@ -3950,6 +3950,9 @@ function runProductionHistoryTests(){
   const actual=productionActualMetrics(scheduled),checks=[];
   checks.push({name:'scheduled waiting excluded from preparation duration',ok:actual.preparationMinutes===12,details:JSON.stringify(actual)});
   checks.push({name:'queue duration remains separately observable',ok:actual.queueMinutes===300,details:JSON.stringify(actual)});
+  const mixedStation={kitchen:{status:'READY',startedAt:base+5*60*60000,readyAt:base+17*60*60000},bar:{status:'READY',startedAt:base+7*60*60000,readyAt:base+11*60*60000}};
+  const stationDurations=Object.fromEntries(Object.entries(mixedStation).map(([st,x])=>[st,Math.round((x.readyAt-x.startedAt)/600)/100]));
+  checks.push({name:'mixed station durations remain independently measurable',ok:stationDurations.kitchen===12&&stationDurations.bar===4,details:JSON.stringify(stationDurations)});
   const completed={id:'history-test',status:'READY',mode:'ASAP',items:[],queuedAt:base,startedAt:base+60000,readyAt:base+6*60000};
   const before=state.productionHistory.length,existing=state.productionHistory.find(x=>x.productionOrderId===completed.id);
   if(!existing){ensureProductionHistoryRecord(completed);ensureProductionHistoryRecord(completed);}
