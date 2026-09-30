@@ -3806,7 +3806,11 @@ function productionOrderById(id){return id?state.productionOrders.find(x=>x.id==
 function normalizeProductionOrder(o){
   if(!o||typeof o!=='object')return null;
   const status=PRODUCTION_STATUSES.has(o.status)?o.status:'QUEUED',mode=o.mode==='SCHEDULED'?'SCHEDULED':'ASAP';
-  return {...o,version:1,status,mode,requestedReadyAt:mode==='SCHEDULED'?(Number(o.requestedReadyAt)||null):null,createdAt:Number(o.createdAt)||Date.now(),queuedAt:Number(o.queuedAt)||Number(o.createdAt)||Date.now(),startedAt:Number(o.startedAt)||null,readyAt:Number(o.readyAt)||null,cancelledAt:Number(o.cancelledAt)||null,updatedAt:Number(o.updatedAt)||Date.now()};
+  const normalized={...o,version:2,status,mode,requestedReadyAt:mode==='SCHEDULED'?(Number(o.requestedReadyAt)||null):null,createdAt:Number(o.createdAt)||Date.now(),queuedAt:Number(o.queuedAt)||Number(o.createdAt)||Date.now(),startedAt:Number(o.startedAt)||null,readyAt:Number(o.readyAt)||null,cancelledAt:Number(o.cancelledAt)||null,updatedAt:Number(o.updatedAt)||Date.now()};
+  const stations=productionOrderStations(normalized),existing=o.stationStates&&typeof o.stationStates==='object'?o.stationStates:{};
+  normalized.stationStates={};
+  for(const station of stations){const prev=existing[station]||{},stationStatus=PRODUCTION_STATUSES.has(prev.status)?prev.status:status;normalized.stationStates[station]={status:stationStatus,startedAt:Number(prev.startedAt)||normalized.startedAt||null,readyAt:Number(prev.readyAt)||(stationStatus==='READY'?normalized.readyAt:null),cancelledAt:Number(prev.cancelledAt)||(stationStatus==='CANCELLED'?normalized.cancelledAt:null),updatedAt:Number(prev.updatedAt)||normalized.updatedAt};}
+  return normalized;
 }
 function saveProductionOrders(){saveKey('productionOrders',state.productionOrders);}
 function productionItemsSnapshot(items){return JSON.parse(JSON.stringify((items||[]).map(i=>({...i,prep:i.prep||productPrepSnapshot(getProduct(i.productId)),selectedModifiers:(i.selectedModifiers||[]).map(m=>({...m,prep:m.prep||productPrepSnapshot(getProduct(m.productId))}))}))));}
@@ -3863,6 +3867,16 @@ function updateProductionStatus(id,status){
   saveProductionOrders();
   if(status==='READY'||status==='CANCELLED')ensureProductionHistoryRecord(o);
   return o;
+}
+function updateProductionStationStatus(id,station,status){
+  const o=productionOrderById(id);if(!o||!PRODUCTION_STATIONS.includes(station)||!PRODUCTION_STATUSES.has(status))return o;
+  o.stationStates=o.stationStates||{};const current=o.stationStates[station]||{status:'QUEUED'},now=Date.now();if(current.status===status)return o;
+  if(status==='IN_PROGRESS'&&!current.startedAt){current.startedAt=now;o.startedAt=o.startedAt||now;o.normativeSnapshot=o.normativeSnapshot||productionNormativeSnapshot(o);o.predictionSnapshot=o.predictionSnapshot||productionLoadContextFor(o,now);}
+  current.status=status;current.updatedAt=now;if(status==='READY')current.readyAt=current.readyAt||now;if(status==='CANCELLED')current.cancelledAt=current.cancelledAt||now;o.stationStates[station]=current;
+  const participating=productionOrderStations(o),states=participating.map(st=>o.stationStates[st]?.status||'QUEUED');
+  if(states.length&&states.every(x=>x==='READY'||x==='CANCELLED')){const anyReady=states.some(x=>x==='READY');o.status=anyReady?'READY':'CANCELLED';o.readyAt=anyReady?now:null;o.cancelledAt=anyReady?null:now;}
+  else if(states.some(x=>x==='IN_PROGRESS'||x==='READY'))o.status='IN_PROGRESS';else o.status='QUEUED';
+  o.updatedAt=now;saveProductionOrders();if(o.status==='READY'||o.status==='CANCELLED')ensureProductionHistoryRecord(o);operationalStateChanged();return o;
 }
 function cancelProductionForOrder(order){if(order?.productionOrderId)updateProductionStatus(order.productionOrderId,'CANCELLED');}
 function productionCountsAsCurrentLoad(o,now=Date.now()){
@@ -3943,24 +3957,24 @@ function productionOrderStations(order){
 }
 function productionStationLabel(station){return station==='bar'?'Бар':'Кухня';}
 function productionQueueCard(order,station){
-  const items=productionStationItems(order,station);
+  const items=productionStationItems(order,station),stationState=order.stationStates?.[station]||{status:order.status};
   const timing=order.mode==='SCHEDULED'&&order.requestedReadyAt?'к '+fmtDate(order.requestedReadyAt):'как можно скорее';
   return `<div style="border:1px solid var(--border);border-radius:16px;padding:14px;background:var(--surface);box-shadow:var(--shadow);">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
-      <div style="min-width:0;"><div class="list-row-name">${escapeHtml(order.orderLabel||order.webOrderId||'Заказ')}</div><div class="list-row-sub">${productionStatusLabel(order.status)} · ${timing}</div></div>
+      <div style="min-width:0;"><div class="list-row-name">${escapeHtml(order.orderLabel||order.webOrderId||'Заказ')}</div><div class="list-row-sub">${productionStatusLabel(stationState.status)} · ${timing}</div></div>
       <span class="badge">${productionStationLabel(station)}</span>
     </div>
     <div style="margin-top:10px;display:flex;flex-direction:column;gap:5px;">${items.map(item=>`<div style="display:flex;justify-content:space-between;gap:12px;font-size:13px;"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(item.name)}</span><strong style="white-space:nowrap;">× ${item.qty}</strong></div>`).join('')}</div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
-      ${order.status==='QUEUED'?`<button class="btn btn-outline" onclick="updateProductionStatus('${escapeAttr(order.id)}','IN_PROGRESS');openProductionModal()">Начать</button>`:''}
-      <button class="btn btn-primary" onclick="updateProductionStatus('${escapeAttr(order.id)}','READY');openProductionModal()">Готов</button>
-      <button class="icon-btn danger" title="Отменить" onclick="updateProductionStatus('${escapeAttr(order.id)}','CANCELLED');openProductionModal()">✕</button>
+      ${stationState.status==='QUEUED'?`<button class="btn btn-outline" onclick="updateProductionStationStatus('${escapeAttr(order.id)}','${station}','IN_PROGRESS');openProductionModal()">Начать</button>`:''}
+      <button class="btn btn-primary" onclick="updateProductionStationStatus('${escapeAttr(order.id)}','${station}','READY');openProductionModal()">Готов</button>
+      <button class="icon-btn danger" title="Отменить" onclick="updateProductionStationStatus('${escapeAttr(order.id)}','${station}','CANCELLED');openProductionModal()">✕</button>
     </div>
   </div>`;
 }
 function renderProductionStationColumn(station,list){
   const orders=list.filter(o=>productionOrderStations(o).includes(station));
-  const queued=orders.filter(o=>o.status==='QUEUED').length,inProgress=orders.filter(o=>o.status==='IN_PROGRESS').length;
+  const queued=orders.filter(o=>(o.stationStates?.[station]?.status||o.status)==='QUEUED').length,inProgress=orders.filter(o=>(o.stationStates?.[station]?.status||o.status)==='IN_PROGRESS').length;
   return `<section style="min-width:0;">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;"><div style="font-size:17px;font-weight:800;">${productionStationLabel(station)}</div><div class="list-row-sub">Ожидают: ${queued} · Готовятся: ${inProgress}</div></div>
     <div style="display:flex;flex-direction:column;gap:10px;">${orders.length?orders.map(o=>productionQueueCard(o,station)).join(''):'<div class="center-note" style="padding:28px 12px;border:1px dashed var(--border);border-radius:16px;">Очередь пуста</div>'}</div>
@@ -3971,7 +3985,7 @@ function openProductionModal(){
   const noStation=list.filter(o=>!productionOrderStations(o).length);
   showModal(`<div style="width:min(1040px,88vw);max-width:100%;">
     <div class="modal-title">Производство</div>
-    <div class="settings-note" style="margin-bottom:14px;">Кухня и бар показаны отдельно. Статус остаётся единым для заказа; mixed-заказ отображается в обеих участвующих станциях.</div>
+    <div class="settings-note" style="margin-bottom:14px;">Кухня и бар работают независимо. Mixed-заказ считается готовым только после завершения всех участвующих станций.</div>
     <div style="max-height:68vh;overflow:auto;padding-right:2px;">
       <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;">${renderProductionStationColumn('kitchen',list)}${renderProductionStationColumn('bar',list)}</div>
       ${noStation.length?`<div style="margin-top:16px;"><div style="font-size:15px;font-weight:800;margin-bottom:8px;">Без производства</div><div class="settings-note">В очереди есть ${noStation.length} заказ(а) без позиций кухни/бара. Они не создают производственную нагрузку.</div></div>`:''}
