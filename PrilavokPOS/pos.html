@@ -1043,28 +1043,29 @@ async function loadAll(){
     loadKey('inventoryHistory', []),
     loadKey('inventoryDraft', null)
   ]);
-  state.products = products === null ? seedProducts() : products;
-  state.shifts = shifts;
+  state.products = Array.isArray(products) ? products.filter(p=>p && typeof p==='object') : (products === null ? seedProducts() : []);
+  state.shifts = Array.isArray(shifts) ? shifts : [];
   state.employees = Array.isArray(employees) ? employees : [];
   state.employees.forEach(e=>{ e.role = e.role==='admin' ? 'admin' : 'employee'; });
-  state.orders = orders;
+  state.orders = Array.isArray(orders) ? orders : [];
   state.parked = Array.isArray(parked) ? parked : [];
   state.demandOverload = demandOverload === true;
   state.operationalOutbox = Array.isArray(operationalOutbox) ? operationalOutbox.slice(-2) : [];
   state.operationalRevision = Math.max(0,Number(operationalRevision)||0);
-  state.receivings = receivings;
+  state.receivings = Array.isArray(receivings) ? receivings : [];
   state.suppliers = Array.isArray(suppliers) ? suppliers : [];
   state.purchaseOrders = Array.isArray(purchaseOrders) ? purchaseOrders : [];
   state.purchaseOrderSupplierId = '';
   state.purchaseOrderCart = [];
   state.discounts = Array.isArray(discounts) ? discounts : [];
   state.receivingCart = [];
-  state.categoryOrder = (layout && layout.categoryOrder) || [];
-  state.categoryColors = (layout && layout.categoryColors) || {};
-  state.categorySymbols = (layout && layout.categorySymbols) || {};
-  state.categoryOnline = (layout && layout.categoryOnline) || {};
+  const safeLayout = layout && typeof layout==='object' && !Array.isArray(layout) ? layout : {};
+  state.categoryOrder = Array.isArray(safeLayout.categoryOrder) ? safeLayout.categoryOrder.filter(c=>typeof c==='string') : [];
+  state.categoryColors = safeLayout.categoryColors && typeof safeLayout.categoryColors==='object' && !Array.isArray(safeLayout.categoryColors) ? safeLayout.categoryColors : {};
+  state.categorySymbols = safeLayout.categorySymbols && typeof safeLayout.categorySymbols==='object' && !Array.isArray(safeLayout.categorySymbols) ? safeLayout.categorySymbols : {};
+  state.categoryOnline = safeLayout.categoryOnline && typeof safeLayout.categoryOnline==='object' && !Array.isArray(safeLayout.categoryOnline) ? safeLayout.categoryOnline : {};
   state.categoryOrder.forEach(c=>{ if(typeof state.categoryOnline[c] !== 'boolean') state.categoryOnline[c]=true; });
-  state.layoutTiles = Array.isArray(layout?.tiles) ? layout.tiles : [];
+  state.layoutTiles = Array.isArray(safeLayout.tiles) ? safeLayout.tiles : [];
   state.posNavigation=normalizePosNavigation(posNavigation);
   state.posFolder='';
   state.posPath = null;
