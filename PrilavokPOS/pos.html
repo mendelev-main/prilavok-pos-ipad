@@ -1791,7 +1791,7 @@ function productionPrepEntries(items){
 function productionStationWork(items){
   const result={bar:{station:'bar',workPoints:0,durationMinutes:0,qty:0},kitchen:{station:'kitchen',workPoints:0,durationMinutes:0,qty:0}};
   for(const e of productionPrepEntries(items)){
-    const batch=productionBatchFactor(e.qty),work=e.qty*productionDifficultyMultiplier(e.difficulty),duration=e.minutes*batch;
+    const batch=productionBatchFactor(e.qty),work=e.qty*e.difficulty,duration=e.minutes*batch;
     const row=result[e.station];row.workPoints+=work;row.durationMinutes+=duration;row.qty+=e.qty;
   }
   for(const row of Object.values(result)){row.workPoints=Math.round(row.workPoints*100)/100;row.durationMinutes=Math.round(row.durationMinutes*100)/100;row.qty=Math.round(row.qty*100)/100;}
