@@ -30,15 +30,11 @@
   let readyBusy = false;
   const originalOpenParkedModal = typeof openParkedModal === 'function' ? openParkedModal : null;
   function readyButtonMarkup(order) {
-    const production=window.productionOrderById?.(order?.productionOrderId),status=production?.status||'QUEUED';
-    if (status==='READY' || order?.webReadyAt) return '<span class="badge" style="flex:none;padding:7px 11px;font-size:14px;white-space:nowrap;background:var(--accent-soft);color:var(--accent);">✓ Готов</span>';
-    if (status==='CANCELLED') return '<span class="badge" style="flex:none;padding:7px 11px;font-size:14px;white-space:nowrap;">Отменён</span>';
-    const start=status==='QUEUED'? `<button class="btn btn-outline" style="flex:none;width:auto;min-height:40px;padding:8px 12px;font-size:13px;white-space:nowrap;" onclick="event.stopPropagation();setProductionStatusFromParked('${escapeAttr(order.id)}','IN_PROGRESS')">Готовится</button>` : '';
-    const ready=order?.webOrderId
-      ? `<button class="btn btn-primary web-ready-btn" style="flex:none;width:auto;min-width:0;min-height:40px;padding:8px 14px;font-size:14px;white-space:nowrap;" onclick="event.stopPropagation();confirmWebOrderReady('${escapeAttr(order.id)}')">Готов</button>`
-      : `<button class="btn btn-primary" style="flex:none;width:auto;min-height:40px;padding:8px 14px;font-size:14px;white-space:nowrap;" onclick="event.stopPropagation();setProductionStatusFromParked('${escapeAttr(order.id)}','READY')">Готов</button>`;
-    return start+ready;
+    if (!order?.webOrderId) return '';
+    if (order?.webReadyAt) return '<span class="badge" style="flex:none;padding:7px 11px;font-size:14px;white-space:nowrap;background:var(--accent-soft);color:var(--accent);">✓ Готов</span>';
+    return `<button class="btn btn-primary web-ready-btn" style="flex:none;width:auto;min-width:0;min-height:40px;padding:8px 14px;font-size:14px;white-space:nowrap;" onclick="event.stopPropagation();confirmWebOrderReady('${escapeAttr(order.id)}')">Готов</button>`;
   }
+
   function confirmationModal(title, text, confirmLabel, confirmAction, danger=false) {
     showModal(`
       <div class="modal-title">${escapeHtml(title)}</div>
