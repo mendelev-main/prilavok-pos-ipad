@@ -1463,7 +1463,7 @@ Exact SQL constraints/indexes/migrations are fixed during P1/P2, but uniqueness 
 
 ### 12. Этапы реализации
 
-1. ⬜ **P1 — Customer foundation.** DB migrations, уникальный normalized phone, CRUD/search, создание/поиск клиента, безопасная Telegram linkage.
+1. 🟡 **P1 — Customer foundation.** DB migration применена: `customers`, unique `normalized_phone`, unique non-null `telegram_user_id`, `orders.customer_id`, RLS/server-only access. Verified WEB checkout resolve/create клиента и привязка заказа реализованы; добавлен backend regression test. Осталось подтвердить CI/deploy и live checkout перед статусом DONE.
 2. ⬜ **P2 — Loyalty engine.** Programs, earning/reward product sets, ledger, progress/reward projection, threshold math, idempotency.
 3. ⬜ **P3 — POS customer UX.** Поиск/создание/привязка клиента к чеку, прогресс и доступные подарки, выбор reward.
 4. ⬜ **P4 — Sale finalization.** Атомарное/идемпотентное начисление после оплаты, grant/redeem, защита от двойных операций.
