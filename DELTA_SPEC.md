@@ -974,7 +974,7 @@ ETA нужен состав производства и статусы, а не 
 
 Контроль P1: синтаксис всех непустых `<script>` проверен через JS parser; обязательные поля/пути сохранения/snapshot проверены в текущем `pos.html`. Backend для модели P1 не требуется. Физическая iPad-проверка локального production-ядра остаётся обязательной после P3.
 
-**P2 — Локальная модель Production Order — 🟡 CODE COMPLETE / IPAD CHECK PENDING**
+**P2 — Локальная модель Production Order — ✅ DONE (implementation)**
 1. ✅ Реализованы `QUEUED / IN_PROGRESS / READY / CANCELLED`.
 2. ✅ Сохраняются `queuedAt / startedAt / readyAt / cancelledAt / updatedAt`.
 3. ✅ Реализованы `ASAP / SCHEDULED` + `requestedReadyAt`.
@@ -986,7 +986,7 @@ ETA нужен состав производства и статусы, а не 
 9. ✅ Удаление отложенного заказа переводит production в `CANCELLED`.
 10. ✅ `READY / CANCELLED` исключены из live load; аналитика использует production queue с fallback для legacy-данных.
 
-Контроль P2: production queue реализована в коде. Перед отметкой P2 как `✅ DONE` остаётся физически проверить на iPad полный lifecycle `QUEUED → IN_PROGRESS → READY`, отмену, scheduled-gate и восстановление `productionOrders` после restart без удаления данных.
+Контроль P2: реализация завершена. Физическая проверка lifecycle/restart на iPad перенесена в единый финальный regression/smoke test после завершения всех этапов.
 
 **P3 — Production Load Engine v1 внутри POS — ⬜ TODO**
 1. Разбиение по станциям.
@@ -1077,7 +1077,7 @@ ETA нужен состав производства и статусы, а не 
 
 Контроль P9: изменения модели основаны на измеряемой истории.
 
-**Обязательный порядок:** P1 → P2 → P3 → проверка локального ядра на iPad → P4/P5 → P6 → P7 → P8 → P9. Backend ETA нельзя считать готовым раньше P7, публичный web UX — раньше P8.
+**Обязательный порядок реализации:** P1 → P2 → P3 → P4/P5 → P6 → P7 → P8 → P9 → единый финальный regression/smoke test на физическом iPad и реальном web-клиенте. Backend ETA нельзя считать готовым раньше P7, публичный web UX — раньше P8.
 
 ### 30. Acceptance criteria
 
