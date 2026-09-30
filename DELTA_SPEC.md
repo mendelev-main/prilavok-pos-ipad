@@ -1342,7 +1342,7 @@ D13 переносится из DELTA в MASTER только когда:
 
 ## D14 — Клиенты и программа лояльности
 
-**Статус:** 🟡 IN PROGRESS — P1–P5 DONE, P6/P7 финализация  
+**Статус:** 🟡 IMPLEMENTED — P1–P7 code complete, ожидается ручная iPad acceptance  
 **Дата утверждения:** 2026-10-01
 
 ### 1. Цель и границы
@@ -1468,8 +1468,8 @@ Exact SQL constraints/indexes/migrations are fixed during P1/P2, but uniqueness 
 3. ✅ **P3 — POS customer UX.** Реализованы поиск/создание/привязка клиента, прогресс/подарки в текущем чеке, выбор reward и отдельная loyalty-компенсация в сумме чека. Добавлены regression tests; визуальная приёмка входит в общий финальный прогон.
 4. ✅ **P4 — Sale finalization.** Loyalty публикуется только после успешной оплаты; earn/grant/redeem idempotent, pending sync повторяется после восстановления сети, полный возврат инициирует idempotent REVERSAL. Regression coverage добавлен; live E2E отложен до общего прогона.
 5. ✅ **P5 — WEB + Telegram.** Verified WEB checkout resolve/create клиента и связывает подтверждённый Telegram ID; order получает `customer_id`. Loyalty sale возвращает notification payload, а `ready-server.js` использует существующий `TELEGRAM_BOT_TOKEN` transport для уведомления клиента. Duplicate/idempotent retry не отправляет Telegram повторно. Regression test добавлен; live E2E входит в общий финальный прогон.
-6. 🟡 **P6 — Admin UI.** Реализованы Клиенты, карточка клиента, Telegram state, progress/rewards, ledger history, ручная корректировка с обязательной причиной и audit identity администратора; создание и редактирование loyalty programs, раздельные earning/reward product sets, включение/выключение программы. Исторический ledger при изменении правил не переписывается. Осталась финальная regression/visual acceptance проверка.
-7. 🟡 **P7 — Reliability + analytics readiness.** Реализованы atomic sale RPC с DB advisory lock, idempotent sale/reversal, eligible reward quantity validation, semantic ledger (`EARN`, `REWARD_GRANTED`, `REWARD_REDEEMED`) и per-event idempotent `REVERSAL`, duplicate Telegram suppression, pending earn/reversal retry, purchase history и offline-safe reward guard. КРИТИЧЕСКИЙ ИНВАРИАНТ: отсутствие интернета никогда не блокирует обычную POS-продажу или оплату; чек/кассовая операция завершаются локально, loyalty accrual синхронизируется позже. Если центральный reward нельзя подтвердить online, POS предлагает продолжить продажу без подарка, не списывая его. Backend production regression: Railway SUCCESS, 39/39 tests, fail 0. Осталась ручная POS/iPad acceptance-проверка UI/E2E и финальная сверка analytics presentation.
+6. ✅ **P6 — Admin UI.** Реализованы Клиенты, карточка клиента, Telegram state, progress/rewards, история покупок, ledger history, ручная корректировка с обязательной причиной и audit identity администратора; backend повторно проверяет admin password через server secret. Реализованы создание/редактирование программ, раздельные earning/reward sets и включение/выключение. Исторический ledger при изменении правил не переписывается. Визуальная приёмка — в общем iPad acceptance.
+7. ✅ **P7 — Reliability + analytics readiness.** Реализованы atomic sale RPC с DB advisory lock, idempotent sale/reversal, eligible reward validation, semantic ledger и per-event REVERSAL, duplicate Telegram suppression, pending earn/reversal retry, purchase history и offline-safe reward guard. В админской аналитике добавлены центральные метрики клиентов/loyalty: клиенты, новые, повторные, средний чек клиента, активные участники, начисленные и использованные подарки. КРИТИЧЕСКИЙ ИНВАРИАНТ сохранён: отсутствие интернета никогда не блокирует обычную POS-продажу или оплату; центральный loyalty-блок при отсутствии backend лишь показывает недоступность. Railway production после финального security pass: SUCCESS, 41/41 tests, fail 0. Осталась ручная POS/iPad acceptance-проверка UI/E2E.
 
 **Порядок реализации:** P1 → P2 → P3 → P4 → P5 → P6 → P7. Этап считается DONE только после implementation + regression/acceptance для его критических сценариев.
 
@@ -1494,3 +1494,12 @@ Exact SQL constraints/indexes/migrations are fixed during P1/P2, but uniqueness 
 17. Изменение правил программы в будущем не должно переписывать уже совершённые ledger-события.
 18. Недоступность интернета/backend не может блокировать наличную или карточную оплату, завершение обычной продажи, локальное сохранение чека и локальные кассовые операции.
 19. Offline loyalty accrual сохраняется как pending и синхронизируется после восстановления связи; центральная reward redemption без подтверждения backend не выполняется.
+
+
+### 14. Финальный технический проход — 2026-10-01
+
+- Исправлен контракт истории покупок: backend и POS используют фактические поля orders `external_id`, `total` и order_items `price`.
+- Добавлен `GET /api/analytics/loyalty` и customer/loyalty блок в админской аналитике.
+- Manual adjustment защищён не только ролью текущего сотрудника в POS: backend требует `POS_ADMIN_PASSWORD`, хранящийся как Railway environment secret.
+- Production deployment: SUCCESS; backend regression suite: 41 passed / 0 failed; runtime слушает порт 8080.
+- Следующий gate: ручной acceptance на реальном iPad. После его прохождения D14 переводится в DONE.
