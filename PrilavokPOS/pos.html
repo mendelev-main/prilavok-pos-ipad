@@ -911,6 +911,7 @@ let state = {
   employees: [],
   orders: [],
   parked: [],
+  productionOrders: [],
   receivings: [],
   suppliers: [],
   purchaseOrders: [],
@@ -939,6 +940,9 @@ let state = {
   orderType: 'На месте',
   customer: {name:'', phone:'', address:''},
   orderLabel: '',
+  productionMode: 'ASAP',
+  requestedReadyAt: null,
+  currentProductionOrderId: '',
   printer: {enabled:false, autoPrint:false, ip:'', port:9100 },
   company: {establishmentName:'', legalName:'', address:'', deliveryAddress:''},
   deliveryRates: [],
@@ -1011,12 +1015,13 @@ async function loadAll(){
     markStorageBroken('localStorage test write failed');
   }
   storageCheckedOnce = true;
-  const [products, shifts, employees, orders, parked, receivings, suppliers, purchaseOrders, discounts, layout, printer, theme, company, deliveryRates, telegram, network, currentOrderSession, hallTables, bookings, webEvents, posNavigation, inventoryConfig, inventoryHistory, inventoryDraft] = await Promise.all([
+  const [products, shifts, employees, orders, parked, productionOrders, receivings, suppliers, purchaseOrders, discounts, layout, printer, theme, company, deliveryRates, telegram, network, currentOrderSession, hallTables, bookings, webEvents, posNavigation, inventoryConfig, inventoryHistory, inventoryDraft] = await Promise.all([
     loadKey('products', null),
     loadKey('shifts', []),
     loadKey('employees', []),
     loadKey('orders', []),
     loadKey('parked', []),
+    loadKey('productionOrders', []),
     loadKey('receivings', []),
     loadKey('suppliers', []),
     loadKey('purchaseOrders', []),
@@ -1042,7 +1047,8 @@ async function loadAll(){
   state.employees = Array.isArray(employees) ? employees : [];
   state.employees.forEach(e=>{ e.role = e.role==='admin' ? 'admin' : 'employee'; });
   state.orders = orders;
-  state.parked = parked;
+  state.parked = Array.isArray(parked) ? parked : [];
+  state.productionOrders = Array.isArray(productionOrders) ? productionOrders : [];
   state.receivings = receivings;
   state.suppliers = Array.isArray(suppliers) ? suppliers : [];
   state.purchaseOrders = Array.isArray(purchaseOrders) ? purchaseOrders : [];
@@ -1091,6 +1097,9 @@ async function loadAll(){
     state.currentOrderSource = currentOrderSession.source || '';
     state.currentWebOrderId = currentOrderSession.webOrderId || '';
     state.currentWebOrderStatus = currentOrderSession.webOrderStatus || '';
+    state.productionMode = currentOrderSession.productionMode==='SCHEDULED'?'SCHEDULED':'ASAP';
+    state.requestedReadyAt = Number(currentOrderSession.requestedReadyAt)||null;
+    state.currentProductionOrderId = currentOrderSession.productionOrderId || '';
     window.__currentOrderKitchenPrinted = !!currentOrderSession.kitchenPrinted;
     window.__currentOrderPrintedItems = Array.isArray(currentOrderSession.printedItems) ? JSON.parse(JSON.stringify(currentOrderSession.printedItems)) : [];
   }
@@ -1287,6 +1296,9 @@ function saveCurrentOrderSession(){
     source: state.currentOrderSource || '',
     webOrderId: state.currentWebOrderId || '',
     webOrderStatus: state.currentWebOrderStatus || '',
+    productionMode: state.productionMode==='SCHEDULED'?'SCHEDULED':'ASAP',
+    requestedReadyAt: Number(state.requestedReadyAt)||null,
+    productionOrderId: state.currentProductionOrderId || '',
     kitchenPrinted: !!window.__currentOrderKitchenPrinted,
     printedItems: JSON.parse(JSON.stringify(window.__currentOrderPrintedItems || [])),
     updatedAt: Date.now()
@@ -1297,7 +1309,7 @@ function saveCurrentOrderSession(){
 }
 
 function clearCurrentOrderSession(){
-  saveKey('currentOrderSession', {items:[],orderLabel:'',orderType:'На месте',customer:{name:'',phone:'',address:''},deliveryFee:0,orderComment:'',source:'',webOrderId:'',webOrderStatus:'',kitchenPrinted:false,printedItems:[],updatedAt:Date.now()});
+  saveKey('currentOrderSession', {items:[],orderLabel:'',orderType:'На месте',customer:{name:'',phone:'',address:''},deliveryFee:0,orderComment:'',source:'',webOrderId:'',webOrderStatus:'',productionMode:'ASAP',requestedReadyAt:null,productionOrderId:'',kitchenPrinted:false,printedItems:[],updatedAt:Date.now()});
 }
 
 function cartTotal(){
@@ -3525,6 +3537,9 @@ function resetCurrentOrderState(){
   state.currentOrderSource='';
   state.currentWebOrderId='';
   state.currentWebOrderStatus='';
+  state.productionMode='ASAP';
+  state.requestedReadyAt=null;
+  state.currentProductionOrderId='';
   window.__currentOrderKitchenPrinted=false;
   window.__currentOrderPrintedItems=[];
 }
@@ -3545,6 +3560,51 @@ function flash(msg){
   el.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1B1F2A;color:#fff;padding:12px 20px;border-radius:100px;font-weight:600;font-size:14px;z-index:999;box-shadow:0 8px 24px rgba(0,0,0,.25);';
   document.body.appendChild(el);
   setTimeout(()=>el.remove(), 1800);
+}
+
+/* ---- Local production lifecycle ---- */
+const PRODUCTION_STATUSES=new Set(['QUEUED','IN_PROGRESS','READY','CANCELLED']);
+function productionStatusLabel(status){return status==='IN_PROGRESS'?'Готовится':status==='READY'?'Готов':status==='CANCELLED'?'Отменён':'В очереди';}
+function productionOrderById(id){return id?state.productionOrders.find(x=>x.id===id):null;}
+function normalizeProductionOrder(o){
+  if(!o||typeof o!=='object')return null;
+  const status=PRODUCTION_STATUSES.has(o.status)?o.status:'QUEUED',mode=o.mode==='SCHEDULED'?'SCHEDULED':'ASAP';
+  return {...o,version:1,status,mode,requestedReadyAt:mode==='SCHEDULED'?(Number(o.requestedReadyAt)||null):null,createdAt:Number(o.createdAt)||Date.now(),queuedAt:Number(o.queuedAt)||Number(o.createdAt)||Date.now(),startedAt:Number(o.startedAt)||null,readyAt:Number(o.readyAt)||null,cancelledAt:Number(o.cancelledAt)||null,updatedAt:Number(o.updatedAt)||Date.now()};
+}
+function saveProductionOrders(){saveKey('productionOrders',state.productionOrders);}
+function productionItemsSnapshot(items){return JSON.parse(JSON.stringify((items||[]).map(i=>({...i,prep:i.prep||productPrepSnapshot(getProduct(i.productId)),selectedModifiers:(i.selectedModifiers||[]).map(m=>({...m,prep:m.prep||productPrepSnapshot(getProduct(m.productId))}))}))));}
+function ensureProductionOrder(sourceOrder,sourceType='parked'){
+  let id=sourceOrder?.productionOrderId||state.currentProductionOrderId||'',existing=productionOrderById(id);
+  const now=Date.now(),mode=(sourceOrder?.productionMode||state.productionMode)==='SCHEDULED'?'SCHEDULED':'ASAP',requestedReadyAt=mode==='SCHEDULED'?(Number(sourceOrder?.requestedReadyAt||state.requestedReadyAt)||null):null;
+  if(existing){
+    if(existing.status!=='READY'&&existing.status!=='CANCELLED'){
+      existing.items=productionItemsSnapshot(sourceOrder?.items||state.cart);existing.mode=mode;existing.requestedReadyAt=requestedReadyAt;existing.orderLabel=sourceOrder?.orderLabel||state.orderLabel||existing.orderLabel||'';existing.updatedAt=now;saveProductionOrders();
+    }
+    return existing;
+  }
+  id=id||uid();
+  const created=normalizeProductionOrder({id,sourceType,sourceOrderId:sourceOrder?.id||'',webOrderId:sourceOrder?.webOrderId||state.currentWebOrderId||'',orderLabel:sourceOrder?.orderLabel||state.orderLabel||'',items:productionItemsSnapshot(sourceOrder?.items||state.cart),status:'QUEUED',mode,requestedReadyAt,createdAt:now,queuedAt:now,updatedAt:now});
+  state.productionOrders.push(created);saveProductionOrders();return created;
+}
+function updateProductionStatus(id,status){
+  const o=productionOrderById(id);if(!o||!PRODUCTION_STATUSES.has(status)||o.status===status)return o;
+  const now=Date.now();o.status=status;o.updatedAt=now;
+  if(status==='IN_PROGRESS'&&!o.startedAt)o.startedAt=now;
+  if(status==='READY')o.readyAt=o.readyAt||now;
+  if(status==='CANCELLED')o.cancelledAt=o.cancelledAt||now;
+  saveProductionOrders();return o;
+}
+function cancelProductionForOrder(order){if(order?.productionOrderId)updateProductionStatus(order.productionOrderId,'CANCELLED');}
+function productionCountsAsCurrentLoad(o,now=Date.now()){
+  if(!o||o.status==='READY'||o.status==='CANCELLED')return false;
+  if(o.mode!=='SCHEDULED'||!o.requestedReadyAt)return true;
+  const maxPrep=(o.items||[]).reduce((max,i)=>Math.max(max,Number(i.prep?.basePrepMinutes)||0,...(i.selectedModifiers||[]).map(m=>Number(m.prep?.basePrepMinutes)||0)),0);
+  return Number(o.requestedReadyAt)<=now+Math.max(15,maxPrep)*60000;
+}
+function setProductionStatusFromParked(id,status){
+  const parked=state.parked.find(x=>x.id===id);if(!parked)return;
+  const production=ensureProductionOrder(parked,'parked');parked.productionOrderId=production.id;
+  updateProductionStatus(production.id,status);saveKey('parked',state.parked);openParkedModal();
 }
 
 /* ---- Park (save receipt for later) ---- */
