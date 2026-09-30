@@ -1339,9 +1339,7 @@ function render(){
         const scroller=document.querySelector('.cart-items');
         const content=row?.querySelector('.cart-row-content');
         const visible=!!(row&&scroller&&row.getBoundingClientRect().bottom>scroller.getBoundingClientRect().top&&row.getBoundingClientRect().top<scroller.getBoundingClientRect().bottom);
-        if(animation.source&&row&&visible){
-          animateProductToCart(animation.source,row);
-        }else if(content&&visible){
+        if(content&&visible){
           content.classList.add(animation.className);
           setTimeout(()=>content.classList.remove(animation.className),340);
         }
@@ -3322,31 +3320,31 @@ function modifierSelectionSignature(mods){return JSON.stringify((mods||[]).map(m
 function cartItemKey(item){return item.cartLineId||item.productId;}
 function productNeedsManualPrice(p){return !!p && (!Number.isFinite(Number(p.price)) || Number(p.price)<=0);}
 function rememberCartAnimationSource(el){if(!el)return null;const r=el.getBoundingClientRect();return {left:r.left,top:r.top,width:r.width,height:r.height,html:el.outerHTML};}
-function animateProductToCart(source,targetRow){
-  if(!source||!targetRow||window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)return;
-  const tr=targetRow.getBoundingClientRect();
-  const scroller=document.querySelector('.cart-items'),sr=scroller?.getBoundingClientRect();
-  if(!sr||tr.bottom<=sr.top||tr.top>=sr.bottom)return;
-  const holder=document.createElement('div');holder.innerHTML=source.html;
-  const tile=holder.firstElementChild;if(!tile)return;
-  document.body.appendChild(tile);tile.classList.add('cart-flying-tile');
+function animateProductToCart(source){
+  if(!source||window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)return;
+  const target=document.querySelector('.cart-panel');
+  if(!target)return;
+  const tr=target.getBoundingClientRect(),ghost=document.createElement('div');
+  ghost.className='cart-flying-tile';
+  ghost.innerHTML=source.html;
+  const tile=ghost.firstElementChild;
+  if(!tile)return;
+  document.body.appendChild(tile);
+  tile.classList.add('cart-flying-tile');
   Object.assign(tile.style,{left:source.left+'px',top:source.top+'px',width:source.width+'px',height:source.height+'px'});
-  const targetScale=Math.max(.22,Math.min(.48,tr.width/source.width,tr.height/source.height));
-  const sourceCX=source.left+source.width/2,sourceCY=source.top+source.height/2;
-  const targetCX=tr.left+tr.width/2,targetCY=tr.top+tr.height/2;
-  const dx=targetCX-sourceCX,dy=targetCY-sourceCY;
+  const targetX=tr.left+Math.min(70,tr.width*.22),targetY=tr.top+Math.min(95,tr.height*.18);
+  const dx=targetX-(source.left+source.width/2),dy=targetY-(source.top+source.height/2);
   const animation=tile.animate([
-    {transform:'translate3d(0,0,0) scale(1)',opacity:.96},
-    {transform:`translate3d(${dx*.48}px,${dy*.48-12}px,0) scale(${.72+(targetScale-.72)*.48})`,opacity:.88,offset:.48},
-    {transform:`translate3d(${dx}px,${dy}px,0) scale(${targetScale})`,opacity:.12}
-  ],{duration:390,easing:'cubic-bezier(.2,.72,.22,1)',fill:'forwards'});
-  animation.onfinish=()=>{tile.remove();const content=targetRow.querySelector('.cart-row-content');if(content){content.classList.remove('cart-item-added','cart-item-updated');void content.offsetWidth;content.classList.add('cart-item-updated');setTimeout(()=>content.classList.remove('cart-item-updated'),300);}};
-  animation.oncancel=()=>tile.remove();
+    {transform:'translate3d(0,0,0) scale(1)',opacity:.92},
+    {transform:`translate3d(${dx*.55}px,${dy*.38-16}px,0) scale(.78)`,opacity:.78,offset:.55},
+    {transform:`translate3d(${dx}px,${dy}px,0) scale(.24)`,opacity:0}
+  ],{duration:360,easing:'cubic-bezier(.22,.75,.24,1)',fill:'forwards'});
+  animation.onfinish=()=>tile.remove();animation.oncancel=()=>tile.remove();
 }
 function addToCart(id,sourceEl=null){const p=getProduct(id);if(!p)return;const source=rememberCartAnimationSource(sourceEl);if(Array.isArray(p.modifierGroups)&&p.modifierGroups.length){window.__pendingCartFlySource=source;openModifierSelection(id);return;}if(productNeedsManualPrice(p)){window.__pendingCartFlySource=source;openManualPriceModal(p,[]);return;}addConfiguredCartItem(p,[],null,source);}
 function openManualPriceModal(p,mods=[]){if(!p)return;window._manualPriceContext={productId:p.id,mods:JSON.parse(JSON.stringify(mods||[]))};const extra=(mods||[]).reduce((x,m)=>x+Number(m.priceDelta||0),0);showModal(`<div class="modal-title">${escapeHtml(p.name)}</div><div class="settings-note">У товара не указана цена продажи. Введите цену для этой позиции заказа.</div><div class="field"><label>Цена продажи, BYN</label><input id="manual-sale-price" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="0,00" autofocus></div>${extra?`<div class="settings-note">Модификаторы: ${extra>0?'+':''}${money(extra)}</div>`:''}<div class="modal-actions"><button class="btn btn-secondary" onclick="window._manualPriceContext=null;closeModal()">Отмена</button><button class="btn btn-primary" onclick="confirmManualPrice()">Добавить в заказ</button></div>`,true);setTimeout(()=>document.getElementById('manual-sale-price')?.focus(),50);}
 function confirmManualPrice(){const context=window._manualPriceContext;if(!context)return;const input=document.getElementById('manual-sale-price'),raw=String(input?.value||'').replace(',','.'),price=Number(raw);if(!Number.isFinite(price)||price<=0){flash('Укажите цену больше 0');input?.focus();return;}const p=getProduct(context.productId);if(!p){flash('Товар не найден');return;}const mods=context.mods||[];window._manualPriceContext=null;addConfiguredCartItem(p,mods,Math.round(price*100)/100);}
-function addConfiguredCartItem(p,mods,manualBasePrice=null,animationSource=null){const extra=(mods||[]).reduce((x,m)=>x+Number(m.priceDelta||0),0),basePrice=manualBasePrice===null?(Number(p.price)||0):Number(manualBasePrice),sig=modifierSelectionSignature(mods),manual=manualBasePrice!==null;const existing=manual?null:state.cart.find(i=>i.productId===p.id&&modifierSelectionSignature(i.selectedModifiers)===sig&&!i.comment&&!i.discountId);const proposed=state.cart.map(i=>({...i,qty:i===existing?i.qty+1:i.qty}));if(!existing)proposed.push({productId:p.id,qty:1,selectedModifiers:mods});if(!canFulfillCart(proposed))return;let animatedId,animationClass;if(existing){existing.qty++;animatedId=cartItemKey(existing);animationClass='cart-item-updated';}else{const item={cartLineId:uid(),productId:p.id,name:p.name,price:basePrice+extra,basePrice,manualPrice:manual,qty:1,selectedModifiers:JSON.parse(JSON.stringify(mods||[]))};state.cart.push(item);animatedId=cartItemKey(item);animationClass='cart-item-added';}const flySource=animationSource||window.__pendingCartFlySource;window.__pendingCartFlySource=null;window.__cartAnimation={id:animatedId,className:animationClass,source:flySource};saveCurrentOrderSession();closeModal();render();
+function addConfiguredCartItem(p,mods,manualBasePrice=null,animationSource=null){const extra=(mods||[]).reduce((x,m)=>x+Number(m.priceDelta||0),0),basePrice=manualBasePrice===null?(Number(p.price)||0):Number(manualBasePrice),sig=modifierSelectionSignature(mods),manual=manualBasePrice!==null;const existing=manual?null:state.cart.find(i=>i.productId===p.id&&modifierSelectionSignature(i.selectedModifiers)===sig&&!i.comment&&!i.discountId);const proposed=state.cart.map(i=>({...i,qty:i===existing?i.qty+1:i.qty}));if(!existing)proposed.push({productId:p.id,qty:1,selectedModifiers:mods});if(!canFulfillCart(proposed))return;let animatedId,animationClass;if(existing){existing.qty++;animatedId=cartItemKey(existing);animationClass='cart-item-updated';}else{const item={cartLineId:uid(),productId:p.id,name:p.name,price:basePrice+extra,basePrice,manualPrice:manual,qty:1,selectedModifiers:JSON.parse(JSON.stringify(mods||[]))};state.cart.push(item);animatedId=cartItemKey(item);animationClass='cart-item-added';}window.__cartAnimation={id:animatedId,className:animationClass};const flySource=animationSource||window.__pendingCartFlySource;window.__pendingCartFlySource=null;if(flySource)animateProductToCart(flySource);saveCurrentOrderSession();closeModal();render();}
 function openModifierSelection(productId){const p=getProduct(productId);if(!p)return;const groups=(p.modifierGroups||[]).map(normalizeModifierGroup),html=groups.map((g,gi)=>'<div class="field"><label>'+escapeHtml(g.name)+'</label><div class="modifier-choice-grid">'+g.options.map(o=>{const mp=getProduct(o.productId),delta=Number(o.priceDelta)||0,displayName=String(o.posName||'').trim()||mp?.name||'Товар недоступен',priceText=delta?'<span class="modifier-choice-price">'+(delta>0?'+':'')+money(delta)+'</span>':'';return '<button type="button" class="modifier-choice" data-modifier-group="'+gi+'" data-modifier-option="'+escapeAttr(o.id)+'" data-modifier-max="'+g.max+'" aria-pressed="false" onclick="toggleModifierChoice(this,\''+escapeAttr(productId)+'\')"><span class="modifier-choice-name">'+escapeHtml(displayName)+'</span>'+priceText+'</button>';}).join('')+'</div></div>').join('');showModal('<div class="modal-title">'+escapeHtml(p.name)+'</div><div class="settings-note">Выберите модификаторы товара.</div>'+html+'<div style="font-size:22px;font-weight:850;margin-top:14px">Итого: <span id="modifier-selection-total">'+fullMoney(p.price)+'</span></div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button class="btn btn-primary" onclick="confirmModifierSelection(\''+escapeAttr(productId)+'\')">Добавить в заказ</button></div>',true);updateModifierSelectionTotal(productId);}
 function toggleModifierChoice(el,productId){const gi=el.dataset.modifierGroup,max=Math.max(1,Number(el.dataset.modifierMax)||1),selected=el.classList.contains('selected');if(max===1){document.querySelectorAll('.modifier-choice[data-modifier-group="'+gi+'"]').forEach(x=>{x.classList.remove('selected');x.setAttribute('aria-pressed','false');});if(!selected){el.classList.add('selected');el.setAttribute('aria-pressed','true');}}else{if(!selected){const count=document.querySelectorAll('.modifier-choice[data-modifier-group="'+gi+'"].selected').length;if(count>=max){flash('Можно выбрать не больше '+max);return;}}el.classList.toggle('selected');el.setAttribute('aria-pressed',el.classList.contains('selected')?'true':'false');}updateModifierSelectionTotal(productId);}
 function readModifierSelection(productId){const p=getProduct(productId),groups=(p?.modifierGroups||[]).map(normalizeModifierGroup),selected=[];for(let gi=0;gi<groups.length;gi++){const g=groups[gi],checked=[...document.querySelectorAll('.modifier-choice[data-modifier-group="'+gi+'"].selected')];if(checked.length<g.min||checked.length>g.max)throw new Error('«'+g.name+'»: выберите от '+g.min+' до '+g.max);for(const input of checked){const o=g.options.find(x=>x.id===input.dataset.modifierOption);if(!o)continue;const mp=getProduct(o.productId);if(!mp)throw new Error('Модификатор больше недоступен: '+g.name);selected.push({groupId:g.id,groupName:g.name,optionId:o.id,productId:o.productId,name:String(o.posName||'').trim()||mp.name,qty:Number(o.qty)||1,priceDelta:Number(o.priceDelta)||0});}}return selected;}
