@@ -1108,6 +1108,8 @@ async function loadAll(){
     if(typeof p.sortOrder !== 'number'){ maxOrder += 1; p.sortOrder = maxOrder; needSave = true; }
     if(typeof p.availableOnline !== 'boolean'){ p.availableOnline = true; needSave = true; }
     if(typeof p.imageUrl !== 'string'){ p.imageUrl = ''; needSave = true; }
+    if(p.prepStation!=='bar' && p.prepStation!=='kitchen'){ p.prepStation='kitchen'; needSave=true; }
+    if(!Number.isInteger(p.prepDifficulty) || p.prepDifficulty<1 || p.prepDifficulty>5){ p.prepDifficulty=1; needSave=true; }
   }
   if(needSave) saveKey('products', state.products);
   syncCategoryOrder();
@@ -1727,6 +1729,38 @@ function exportWarehousePDF(documentsOnly=false){
   }catch(e){flash(e.message);}
 }
 
+function preparationLoadData(){
+  const orders=[];
+  if(state.cart?.length)orders.push({items:state.cart,source:'current'});
+  for(const o of (state.parked||[])){
+    if(!Array.isArray(o.items)||!o.items.length)continue;
+    if(o.webOrderStatus==='ready')continue;
+    orders.push({items:o.items,source:o.source||'parked'});
+  }
+  const stations={bar:{key:'bar',name:'Бар',points:0,qty:0,lines:0},kitchen:{key:'kitchen',name:'Кухня',points:0,qty:0,lines:0}};
+  for(const order of orders)for(const item of (order.items||[])){
+    const p=getProduct(item.productId);if(!p)continue;
+    const station=p.prepStation==='bar'?'bar':'kitchen',qty=Math.max(0,Number(item.qty)||0),difficulty=Math.max(1,Math.min(5,Number(p.prepDifficulty)||1));
+    stations[station].points+=qty*difficulty;stations[station].qty+=qty;stations[station].lines++;
+  }
+  return {orders:orders.length,stations:[stations.bar,stations.kitchen]};
+}
+function preparationLoadLevel(points){
+  const n=Number(points)||0;
+  if(n<=0)return {label:'Нет загрузки',percent:0};
+  if(n<=5)return {label:'Низкая',percent:25};
+  if(n<=12)return {label:'Средняя',percent:50};
+  if(n<=22)return {label:'Высокая',percent:75};
+  return {label:'Очень высокая',percent:100};
+}
+function renderPreparationLoad(){
+  const load=preparationLoadData();
+  return `<div class="analytics-card" style="margin-bottom:14px;"><div class="analytics-title">Текущая загруженность</div><div class="analytics-sub">Активные заказы · сложность × количество. Заказов в работе: ${load.orders}</div>
+    <div class="analytics-grid-2" style="margin-top:14px;">${load.stations.map(s=>{const level=preparationLoadLevel(s.points);return `<div style="padding:14px;border:1px solid var(--border);border-radius:14px;background:var(--surface);"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><strong>${s.name}</strong><span style="font-weight:850;">${level.label}</span></div><div style="height:8px;background:var(--bg);border-radius:99px;overflow:hidden;margin:10px 0;"><div style="height:100%;width:${level.percent}%;background:var(--accent);border-radius:inherit;"></div></div><div class="analytics-sub">${s.points} балл. нагрузки · ${s.qty} шт. · ${s.lines} поз.</div></div>`}).join('')}</div>
+    <div class="analytics-sub" style="margin-top:12px;">Баллы являются относительной оценкой нагрузки. Эта модель подготовлена для последующего расчёта ориентировочного времени приготовления и доставки.</div>
+  </div>`;
+}
+
 function renderAnalyticsScreen(){
   const d=analyticsData();
   const today=localDateString(new Date());
@@ -1760,6 +1794,7 @@ function renderAnalyticsScreen(){
       </div>
     </div>
     ${adminKpis}
+    ${renderPreparationLoad()}
     <div class="analytics-grid-2" style="margin-bottom:14px;">
       <div class="analytics-card"><div class="analytics-title">Продажи сотрудников</div><div class="analytics-sub">${admin?'Выручка по сотруднику за выбранный период':'Продажи по сотруднику за выбранный период'}</div>${admin?renderHbars(d.employees,true):renderHbars(d.employees,false)}</div>
       <div class="analytics-card"><div class="analytics-title">Способы оплаты</div><div class="analytics-sub">Распределение оплат</div>${renderAnalyticsBars([{name:'Наличные',value:d.cash},{name:'Карта',value:d.card}],{format:'money',percentTotal:paymentTotal,percentOnly:!admin})}</div>
@@ -4741,7 +4776,7 @@ function openProductModal(id){
 }
 function productEditorSnapshot(){
   const value=id=>document.getElementById(id)?.value??'';
-  return JSON.stringify({purchaseUnit:value('pf-purchase-unit'),packSize:value('pf-pack-size'),purchaseContentUnit:value('pf-purchase-content-unit'),sku:value('pf-sku'),note:value('pf-note'),unit:window._pmUnit,minimum:value('pf-min-stock'),name:value('pf-name'),category:value('pf-category'),symbol:value('pf-symbol'),price:value('pf-price'),type:window._pmType,
+  return JSON.stringify({purchaseUnit:value('pf-purchase-unit'),packSize:value('pf-pack-size'),purchaseContentUnit:value('pf-purchase-content-unit'),sku:value('pf-sku'),note:value('pf-note'),unit:window._pmUnit,minimum:value('pf-min-stock'),name:value('pf-name'),category:value('pf-category'),symbol:value('pf-symbol'),price:value('pf-price'),prepStation:value('pf-prep-station'),prepDifficulty:value('pf-prep-difficulty'),type:window._pmType,
     cost:window._pmType==='simple'?value('pf-cost'):null,stock:window._pmType==='simple'?value('pf-stock'):null,
     noStock:window._pmType==='simple'?!!document.getElementById('pf-no-stock')?.checked:false,
     components:window._pmType==='composite'?window._pmComponents:[],modifierGroups:window._pmModifierGroups||[],recipeYield:window._pmType==='composite'?Number(document.getElementById('pf-recipe-yield')?.value||window._pmRecipeYield||1):null,recipeUnit:window._pmType==='composite'?(document.getElementById('pf-recipe-unit')?.value||window._pmRecipeUnit||'piece'):null,online:window._pmOnline,image:window._pmImageData,removeImage:window._pmRemoveImage});
@@ -4825,6 +4860,10 @@ function renderProductModal(editing, type, simpleProducts, catList){
         <div class="field"><label for="pf-note">Внутренняя заметка</label><textarea id="pf-note" maxlength="2000" rows="3" style="width:100%;font:inherit;padding:12px;background:var(--bg);color:var(--ink);border:1px solid var(--border);border-radius:12px;">${escapeHtml(editing?.internalNote||'')}</textarea><p class="pe-note">Для сотрудников. Не выводится в чек или онлайн-меню.</p></div>
         <div class="field"><label>Тип товара</label><div class="radio-row"><button type="button" class="radio-opt product-type-switch ${type==='simple'?'selected':''}" data-type="simple" onclick="switchProductType('simple')">Простой</button><button type="button" class="radio-opt product-type-switch ${type==='composite'?'selected':''}" data-type="composite" onclick="switchProductType('composite')">Составной</button></div><p class="pe-note">Простой товар хранится на складе. Составной расходует ингредиенты по рецептуре.</p></div>
         <div class="field"><label for="pf-price">Цена продажи, ${escapeHtml(state.currency)}</label><input id="pf-price" type="number" min="0" step="0.01" inputmode="decimal" value="${editing?.price??''}" placeholder="0,00"></div>
+        <div class="pe-two-fields">
+          <div class="field"><label for="pf-prep-station">Подразделение приготовления</label><select id="pf-prep-station"><option value="kitchen" ${(editing?.prepStation||'kitchen')==='kitchen'?'selected':''}>Кухня</option><option value="bar" ${editing?.prepStation==='bar'?'selected':''}>Бар</option></select><p class="pe-note">Используется для разделения текущей загрузки и будущего расчёта времени приготовления.</p></div>
+          <div class="field"><label for="pf-prep-difficulty">Сложность приготовления</label><select id="pf-prep-difficulty">${[1,2,3,4,5].map(n=>`<option value="${n}" ${Number(editing?.prepDifficulty||1)===n?'selected':''}>${n} из 5</option>`).join('')}</select><p class="pe-note">1 — быстро и просто, 5 — наиболее трудоёмкая позиция.</p></div>
+        </div>
         <div class="pe-photo"><div id="pf-image-preview" class="product-image-preview">${editing?.imageUrl?`<img src="${escapeAttr(editing.imageUrl)}" alt="Фото товара">`:'<div class="product-image-empty">Фото товара</div>'}</div><div><h3>Фото товара</h3><p class="pe-note">Изображение для онлайн-меню.</p><button class="btn btn-outline" onclick="pickProductImage()">Выбрать фото</button><button class="btn btn-outline" onclick="removeProductImage();updateProductEditorSummary()">Убрать фото</button></div><input id="pf-image-input" type="file" accept="image/*" hidden onchange="handleProductImage(this)"></div>
       </section>
       <section class="pe-card" data-pe-panel="stock" hidden><div class="pe-section-heading"><h2>Состав и остатки</h2></div><div id="pf-type-fields"></div></section>
@@ -5111,6 +5150,8 @@ async function saveProduct(editingId){
   const category = document.getElementById('pf-category').value.trim();
   const price = parseFloat(document.getElementById('pf-price').value) || 0;
   const tileSymbol = limitTileSymbol(document.getElementById('pf-symbol')?.value||'');
+  const prepStation=document.getElementById('pf-prep-station')?.value==='bar'?'bar':'kitchen';
+  const prepDifficulty=Math.max(1,Math.min(5,Math.round(Number(document.getElementById('pf-prep-difficulty')?.value)||1)));
   const noStockTracking = !!document.getElementById('pf-no-stock')?.checked;
   if(!name){ flash('Введите название'); return; }
   const type = window._pmType;
@@ -5133,6 +5174,7 @@ async function saveProduct(editingId){
       p = JSON.parse(originalProduct);
       p.name = name; p.category = category; p.price = price; p.type = type;
       p.tileSymbol = tileSymbol;
+      p.prepStation=prepStation; p.prepDifficulty=prepDifficulty;
       p.noStockTracking = noStockTracking;
       p.availableOnline = canEditProductWebSetting() ? window._pmOnline !== false : getProduct(editingId)?.availableOnline !== false;
       if(window._pmRemoveImage) p.imageUrl = '';
@@ -5150,7 +5192,7 @@ async function saveProduct(editingId){
       const catKey = category.trim() || 'Без категории';
       const siblingOrders = state.products.filter(x=>productCategoryKey(x)===catKey).map(x=>x.sortOrder||0);
       const nextOrder = siblingOrders.length ? Math.max(...siblingOrders)+1 : 0;
-      p = {id: uid(), name, category, price, type, tileSymbol, noStockTracking, sortOrder: nextOrder, availableOnline: canEditProductWebSetting() ? window._pmOnline !== false : false, imageUrl:''};
+      p = {id: uid(), name, category, price, type, tileSymbol, prepStation, prepDifficulty, noStockTracking, sortOrder: nextOrder, availableOnline: canEditProductWebSetting() ? window._pmOnline !== false : false, imageUrl:''};
       if(type==='simple'){
         p.cost = parseFloat(document.getElementById('pf-cost')?.value) || 0;
         p.stock = parseFloat(document.getElementById('pf-stock')?.value) || 0;
