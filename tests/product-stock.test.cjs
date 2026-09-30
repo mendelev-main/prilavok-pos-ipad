@@ -660,17 +660,17 @@ test('availability schedule waits ten minutes on launch/resume; no network event
 });
 function webAcceptFixture(){const f=fixture();f.state.network={backendUrl:'https://test',deviceKey:'test'};f.state.webEvents=[{id:'web-1',external_id:'WEB-1',total:10,order_items:[{external_product_id:'pizza',product_name:'Пицца',quantity:1,price:10}]}];return f;}
 test('WEB acceptance checks aggregate ingredient availability before any network request',async()=>{
- const f=webAcceptFixture();f.c.getProduct('flour').stock=.3;f.state.webEvents[0].order_items.push({external_product_id:'flour',product_name:'Мука',quantity:.2,price:2});await f.c.acceptWebOrder('web-1');assert.equal(f.state.parked.length,0);assert.match(f.messages.join(' '),/Недостаточно остатка/);
+ const f=webAcceptFixture();f.c.getProduct('flour').stock=.3;f.state.webEvents[0].order_items.push({external_product_id:'flour',product_name:'Мука',quantity:.2,price:2});await f.c.acceptWebOrder('web-1','15m');assert.equal(f.state.parked.length,0);assert.match(f.messages.join(' '),/Недостаточно остатка/);
 });
 test('WEB acceptance rejects missing IDs instead of silently dropping lines or matching a renamed product',async()=>{
- const f=webAcceptFixture();f.state.webEvents[0].order_items[0].external_product_id='deleted';await f.c.acceptWebOrder('web-1');assert.equal(f.state.parked.length,0);assert.match(f.messages.join(' '),/не найден/);
+ const f=webAcceptFixture();f.state.webEvents[0].order_items[0].external_product_id='deleted';await f.c.acceptWebOrder('web-1','15m');assert.equal(f.state.parked.length,0);assert.match(f.messages.join(' '),/не найден/);
 });
 test('WEB acceptance persists locally before network and retries without duplicating even after consumption',async()=>{
  const f=webAcceptFixture();let attempts=0;f.c.fetch=async()=>{attempts++;assert.equal(JSON.parse(f.data.get('prilavok_parked')).length,1);assert.equal(JSON.parse(f.data.get('prilavok_webOrderAcceptances'))['web-1'].stage,'local');if(attempts===1)throw Error('offline');return {ok:true,json:async()=>({ok:true})}};
- await f.c.acceptWebOrder('web-1');assert.equal(f.state.parked.length,1);f.state.parked=[];await f.c.saveKey('parked',[]);f.c.fetch=async()=>({ok:true,json:async()=>({ok:true})});await f.c.acceptWebOrder('web-1');assert.equal(f.state.parked.length,0);assert.equal(f.state.webEvents.length,0);assert.equal(JSON.parse(f.data.get('prilavok_webOrderAcceptances'))['web-1'].stage,'confirmed');
+ await f.c.acceptWebOrder('web-1','15m');assert.equal(f.state.parked.length,1);f.state.parked=[];await f.c.saveKey('parked',[]);f.c.fetch=async()=>({ok:true,json:async()=>({ok:true})});await f.c.acceptWebOrder('web-1','15m');assert.equal(f.state.parked.length,0);assert.equal(f.state.webEvents.length,0);assert.equal(JSON.parse(f.data.get('prilavok_webOrderAcceptances'))['web-1'].stage,'confirmed');
 });
 test('WEB local write failure never sends confirmation',async()=>{
- const f=webAcceptFixture();f.c.localStorage.setItem=()=>{throw Error('disk full')};let calls=0;f.c.fetch=async()=>{calls++};await f.c.acceptWebOrder('web-1');assert.equal(calls,0);assert.equal(f.state.parked.length,0);
+ const f=webAcceptFixture();f.c.localStorage.setItem=()=>{throw Error('disk full')};let calls=0;f.c.fetch=async()=>{calls++};await f.c.acceptWebOrder('web-1','15m');assert.equal(calls,0);assert.equal(f.state.parked.length,0);
 });
 test('prepared WEB acceptance recovers persisted parked row on restart without another copy',async()=>{
  const f=webAcceptFixture();const parked={id:'p',webOrderId:'web-1',items:[]};f.state.parked=[parked];await f.c.saveKey('webOrderAcceptances',{'web-1':{stage:'prepared',parked}});await f.c.recoverWebAcceptanceJournal();assert.equal(JSON.parse(f.data.get('prilavok_webOrderAcceptances'))['web-1'].stage,'local');assert.equal(f.state.parked.length,1);
