@@ -1005,14 +1005,15 @@ ETA нужен состав производства и статусы, а не 
 
 Контроль P3: POS локально рассчитывает загрузку и прогноз новой корзины без сети. Физическая проверка на iPad выполняется в едином финальном regression/smoke test после завершения этапов реализации.
 
-**P4 — Сбор фактических production timestamps — ⬜ TODO**
-1. История production orders.
-2. Normative prep snapshot.
-3. Actual started/ready.
-4. Load context.
-5. Данные predicted-vs-actual.
+**P4 — Сбор фактических production timestamps — ✅ DONE (implementation)**
+1. ✅ Добавлена отдельная локальная `productionHistory`; terminal production order фиксируется один раз по `productionOrderId`.
+2. ✅ При старте/завершении фиксируется immutable normative prep snapshot по станциям: duration/work points/qty + engine version.
+3. ✅ Сохраняются actual `queuedAt / startedAt / readyAt / cancelledAt`; отдельно рассчитываются queue time и preparation time.
+4. ✅ Фиксируется load context: critical/delaying/loaded stations, уровень, station estimates и версия engine.
+5. ✅ Сохраняются predicted minutes и `predictionErrorMinutes` для READY-заказов; добавлены диагностический summary и deterministic checks.
+6. ✅ Для SCHEDULED preparation duration считается только `startedAt → readyAt`; ожидание до production window не смешивается с фактическим временем приготовления.
 
-Контроль P4: завершённый заказ даёт пригодные данные для будущей калибровки; scheduled waiting не считается временем приготовления.
+Контроль P4: завершённый заказ сохраняет пригодный для будущей калибровки snapshot predicted-vs-actual. Физическая проверка выполняется в едином финальном regression/smoke test.
 
 **P5 — Неблокирующий POS → backend operational channel — ⬜ TODO**
 1. Device/location identity.
