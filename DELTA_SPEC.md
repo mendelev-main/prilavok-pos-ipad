@@ -369,6 +369,9 @@ POS:
 - `b8fb34d` — WEB `Готов` отвязан от локального production lifecycle;
 - `d408a36` — обычные/WEB/оплаченные заказы больше не создают `ProductionOrder`; из карточки товара удалены поля подразделения, сложности и базового времени;
 - `de0369a` — загрузка старых товаров больше не добавляет retired prep-поля обратно;
+- `2256f7e` / `e7cec13` — удалены старые Production Load Engine, ProductionOrder/history/calibration и остаточный production UI/session state;
+- `3752bfe` / `83882e8` — после cleanup восстановлен независимый WEB-order transport/SSE без prep snapshots; это transport заказов, а не production lifecycle;
+- `ed6b549` / `c2f3bf8` — старый production regression заменён проверкой persistence и operational contract `demand.overload`;
 - старые prep-поля в уже сохранённых товарах считаются legacy-данными и больше не редактируются/не участвуют в новом demand status;
 - POS CI контролирует отсутствие регрессий после каждого cleanup-коммита.
 
