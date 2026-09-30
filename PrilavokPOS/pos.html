@@ -2304,8 +2304,6 @@ async function acceptWebOrder(id){
       record.stage='local';await window.PrilavokCore.Storage.set('webOrderAcceptances',journal);
       state.parked=parked;
     }
-    const production=ensureProductionOrder(record.parked,'web');record.parked.productionOrderId=production.id;
-    const parkedProductionIndex=state.parked.findIndex(p=>p.webOrderId===id);if(parkedProductionIndex>=0){state.parked[parkedProductionIndex].productionOrderId=production.id;await window.PrilavokCore.Storage.set('parked',state.parked);}
     // WEB-заказ печатаем на кухню один раз в момент "Взять в работу".
     // Снимок printedItems сохраняет идемпотентность и позволяет позже допечатать только добавленные позиции.
     if(!record.parked.kitchenPrinted){
@@ -4107,11 +4105,9 @@ function parkOrderNow(){
     total:cartTotal(), subtotal:cartSubtotal(), deliveryFee:state.orderType==='Доставка'?Number(state.deliveryFee||0):0,
     orderLabel:state.orderLabel, orderType:state.orderType, customer:JSON.parse(JSON.stringify(state.customer)),
     comment:state.orderComment||'', source:state.currentOrderSource||'', webOrderId:state.currentWebOrderId||'', webOrderStatus:state.currentWebOrderStatus||'',
-    productionMode:state.productionMode==='SCHEDULED'?'SCHEDULED':'ASAP',requestedReadyAt:Number(state.requestedReadyAt)||null,productionOrderId:state.currentProductionOrderId||'',
     employeeName:employee?.name||employee?.fullName||'Сотрудник',registerName:'POS 1',timestamp:Date.now(),createdAt:Date.now(),kitchenPrinted:!!window.__currentOrderKitchenPrinted,
     printedItems:JSON.parse(JSON.stringify(window.__currentOrderPrintedItems||[]))
   };
-  const production=ensureProductionOrder(parked,'parked');parked.productionOrderId=production.id;state.currentProductionOrderId=production.id;
   const deltaItems=kitchenPrintDelta(parked.items,parked.printedItems);
   if(deltaItems.length && typeof window.printKitchenOrderNow==='function'){
     window.printKitchenOrderNow({...parked,items:deltaItems});
@@ -4567,9 +4563,7 @@ function finalizePayment(payments){
   const kitchenPrinted=!!window.__currentOrderKitchenPrinted;
   const receiptSequence=(state.orders.filter(o=>o.shiftId===shift.id).length+1);
   const shiftEmployee=state.employees.find(e=>e.id===shift.employeeId);
-  const production=ensureProductionOrder({items:state.cart,orderLabel:state.orderLabel,productionMode:state.productionMode,requestedReadyAt:state.requestedReadyAt,productionOrderId:state.currentProductionOrderId,webOrderId:state.currentWebOrderId},'paid');
-  state.currentProductionOrderId=production.id;
-  const order={id:uid(),productionOrderId:production.id,productionMode:production.mode,requestedReadyAt:production.requestedReadyAt,shiftId:shift.id,receiptNumber:receiptSequence,receiptDisplayNumber:`#${receiptSequence}`,employeeId:shift.employeeId||'',employeeName:shiftEmployee?.name||shiftEmployee?.fullName||'Сотрудник',registerName:'POS 1',method,total,payments:clean,cashGiven:method==='cash'?clean[0].cashGiven:null,change:method==='cash'?clean[0].change:null,orderLabel:state.orderLabel||'',orderType:state.orderType,deliveryFee:deliveryFee,customer:JSON.parse(JSON.stringify(state.customer)),items:state.cart.map(i=>{const d=state.discounts.find(x=>x.id===i.discountId),product=getProduct(i.productId);return {...i,category:product?.category||i.category||'',discountName:d?.name||'',discountType:d?.type||'',discountValue:Number(d?.value)||0,cost:product?(product.type==='simple'?product.cost:compositeCost(product)):0};}),timestamp:Date.now(),kitchenPrinted,printedItems:JSON.parse(JSON.stringify(window.__currentOrderPrintedItems||[]))};
+  const order={id:uid(),shiftId:shift.id,receiptNumber:receiptSequence,receiptDisplayNumber:`#${receiptSequence}`,employeeId:shift.employeeId||'',employeeName:shiftEmployee?.name||shiftEmployee?.fullName||'Сотрудник',registerName:'POS 1',method,total,payments:clean,cashGiven:method==='cash'?clean[0].cashGiven:null,change:method==='cash'?clean[0].change:null,orderLabel:state.orderLabel||'',orderType:state.orderType,deliveryFee:deliveryFee,customer:JSON.parse(JSON.stringify(state.customer)),items:state.cart.map(i=>{const d=state.discounts.find(x=>x.id===i.discountId),product=getProduct(i.productId);return {...i,category:product?.category||i.category||'',discountName:d?.name||'',discountType:d?.type||'',discountValue:Number(d?.value)||0,cost:product?(product.type==='simple'?product.cost:compositeCost(product)):0};}),timestamp:Date.now(),kitchenPrinted,printedItems:JSON.parse(JSON.stringify(window.__currentOrderPrintedItems||[]))};
   order.stockConsumption=stockConsumption;
   for(const item of stockConsumption.items){
     const p=getProduct(item.productId);
@@ -5395,12 +5389,6 @@ function renderProductModal(editing, type, simpleProducts, catList){
         <div class="field"><label for="pf-note">Внутренняя заметка</label><textarea id="pf-note" maxlength="2000" rows="3" style="width:100%;font:inherit;padding:12px;background:var(--bg);color:var(--ink);border:1px solid var(--border);border-radius:12px;">${escapeHtml(editing?.internalNote||'')}</textarea><p class="pe-note">Для сотрудников. Не выводится в чек или онлайн-меню.</p></div>
         <div class="field"><label>Тип товара</label><div class="radio-row"><button type="button" class="radio-opt product-type-switch ${type==='simple'?'selected':''}" data-type="simple" onclick="switchProductType('simple')">Простой</button><button type="button" class="radio-opt product-type-switch ${type==='composite'?'selected':''}" data-type="composite" onclick="switchProductType('composite')">Составной</button></div><p class="pe-note">Простой товар хранится на складе. Составной расходует ингредиенты по рецептуре.</p></div>
         <div class="field"><label for="pf-price">Цена продажи, ${escapeHtml(state.currency)}</label><input id="pf-price" type="number" min="0" step="0.01" inputmode="decimal" value="${editing?.price??''}" placeholder="0,00"></div>
-        <div class="pe-two-fields">
-          <div class="field"><label for="pf-prep-station">Подразделение приготовления</label><select id="pf-prep-station" onchange="togglePrepTimeField()"><option value="kitchen" ${(editing?.prepStation||'kitchen')==='kitchen'?'selected':''}>Кухня</option><option value="bar" ${editing?.prepStation==='bar'?'selected':''}>Бар</option><option value="none" ${editing?.prepStation==='none'?'selected':''}>Без приготовления</option></select><p class="pe-note">Используется для разделения текущей загрузки и расчёта времени приготовления.</p></div>
-          <div class="field"><label for="pf-prep-difficulty">Сложность приготовления</label><select id="pf-prep-difficulty">${[1,2,3,4,5].map(n=>`<option value="${n}" ${Number(editing?.prepDifficulty||1)===n?'selected':''}>${n} из 5</option>`).join('')}</select><p class="pe-note">1 — быстро и просто, 5 — наиболее трудоёмкая позиция.</p></div>
-        </div>
-        <div class="field" id="pf-base-prep-wrap"><label for="pf-base-prep-minutes">Базовое время приготовления, мин</label><input id="pf-base-prep-minutes" type="number" min="1" max="240" step="1" inputmode="numeric" value="${editing?.prepStation==='none'?'':(editing?.basePrepMinutes??5)}" placeholder="5"><p class="pe-note">Норматив одной производственной партии. Это не обещанное клиенту ETA: очередь и загрузка учитываются отдельно.</p></div>
-        </div>
         <div class="pe-photo"><div id="pf-image-preview" class="product-image-preview">${editing?.imageUrl?`<img src="${escapeAttr(editing.imageUrl)}" alt="Фото товара">`:'<div class="product-image-empty">Фото товара</div>'}</div><div><h3>Фото товара</h3><p class="pe-note">Изображение для онлайн-меню.</p><button class="btn btn-outline" onclick="pickProductImage()">Выбрать фото</button><button class="btn btn-outline" onclick="removeProductImage();updateProductEditorSummary()">Убрать фото</button></div><input id="pf-image-input" type="file" accept="image/*" hidden onchange="handleProductImage(this)"></div>
       </section>
       <section class="pe-card" data-pe-panel="stock" hidden><div class="pe-section-heading"><h2>Состав и остатки</h2></div><div id="pf-type-fields"></div></section>
@@ -5413,13 +5401,7 @@ function renderProductModal(editing, type, simpleProducts, catList){
       <section class="pe-card" data-pe-panel="web" hidden><h2>Онлайн-меню</h2><div class="web-setting-row"><div><strong>Публиковать в WEB</strong><p class="pe-note">Товар виден в онлайн-меню, если опубликована и его категория.</p></div><button id="pf-web-toggle" type="button" role="switch" aria-label="Публиковать в WEB" aria-checked="${window._pmOnline}" aria-disabled="${!canEditProductWebSetting()}" class="toggle-switch ${window._pmOnline?'on':''}" ${canEditProductWebSetting()?'':'disabled'} onclick="toggleProductModalOnline();updateProductEditorSummary()"><span></span></button></div><p class="pe-note">${canEditProductWebSetting()?'Изменения меню отправляются вручную: Настройки → Сетевые настройки → Синхронизировать меню.':'Настройку WEB может изменять только администратор при открытой им смене.'}</p></section>
       </main><aside class="pe-summary"><div class="pe-price-block"><span>Цена продажи</span><strong id="pe-summary-price"></strong></div><div class="pe-summary-row"><span>Себестоимость</span><strong id="pe-summary-cost"></strong></div><div class="pe-summary-row"><span>Цена − себестоимость</span><strong id="pe-summary-difference"></strong></div><p class="pe-note">Для составного товара себестоимость рассчитывается по ингредиентам.</p><div class="pe-summary-hint">Количество в составе указывается на одну продаваемую единицу товара.</div></aside></div>
     </div></div></section>`;
-  renderTypeFields();toggleNoStockFields();togglePrepTimeField();updateProductEditorSummary();
-}
-function togglePrepTimeField(){
-  const none=document.getElementById('pf-prep-station')?.value==='none',wrap=document.getElementById('pf-base-prep-wrap'),time=document.getElementById('pf-base-prep-minutes'),difficulty=document.getElementById('pf-prep-difficulty');
-  if(wrap)wrap.hidden=none;
-  if(time)time.disabled=none;
-  if(difficulty)difficulty.disabled=none;
+  renderTypeFields();toggleNoStockFields();updateProductEditorSummary();
 }
 function switchProductType(t){
   const existing=getProduct(window._pmEditingId);
@@ -5693,12 +5675,6 @@ async function saveProduct(editingId){
   const category = document.getElementById('pf-category').value.trim();
   const price = parseFloat(document.getElementById('pf-price').value) || 0;
   const tileSymbol = limitTileSymbol(document.getElementById('pf-symbol')?.value||'');
-  const prepStationRaw=document.getElementById('pf-prep-station')?.value;
-  const prepStation=(prepStationRaw==='bar'||prepStationRaw==='none')?prepStationRaw:'kitchen';
-  const prepDifficulty=Math.max(1,Math.min(5,Math.round(Number(document.getElementById('pf-prep-difficulty')?.value)||1)));
-  const prepMinutesRaw=Number(document.getElementById('pf-base-prep-minutes')?.value);
-  const basePrepMinutes=prepStation==='none'?0:Math.round(prepMinutesRaw);
-  if(prepStation!=='none' && (!Number.isFinite(basePrepMinutes)||basePrepMinutes<1||basePrepMinutes>240)){flash('Укажите базовое время приготовления от 1 до 240 минут');return;}
   const noStockTracking = !!document.getElementById('pf-no-stock')?.checked;
   if(!name){ flash('Введите название'); return; }
   const type = window._pmType;
@@ -5721,7 +5697,6 @@ async function saveProduct(editingId){
       p = JSON.parse(originalProduct);
       p.name = name; p.category = category; p.price = price; p.type = type;
       p.tileSymbol = tileSymbol;
-      p.prepStation=prepStation; p.prepDifficulty=prepDifficulty; p.basePrepMinutes=basePrepMinutes;
       p.noStockTracking = noStockTracking;
       p.availableOnline = canEditProductWebSetting() ? window._pmOnline !== false : getProduct(editingId)?.availableOnline !== false;
       if(window._pmRemoveImage) p.imageUrl = '';
@@ -5739,7 +5714,7 @@ async function saveProduct(editingId){
       const catKey = category.trim() || 'Без категории';
       const siblingOrders = state.products.filter(x=>productCategoryKey(x)===catKey).map(x=>x.sortOrder||0);
       const nextOrder = siblingOrders.length ? Math.max(...siblingOrders)+1 : 0;
-      p = {id: uid(), name, category, price, type, tileSymbol, prepStation, prepDifficulty, basePrepMinutes, noStockTracking, sortOrder: nextOrder, availableOnline: canEditProductWebSetting() ? window._pmOnline !== false : false, imageUrl:''};
+      p = {id: uid(), name, category, price, type, tileSymbol, noStockTracking, sortOrder: nextOrder, availableOnline: canEditProductWebSetting() ? window._pmOnline !== false : false, imageUrl:''};
       if(type==='simple'){
         p.cost = parseFloat(document.getElementById('pf-cost')?.value) || 0;
         p.stock = parseFloat(document.getElementById('pf-stock')?.value) || 0;
