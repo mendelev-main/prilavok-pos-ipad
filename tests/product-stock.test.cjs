@@ -25,6 +25,15 @@ function fixture(){
  return {c,state,data,messages,writes,fields,events,cart,sale};
 }
 test('all inline JavaScript and adapter parse',()=>{new vm.Script(inline);new vm.Script(adapter);});
+test('startup first paint does not wait for WEB acceptance recovery',async()=>{
+ const f=fixture();let rendered=false,recoveryStarted=false,release;
+ const gate=new Promise(resolve=>{release=resolve;});
+ f.c.render=()=>{rendered=true;};
+ f.c.recoverWebAcceptanceJournal=async()=>{recoveryStarted=true;await gate;return true;};
+ await f.c.loadAll();
+ assert.equal(rendered,true);assert.equal(recoveryStarted,true);
+ release();
+});
 test('nested recipe multiplies quantities and aggregates repeated ingredients',()=>{
  const f=fixture();f.c.getProduct('pizza').components=[{productId:'dough',qty:2},{productId:'flour',qty:0.1}];
  const quantities=f.c.productIngredients(f.c.getProduct('pizza'),3);
