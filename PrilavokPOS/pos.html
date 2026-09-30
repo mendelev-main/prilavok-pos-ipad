@@ -1755,7 +1755,16 @@ function exportWarehousePDF(documentsOnly=false){
 }
 
 function preparationLoadData(){
-  const orders=state.productionOrders.filter(o=>productionCountsAsCurrentLoad(o));
+  const productionActive=(state.productionOrders||[]).filter(o=>productionCountsAsCurrentLoad(o));
+  const orders=productionActive.length?productionActive.map(o=>({items:o.items||[],source:o.sourceType||'production'})):[];
+  if(!productionActive.length){
+    if(state.cart?.length)orders.push({items:state.cart,source:'current'});
+    for(const o of (state.parked||[])){
+      if(!Array.isArray(o.items)||!o.items.length)continue;
+      if(o.webOrderStatus==='ready'||o.webReadyAt)continue;
+      orders.push({items:o.items,source:o.source||'parked'});
+    }
+  }
   const stations={bar:{key:'bar',name:'Бар',points:0,qty:0,lines:0},kitchen:{key:'kitchen',name:'Кухня',points:0,qty:0,lines:0}};
   for(const order of orders)for(const item of (order.items||[])){
     const p=getProduct(item.productId),prep=item.prep||productPrepSnapshot(p),qty=Math.max(0,Number(item.qty)||0);
