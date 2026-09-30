@@ -1048,7 +1048,7 @@ async function loadAll(){
   state.employees.forEach(e=>{ e.role = e.role==='admin' ? 'admin' : 'employee'; });
   state.orders = orders;
   state.parked = Array.isArray(parked) ? parked : [];
-  state.productionOrders = Array.isArray(productionOrders) ? productionOrders : [];
+  state.productionOrders = (Array.isArray(productionOrders) ? productionOrders : []).map(normalizeProductionOrder).filter(Boolean);
   state.receivings = receivings;
   state.suppliers = Array.isArray(suppliers) ? suppliers : [];
   state.purchaseOrders = Array.isArray(purchaseOrders) ? purchaseOrders : [];
@@ -3445,9 +3445,16 @@ function openOrderSettings(){
       <div class="field" style="margin-top:12px;"><label>Итого заказа</label><div style="font-size:24px;font-weight:800;">${fullMoney(cartTotal())}</div></div>`:''}
     <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button class="btn btn-primary" onclick="saveOrderSettings()">Сохранить</button></div>`);
 }
+function localDateTimeInputValue(ts){const d=new Date(Number(ts));if(!Number.isFinite(d.getTime()))return '';const pad=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes());}
+function setProductionMode(mode){state.productionMode=mode==='SCHEDULED'?'SCHEDULED':'ASAP';if(state.productionMode==='ASAP')state.requestedReadyAt=null;saveCurrentOrderSession();openOrderSettings();}
 function setOrderType(t){ state.orderType=t; if(t!=='Доставка') state.deliveryFee=0; saveCurrentOrderSession(); render(); openOrderSettings(); }
 function selectDeliveryFee(amount){ state.deliveryFee=Number(amount)||0; saveCurrentOrderSession(); render(); openOrderSettings(); }
 function saveOrderSettings(){
+  if(state.productionMode==='SCHEDULED'){
+    const raw=document.getElementById('requested-ready-at')?.value||'',ts=raw?new Date(raw).getTime():NaN;
+    if(!Number.isFinite(ts)||ts<=Date.now()){flash('Укажите будущее время готовности');return;}
+    state.requestedReadyAt=ts;
+  }else state.requestedReadyAt=null;
   state.orderLabel=(document.getElementById('order-label')?.value||'').trim();
   state.customer.name=(document.getElementById('customer-name')?.value||'').trim();
   state.customer.phone=(document.getElementById('customer-phone')?.value||'').trim();
