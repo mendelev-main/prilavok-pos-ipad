@@ -988,22 +988,22 @@ ETA нужен состав производства и статусы, а не 
 
 Контроль P2: реализация завершена. Физическая проверка lifecycle/restart на iPad перенесена в единый финальный regression/smoke test после завершения всех этапов.
 
-**P3 — Production Load Engine v1 внутри POS — ⬜ TODO**
-1. Разбиение по станциям.
-2. Work points.
-3. Base duration.
-4. Batch/quantity policy.
-5. Независимые timelines Бара/Кухни.
-6. Current queue.
-7. Future scheduled reservations.
-8. `criticalStation`.
-9. NORMAL/ELEVATED/HIGH.
-10. `delayingStations`.
-11. Hypothetical cart calculation.
-12. Deterministic unit tests.
-13. Перевести live-аналитику с временной v0 формулы на engine.
+**P3 — Production Load Engine v1 внутри POS — ✅ DONE (implementation)**
+1. ✅ Разбиение по станциям Бар/Кухня.
+2. ✅ Work points.
+3. ✅ Base duration из prep snapshot.
+4. ✅ Batch/quantity policy.
+5. ✅ Независимые timelines Бара/Кухни.
+6. ✅ Current queue.
+7. ✅ Future scheduled reservations: будущий заказ блокирует только своё production-окно и не создаёт ложную текущую очередь заранее.
+8. ✅ `criticalStation`.
+9. ✅ NORMAL/ELEVATED/HIGH.
+10. ✅ `delayingStations` + `loadedStations`.
+11. ✅ Hypothetical cart calculation.
+12. ✅ Добавлен deterministic self-test набор для station isolation, mixed order, scheduled, terminal statuses, batch и difficulty.
+13. ✅ Live-аналитика переведена с временной v0 формулы на Production Load Engine v1.
 
-Контроль P3: POS без сети знает фактическую загрузку, задерживающую станцию и прогноз новой корзины. После P3 обязательна проверка на iPad.
+Контроль P3: POS локально рассчитывает загрузку и прогноз новой корзины без сети. Физическая проверка на iPad выполняется в едином финальном regression/smoke test после завершения этапов реализации.
 
 **P4 — Сбор фактических production timestamps — ⬜ TODO**
 1. История production orders.
