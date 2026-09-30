@@ -660,6 +660,12 @@ test('WEB local write failure never sends confirmation',async()=>{
 test('prepared WEB acceptance recovers persisted parked row on restart without another copy',async()=>{
  const f=webAcceptFixture();const parked={id:'p',webOrderId:'web-1',items:[]};f.state.parked=[parked];await f.c.saveKey('webOrderAcceptances',{'web-1':{stage:'prepared',parked}});await f.c.recoverWebAcceptanceJournal();assert.equal(JSON.parse(f.data.get('prilavok_webOrderAcceptances'))['web-1'].stage,'local');assert.equal(f.state.parked.length,1);
 });
+test('recovered WEB ACK clears stale event without duplicating parked order',async()=>{
+ const f=webAcceptFixture();const parked={id:'p',webOrderId:'web-1',items:[]};f.state.parked=[parked];await f.c.saveKey('parked',f.state.parked);await f.c.saveKey('webOrderAcceptances',{'web-1':{stage:'local',parked}});
+ f.c.fetch=async()=>({ok:true,json:async()=>({ok:true})});await f.c.recoverWebAcceptanceJournal();
+ assert.equal(f.state.parked.length,1);assert.equal(f.state.webEvents.length,0);assert.deepEqual(JSON.parse(f.data.get('prilavok_webEvents')),[]);
+ assert.equal(JSON.parse(f.data.get('prilavok_webOrderAcceptances'))['web-1'].stage,'confirmed');
+});
 
 test('production deterministic suite passes against real POS code',()=>{
  const f=fixture();const result=f.c.__runProductionDeterministicTests();
