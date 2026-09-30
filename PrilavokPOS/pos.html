@@ -3974,7 +3974,7 @@ function runProductionHistoryTests(){
   checks.push({name:'scheduled waiting excluded from preparation duration',ok:actual.preparationMinutes===12,details:JSON.stringify(actual)});
   checks.push({name:'queue duration remains separately observable',ok:actual.queueMinutes===300,details:JSON.stringify(actual)});
   const mixedStation={kitchen:{status:'READY',startedAt:base+5*60*60000,readyAt:base+17*60*60000},bar:{status:'READY',startedAt:base+7*60*60000,readyAt:base+11*60*60000}};
-  const stationDurations=Object.fromEntries(Object.entries(mixedStation).map(([st,x])=>[st,Math.round((x.readyAt-x.startedAt)/600)/100]));
+  const stationDurations=Object.fromEntries(Object.entries(mixedStation).map(([st,x])=>[st,Math.round((x.readyAt-x.startedAt)/60000*100)/100]));
   checks.push({name:'mixed station durations remain independently measurable',ok:stationDurations.kitchen===12&&stationDurations.bar===4,details:JSON.stringify(stationDurations)});
   const completed={id:'history-test',status:'READY',mode:'ASAP',items:[],queuedAt:base,startedAt:base+60000,readyAt:base+6*60000};
   const before=state.productionHistory.length,existing=state.productionHistory.find(x=>x.productionOrderId===completed.id);
