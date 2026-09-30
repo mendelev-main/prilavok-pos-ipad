@@ -4146,6 +4146,8 @@ function renderCartPanel(shift){
     <div class="order-meta">
       <button class="order-type-btn" onclick="openOrderSettings()">${state.orderLabel?'<b>'+escapeHtml(state.orderLabel)+'</b> · ':''}${escapeHtml(state.orderType)}${state.customer.name||state.customer.phone?' · '+escapeHtml(state.customer.name||state.customer.phone):''}</button>
       ${state.orderComment?`<div class="cart-row-sub" style="color:var(--text);margin-top:6px;">💬 ${escapeHtml(state.orderComment)}</div>`:''}
+      <button class="btn btn-outline" style="width:100%;margin-top:8px;" onclick="openCustomerPicker()">${state.customer?.id?'Клиент: '+escapeHtml(state.customer.name||state.customer.phone):'Выбрать клиента'}</button>
+      ${state.customer?.id?`<div style="margin-top:8px;">${loyaltySummaryHtml()}</div>`:''}
     </div>
     <div class="cart-items">${rows}</div>
     <div class="cart-foot">
