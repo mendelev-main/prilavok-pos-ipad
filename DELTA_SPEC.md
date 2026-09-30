@@ -399,6 +399,7 @@ Backend/Web:
 1. ✅ **A1 — POS cleanup.** Production Load Engine, ProductionOrder/history/calibration, prepStation/prepDifficulty/basePrepMinutes и production UI/session state удалены из рабочего POS-кода.
 2. ✅ **A2 — POS automated regression.** GitHub Actions после cleanup: **124/124, 0 fail, 0 skipped**. WEB acceptance/recovery и operational outbox продолжают проходить.
 3. ✅ **A3 — WEB business status.** Обычные POS/отложенные чеки не имеют production lifecycle; WEB-заказ сохраняет только действие `Готов`, независимое от demand status.
+   - Финальная проверка рабочего `pos.html`: `productionMode`, `requestedReadyAt`, `productionOrderId`, `currentProductionOrderId`, `productionOrderById`, `prepStation`, `prepDifficulty`, `basePrepMinutes`, `productionOrders/history` — 0 активных вхождений; WEB `Готов` больше не содержит retired production gate.
 4. ✅ **A4 — Operational contract.** POS persistent хранит `demandOverload` и публикует `demand.overload: boolean` через существующие revision/outbox/heartbeat/retry механизмы.
 5. ✅ **A5 — Backend cleanup.** Удалены ETA engine version, Kitchen/Bar queue contract, prep catalog и автоматические workload/duration/range calculations. Freshness требует только совместимую operational schema, свежие timestamps и boolean `demand.overload`.
 6. ✅ **A6 — Backend automated regression.** Backend GitHub Actions после cleanup: **25/25, 0 fail, 0 skipped**. Контракт NORMAL/OVERLOAD/UNAVAILABLE и неблокирующий checkout покрыты тестами.
