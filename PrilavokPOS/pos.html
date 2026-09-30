@@ -914,6 +914,7 @@ let state = {
   productionOrders: [],
   productionHistory: [],
   operationalOutbox: [],
+  operationalRevision: 0,
   receivings: [],
   suppliers: [],
   purchaseOrders: [],
@@ -1017,7 +1018,7 @@ async function loadAll(){
     markStorageBroken('localStorage test write failed');
   }
   storageCheckedOnce = true;
-  const [products, shifts, employees, orders, parked, productionOrders, productionHistory, operationalOutbox, receivings, suppliers, purchaseOrders, discounts, layout, printer, theme, company, deliveryRates, telegram, network, currentOrderSession, hallTables, bookings, webEvents, posNavigation, inventoryConfig, inventoryHistory, inventoryDraft] = await Promise.all([
+  const [products, shifts, employees, orders, parked, productionOrders, productionHistory, operationalOutbox, operationalRevision, receivings, suppliers, purchaseOrders, discounts, layout, printer, theme, company, deliveryRates, telegram, network, currentOrderSession, hallTables, bookings, webEvents, posNavigation, inventoryConfig, inventoryHistory, inventoryDraft] = await Promise.all([
     loadKey('products', null),
     loadKey('shifts', []),
     loadKey('employees', []),
@@ -1026,6 +1027,7 @@ async function loadAll(){
     loadKey('productionOrders', []),
     loadKey('productionHistory', []),
     loadKey('operationalOutbox', []),
+    loadKey('operationalRevision', 0),
     loadKey('receivings', []),
     loadKey('suppliers', []),
     loadKey('purchaseOrders', []),
@@ -1055,6 +1057,7 @@ async function loadAll(){
   state.productionOrders = (Array.isArray(productionOrders) ? productionOrders : []).map(normalizeProductionOrder).filter(Boolean);
   state.productionHistory = Array.isArray(productionHistory) ? productionHistory : [];
   state.operationalOutbox = Array.isArray(operationalOutbox) ? operationalOutbox.slice(-2) : [];
+  state.operationalRevision = Math.max(0,Number(operationalRevision)||0);
   state.receivings = receivings;
   state.suppliers = Array.isArray(suppliers) ? suppliers : [];
   state.purchaseOrders = Array.isArray(purchaseOrders) ? purchaseOrders : [];
@@ -2349,7 +2352,7 @@ function operationalCoalesce(type,payload,now=Date.now()){
   state.operationalOutbox=state.operationalOutbox.slice(-2);
   saveKey('operationalOutbox',state.operationalOutbox);return item;
 }
-function queueOperationalSnapshot(now=Date.now()){return operationalCoalesce('snapshot',buildOperationalSnapshot(now),now);}
+function queueOperationalSnapshot(now=Date.now()){state.operationalRevision=Math.max(0,Number(state.operationalRevision)||0)+1;saveKey('operationalRevision',state.operationalRevision);const payload=buildOperationalSnapshot(now);payload.revision=state.operationalRevision;return operationalCoalesce('snapshot',payload,now);}
 function queueOperationalHeartbeat(now=Date.now()){return operationalCoalesce('heartbeat',{schemaVersion:OPERATIONAL_SCHEMA_VERSION,sampledAt:new Date(now).toISOString(),engineVersion:PRODUCTION_ENGINE_VERSION,device:{key:state.network?.deviceKey||'',name:state.network?.deviceName||'M POS iPad'}},now);}
 function operationalBackoffMs(attempts){return Math.min(OPERATIONAL_MAX_BACKOFF,Math.max(1000,1000*Math.pow(2,Math.min(6,Math.max(0,Number(attempts)||0)))));}
 async function sendOperationalItem(item){
@@ -2403,6 +2406,7 @@ function runOperationalChannelTests(){
   operationalCoalesce('snapshot',{n:1},1000);operationalCoalesce('snapshot',{n:2},1001);operationalCoalesce('heartbeat',{n:1},1002);operationalCoalesce('heartbeat',{n:2},1003);
   checks.push({name:'outbox coalesces to at most snapshot + heartbeat',ok:state.operationalOutbox.length===2,details:JSON.stringify(state.operationalOutbox.map(x=>x.type))});
   checks.push({name:'latest snapshot wins',ok:state.operationalOutbox.find(x=>x.type==='snapshot')?.payload?.n===2});
+  const revisionBefore=state.operationalRevision;queueOperationalSnapshot(1004);const rev1=state.operationalOutbox.find(x=>x.type==='snapshot')?.payload?.revision;queueOperationalSnapshot(1005);const rev2=state.operationalOutbox.find(x=>x.type==='snapshot')?.payload?.revision;checks.push({name:'snapshot revision is monotonic',ok:Number(rev2)===Number(rev1)+1&&Number(rev1)>revisionBefore});
   checks.push({name:'backoff is bounded',ok:operationalBackoffMs(100)<=OPERATIONAL_MAX_BACKOFF});
   state.operationalOutbox=original;saveKey('operationalOutbox',state.operationalOutbox);
   return {ok:checks.every(x=>x.ok),passed:checks.filter(x=>x.ok).length,total:checks.length,checks};
