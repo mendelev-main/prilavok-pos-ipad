@@ -2063,7 +2063,10 @@ function normalizeWebOrder(raw){return {id:raw.id,external_id:raw.external_id,st
 function startWebOrderEvents(){const n=networkConfigFromState();if(!n.deviceKey||!n.backendUrl||!window.EventSource)return;try{state.webEventsSource?.close();}catch(e){}const source=new EventSource(n.backendUrl.replace(/\/+$/,'')+'/api/orders/events?deviceKey='+encodeURIComponent(n.deviceKey));state.webEventsSource=source;source.onmessage=(ev)=>{try{const d=JSON.parse(ev.data||'{}');if(d.type!=='orders')return;const oldList=state.webEvents.slice();const oldIds=new Set(oldList.map(x=>x.id));const incoming=(d.orders||[]).map(normalizeWebOrder);const merged=[...incoming];oldList.forEach(x=>{if(!merged.some(y=>y.id===x.id))merged.push(x);});const next=merged.filter(x=>x.status==='new').sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));const changed=next.length!==oldList.length || next.some((x,i)=>{const y=oldList[i];return !y || y.id!==x.id || y.status!==x.status || x.total!==y.total || x.updated_at!==y.updated_at;});state.webEvents=next;if(changed)saveKey('webEvents',state.webEvents);if(incoming.some(x=>!oldIds.has(x.id))){flash('🔔 Новый заказ с сайта');render();}}catch(e){}};source.onerror=()=>{};}
 function webOrderDate(o){return fmtDate(new Date(o.created_at).getTime());}
 function openWebEventsModal(){const list=state.webEvents.slice().sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));showModal(`<div class="modal-title">События</div>${list.length?list.map(o=>`<div class="list-row" style="cursor:pointer;" onclick="openWebOrder('${escapeAttr(o.id)}')"><div style="flex:1;min-width:0;"><div class="list-row-name">Заказ с сайта ${escapeHtml(o.external_id||'')}</div><div class="list-row-sub">${escapeHtml(o.customer_name||'Клиент')} · ${fullMoney(o.total)} · ${webOrderDate(o)}</div></div><div style="font-size:22px;">›</div></div>`).join(''):`<div class="center-note">Новых событий нет</div>`}<div class="modal-actions"><button class="btn btn-secondary" style="width:100%;" onclick="closeModal()">Закрыть</button></div>`);}
-function openWebOrder(id){const o=state.webEvents.find(x=>x.id===id);if(!o)return;showModal(`<div class="modal-title">Заказ с сайта ${escapeHtml(o.external_id||'')}</div><div class="setting-sub" style="margin-bottom:14px;">${escapeHtml(o.customer_name||'Клиент')}${o.phone?' · '+escapeHtml(o.phone):''}</div>${(o.order_items||[]).map(i=>`<div class="receipt-line"><span>${escapeHtml(i.product_name)} × ${Number(i.quantity||0)}</span><span>${fullMoney(Number(i.price||0)*Number(i.quantity||0))}</span></div>`).join('')}${o.delivery_fee?`<div class="receipt-line"><span>Доставка</span><span>${fullMoney(o.delivery_fee)}</span></div>`:''}<div class="receipt-total"><span>Итого</span><span>${fullMoney(o.total)}</span></div><div style="margin-top:14px;font-size:13px;line-height:1.55;color:var(--muted);">${o.address?`<div><b>Адрес:</b> ${escapeHtml(o.address)}</div>`:''}${o.comment?`<div><b>Комментарий:</b> ${escapeHtml(o.comment)}</div>`:''}<div><b>Тип:</b> ${escapeHtml(o.order_type||'На месте')}</div></div><div class="modal-actions"><button class="btn btn-secondary" onclick="openWebEventsModal()">Назад</button><button class="btn btn-primary" onclick="acceptWebOrder('${escapeAttr(o.id)}')">Взять в работу</button></div>`);}
+const WEB_READY_ESTIMATES=[['5m','5 мин'],['15m','15 мин'],['30m','30 мин'],['40m','40 мин'],['60plus','Больше часа']];
+let selectedWebReadyEstimate='';
+function selectWebReadyEstimate(value,id){if(!WEB_READY_ESTIMATES.some(([v])=>v===value))return;selectedWebReadyEstimate=value;openWebOrder(id);}
+function openWebOrder(id){const o=state.webEvents.find(x=>x.id===id);if(!o)return;const estimates=WEB_READY_ESTIMATES.map(([value,label])=>`<button class="btn ${selectedWebReadyEstimate===value?'btn-primary':'btn-secondary'}" style="width:auto;min-width:0;padding:8px 11px;" onclick="selectWebReadyEstimate('${value}','${escapeAttr(o.id)}')">${label}</button>`).join('');showModal(`<div class="modal-title">Заказ с сайта ${escapeHtml(o.external_id||'')}</div><div class="setting-sub" style="margin-bottom:14px;">${escapeHtml(o.customer_name||'Клиент')}${o.phone?' · '+escapeHtml(o.phone):''}</div>${(o.order_items||[]).map(i=>`<div class="receipt-line"><span>${escapeHtml(i.product_name)} × ${Number(i.quantity||0)}</span><span>${fullMoney(Number(i.price||0)*Number(i.quantity||0))}</span></div>`).join('')}${o.delivery_fee?`<div class="receipt-line"><span>Доставка</span><span>${fullMoney(o.delivery_fee)}</span></div>`:''}<div class="receipt-total"><span>Итого</span><span>${fullMoney(o.total)}</span></div><div style="margin-top:14px;font-size:13px;line-height:1.55;color:var(--muted);">${o.address?`<div><b>Адрес:</b> ${escapeHtml(o.address)}</div>`:''}${o.comment?`<div><b>Комментарий:</b> ${escapeHtml(o.comment)}</div>`:''}<div><b>Тип:</b> ${escapeHtml(o.order_type||'На месте')}</div></div><div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);"><div style="font-size:13px;color:var(--muted);margin-bottom:9px;">Примерное время готовности</div><div style="display:flex;gap:7px;flex-wrap:wrap;">${estimates}</div></div><div class="modal-actions"><button class="btn btn-secondary" onclick="selectedWebReadyEstimate='';openWebEventsModal()">Назад</button><button class="btn btn-primary" ${selectedWebReadyEstimate?'':'disabled'} onclick="acceptWebOrder('${escapeAttr(o.id)}',selectedWebReadyEstimate)">Взять в работу</button></div>`);}
 let webAcceptBusy=false,webAcceptanceRecoveryBusy=false;
 function webOrderCartItems(o){
   if(!Array.isArray(o.order_items)||!o.order_items.length)throw new Error('В заказе нет товаров');
@@ -2114,9 +2117,10 @@ async function recoverWebAcceptanceJournal(){
   return true;
   }finally{webAcceptanceRecoveryBusy=false;}
 }
-async function acceptWebOrder(id){
+async function acceptWebOrder(id,readyEstimate=''){
   if(webAcceptBusy)return;
   const o=state.webEvents.find(x=>x.id===id);if(!o)return;
+  if(!WEB_READY_ESTIMATES.some(([value])=>value===readyEstimate)){flash('Выберите примерное время готовности');return;}
   webAcceptBusy=true;
   try{
     const n=networkConfigFromState();
@@ -2163,14 +2167,14 @@ async function acceptWebOrder(id){
     if(record.stage!=='confirmed'){
       const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),30000);
       try{
-        const r=await fetch(n.backendUrl.replace(/\/+$/,'')+'/api/orders/'+encodeURIComponent(id)+'/accept',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Key':n.deviceKey},body:'{}',cache:'no-store',signal:controller.signal});
+        const r=await fetch(n.backendUrl.replace(/\/+$/,'')+'/api/orders/'+encodeURIComponent(id)+'/accept',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Key':n.deviceKey},body:JSON.stringify({readyEstimate}),cache:'no-store',signal:controller.signal});
         const d=await r.json().catch(()=>null);if(!r.ok)throw new Error(d?.error||('HTTP '+r.status));
       }finally{clearTimeout(timeout);}
       record.stage='confirmed';await window.PrilavokCore.Storage.set('webOrderAcceptances',journal);
     }
     const events=state.webEvents.filter(x=>x.id!==id);
     await window.PrilavokCore.Storage.set('webEvents',events);state.webEvents=events;
-    closeModal();render();flash('Заказ взят в работу и добавлен в Отложенные');
+    selectedWebReadyEstimate='';closeModal();render();flash('Заказ взят в работу и добавлен в Отложенные');
   }catch(e){render();flash('Не удалось подтвердить заказ: '+(e?.message||'Ошибка сети')+'. Если заказ уже в Отложенных, повторное нажатие не создаст копию.');}
   finally{webAcceptBusy=false;}
 }
