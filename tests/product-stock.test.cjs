@@ -673,12 +673,12 @@ test('manual demand status is persisted and included in operational snapshot',as
  assert.equal(f.state.demandOverload,true);
  assert.equal(JSON.parse(f.data.get('prilavok_demandOverload')),true);
  const snapshot=f.c.buildOperationalSnapshot(Date.UTC(2026,0,1,12,0,0));
- assert.deepEqual(snapshot.demand,{overload:true});
+ assert.deepEqual(plain(snapshot.demand),{overload:true});
  assert.equal('production' in snapshot,false);
  assert.equal('engineVersion' in snapshot,false);
  f.c.setDemandOverload(false);
  assert.equal(f.state.demandOverload,false);
- assert.deepEqual(f.c.buildOperationalSnapshot().demand,{overload:false});
+ assert.deepEqual(plain(f.c.buildOperationalSnapshot().demand),{overload:false});
 });
 
 test('operational deterministic suite restores outbox and revision',()=>{
