@@ -397,13 +397,13 @@ Backend/Web:
 Актуальная приёмка новой модели:
 
 1. ✅ **A1 — POS cleanup.** Production Load Engine, ProductionOrder/history/calibration, prepStation/prepDifficulty/basePrepMinutes и production UI/session state удалены из рабочего POS-кода.
-2. ✅ **A2 — POS automated regression.** GitHub Actions после cleanup: **124/124, 0 fail, 0 skipped**. WEB acceptance/recovery и operational outbox продолжают проходить.
+2. ✅ **A2 — POS automated regression.** После восстановления физически рабочей startup-базы и WEB ACK recovery: **126/126, 0 fail, 0 skipped** (commit `eeba9af`). WEB acceptance/recovery, manual demand status и operational outbox проходят вместе.
 3. ✅ **A3 — WEB business status.** Обычные POS/отложенные чеки не имеют production lifecycle; WEB-заказ сохраняет только действие `Готов`, независимое от demand status.
    - Финальная проверка рабочего `pos.html`: `productionMode`, `requestedReadyAt`, `productionOrderId`, `currentProductionOrderId`, `productionOrderById`, `prepStation`, `prepDifficulty`, `basePrepMinutes`, `productionOrders/history` — 0 активных вхождений; WEB `Готов` больше не содержит retired production gate.
 4. ✅ **A4 — Operational contract.** POS persistent хранит `demandOverload` и публикует `demand.overload: boolean` через существующие revision/outbox/heartbeat/retry механизмы.
 5. ✅ **A5 — Backend cleanup.** Удалены ETA engine version, Kitchen/Bar queue contract, prep catalog и автоматические workload/duration/range calculations. Freshness требует только совместимую operational schema, свежие timestamps и boolean `demand.overload`.
-6. ✅ **A6 — Backend automated regression.** Backend GitHub Actions после cleanup: **25/25, 0 fail, 0 skipped**. Контракт NORMAL/OVERLOAD/UNAVAILABLE и неблокирующий checkout покрыты тестами.
-7. ✅ **A7 — Web contract.** Fresh OFF → `Обычная загрузка`; fresh ON → `Повышенный спрос / Время приготовления заказа увеличено`; stale/missing → `Статус загрузки временно недоступен`. Минуты, Kitchen/Bar и fallback ETA не показываются.
+6. ✅ **A6 — Backend/web automated regression.** После финального demand UI cleanup: **26/26, 0 fail, 0 skipped** (commit `38c1658`). Контракт NORMAL/OVERLOAD/UNAVAILABLE, неблокирующий checkout и отсутствие retired ETA naming в актуальном web UI покрыты тестами.
+7. ✅ **A7 — Web contract.** Актуальный UI технически переименован с legacy `etaCard/.eta-*` на `demandCard/.demand-*`; сайт использует только `GET /api/demand/status`. Backend временно сохраняет `POST /api/eta/estimate` только как безопасный compatibility alias для уже закэшированных старых web-клиентов; автоматического ETA-расчёта в нём нет. Fresh OFF → `Обычная загрузка`; fresh ON → `Повышенный спрос / Время приготовления заказа увеличено`; stale/missing → `Статус загрузки временно недоступен`. Минуты, Kitchen/Bar и fallback ETA не показываются.
    - Startup regression: первый render POS не зависит от WEB acceptance recovery; сетевой recovery выполняется best-effort после первого экрана. Это предотвращает пустой/тёмный экран при медленном или недоступном backend.
 8. 🟡 **A8 — Physical integration / stable baseline.**
    - ✅ **30.09.2026: физический запуск на iPad подтверждён пользователем.** Рабочая baseline-точка: `b3e1644`; native startup восстановлен из ранее физически рабочей утренней реализации `c4782ed`.
