@@ -27,8 +27,16 @@
     return result;
   };
 
-  let readyBusy = false;
+  let readyBusy = false, readyEstimateBusy = false;
   const originalOpenParkedModal = typeof openParkedModal === 'function' ? openParkedModal : null;
+  const READY_ESTIMATE_OPTIONS = [['5m','5 мин'],['15m','15 мин'],['30m','30 мин'],['40m','40 мин'],['60plus','Больше часа']];
+  function readyEstimateMarkup(order) {
+    if (!order?.webOrderId || order?.webReadyAt) return '';
+    return `<div style="grid-column:1/-1;display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding-top:2px;" onclick="event.stopPropagation()">
+      <span style="font-size:13px;color:var(--muted);margin-right:2px;">Ориентировочное время:</span>
+      ${READY_ESTIMATE_OPTIONS.map(([value,label])=>`<button class="btn btn-secondary" style="width:auto;min-width:0;min-height:34px;padding:6px 10px;font-size:13px;white-space:nowrap;" onclick="event.stopPropagation();sendWebReadyEstimate('${escapeAttr(order.id)}','${value}')">${label}</button>`).join('')}
+    </div>`;
+  }
   function readyButtonMarkup(order) {
     if (!order?.webOrderId) return '';
     if (order?.webReadyAt) return '<span class="badge" style="flex:none;padding:7px 11px;font-size:14px;white-space:nowrap;background:var(--accent-soft);color:var(--accent);">✓ Готов</span>';
@@ -67,12 +75,29 @@
               ${readyButtonMarkup(o)}
               <button class="icon-btn danger" style="flex:none;" aria-label="Удалить заказ" onclick="event.stopPropagation();confirmDeleteParkedOrder('${escapeAttr(o.id)}')">✕</button>
             </div>
+            ${readyEstimateMarkup(o)}
           </div>`).join('') : `<div class="center-note">Нет отложенных чеков</div>`}
         </div>
         <div class="modal-actions"><button class="btn btn-secondary" style="width:100%;" onclick="closeModal()">Закрыть</button></div>
       </div>
     `);
   };
+  window.sendWebReadyEstimate = async function (parkedId, estimate) {
+    if (readyEstimateBusy) return;
+    const parked = state.parked.find(x=>x.id===parkedId); if (!parked?.webOrderId || parked.webReadyAt) return;
+    if (!READY_ESTIMATE_OPTIONS.some(([value])=>value===estimate)) return;
+    const n = networkConfigFromState(); if (!n.backendUrl || !n.deviceKey) { flash('Проверьте сетевые настройки'); return; }
+    readyEstimateBusy = true;
+    try {
+      const controller = new AbortController(); const timeout = setTimeout(()=>controller.abort(),15000); let response;
+      try { response = await fetch(n.backendUrl.replace(/\/+$/,'')+'/api/orders/'+encodeURIComponent(parked.webOrderId)+'/ready-estimate',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Key':n.deviceKey},body:JSON.stringify({estimate}),cache:'no-store',signal:controller.signal}); }
+      finally { clearTimeout(timeout); }
+      const data=await response.json().catch(()=>null); if(!response.ok) throw new Error(data?.error||('HTTP '+response.status));
+      flash('Ориентировочное время отправлено: '+(data?.label||''));
+    } catch(e) { flash('Не удалось отправить время: '+(e?.message||'ошибка сети')); }
+    finally { readyEstimateBusy=false; }
+  };
+
   window.markWebOrderReady = async function (parkedId) {
     if (readyBusy) return;
     const parked = state.parked.find(x=>x.id===parkedId); if (!parked?.webOrderId || parked.webReadyAt) return;
