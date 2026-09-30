@@ -1798,77 +1798,60 @@ function productionOrderReservationStart(order,work){
   const maxDuration=Math.max(...PRODUCTION_STATIONS.map(s=>Number(work[s]?.durationMinutes)||0),0);
   return Number(order.requestedReadyAt)-maxDuration*60000;
 }
+function productionFindSlot(startAt,durationMinutes,reservations){
+  let start=Math.max(0,Number(startAt)||0),duration=Math.max(0,Number(durationMinutes)||0)*60000;
+  for(const r of (reservations||[]).slice().sort((a,b)=>a.startAt-b.startAt)){
+    if(start+duration<=r.startAt)break;
+    if(start<r.endAt&&start+duration>r.startAt)start=r.endAt;
+  }
+  return start;
+}
 function calculateProductionLoad(options={}){
   const now=Number(options.now)||Date.now(),orders=Array.isArray(options.orders)?options.orders:state.productionOrders||[],hypotheticalItems=Array.isArray(options.hypotheticalItems)?options.hypotheticalItems:[];
-  const timelines={bar:{station:'bar',cursorAt:now,currentMinutes:0,reservations:[],workPoints:0},kitchen:{station:'kitchen',cursorAt:now,currentMinutes:0,reservations:[],workPoints:0}};
+  const timelines={bar:{station:'bar',currentCursorAt:now,reservations:[],workPoints:0,currentOrders:0},kitchen:{station:'kitchen',currentCursorAt:now,reservations:[],workPoints:0,currentOrders:0}};
   const active=orders.filter(o=>o&&o.status!=='READY'&&o.status!=='CANCELLED').map(o=>({order:o,work:productionStationWork(o.items||[])}));
   const current=[],future=[];
   for(const entry of active){
     const start=productionOrderReservationStart(entry.order,entry.work);
     (start!==null&&start>now?future:current).push({...entry,reservationStart:start});
   }
-  current.sort((a,b)=>(a.order.startedAt||a.order.queuedAt||a.order.createdAt||0)-(b.order.startedAt||b.order.queuedAt||b.order.createdAt||0));
-  for(const entry of current)for(const station of PRODUCTION_STATIONS){
-    const work=entry.work[station];if(!work.durationMinutes)continue;
-    const tl=timelines[station],start=tl.cursorAt,end=start+work.durationMinutes*60000;tl.cursorAt=end;tl.currentMinutes+=(end-start)/60000;tl.workPoints+=work.workPoints;
-  }
   future.sort((a,b)=>a.reservationStart-b.reservationStart);
   for(const entry of future)for(const station of PRODUCTION_STATIONS){
     const work=entry.work[station];if(!work.durationMinutes)continue;
-    const tl=timelines[station],start=Math.max(entry.reservationStart,tl.cursorAt),end=start+work.durationMinutes*60000;tl.reservations.push({orderId:entry.order.id,startAt:start,endAt:end,durationMinutes:work.durationMinutes});tl.cursorAt=Math.max(tl.cursorAt,end);
+    const requestedReadyAt=Number(entry.order.requestedReadyAt)||0,start=Math.max(now,requestedReadyAt-work.durationMinutes*60000),end=requestedReadyAt;
+    timelines[station].reservations.push({orderId:entry.order.id,startAt:start,endAt:end,durationMinutes:work.durationMinutes});
+  }
+  current.sort((a,b)=>(a.order.startedAt||a.order.queuedAt||a.order.createdAt||0)-(b.order.startedAt||b.order.queuedAt||b.order.createdAt||0));
+  for(const entry of current)for(const station of PRODUCTION_STATIONS){
+    const work=entry.work[station];if(!work.durationMinutes)continue;
+    const tl=timelines[station],start=productionFindSlot(tl.currentCursorAt,work.durationMinutes,tl.reservations),end=start+work.durationMinutes*60000;
+    tl.currentCursorAt=end;tl.workPoints+=work.workPoints;tl.currentOrders++;
   }
   const cartWork=productionStationWork(hypotheticalItems),cartStations=PRODUCTION_STATIONS.filter(s=>cartWork[s].durationMinutes>0),stationEstimates={};
   for(const station of PRODUCTION_STATIONS){
-    const tl=timelines[station],work=cartWork[station],waitMinutes=Math.max(0,(tl.cursorAt-now)/60000),completionMinutes=waitMinutes+work.durationMinutes;
-    stationEstimates[station]={station,waitMinutes:Math.round(waitMinutes*100)/100,cartDurationMinutes:work.durationMinutes,completionMinutes:Math.round(completionMinutes*100)/100,workPoints:Math.round(tl.workPoints*100)/100,level:productionLoadLevel(waitMinutes),futureReservations:tl.reservations.length};
+    const tl=timelines[station],work=cartWork[station],cartStartAt=productionFindSlot(tl.currentCursorAt,work.durationMinutes,tl.reservations),waitMinutes=work.durationMinutes?Math.max(0,(cartStartAt-now)/60000):Math.max(0,(tl.currentCursorAt-now)/60000),completionMinutes=work.durationMinutes?waitMinutes+work.durationMinutes:waitMinutes;
+    stationEstimates[station]={station,waitMinutes:Math.round(waitMinutes*100)/100,cartDurationMinutes:work.durationMinutes,completionMinutes:Math.round(completionMinutes*100)/100,workPoints:Math.round(tl.workPoints*100)/100,level:productionLoadLevel(waitMinutes),futureReservations:tl.reservations.length,currentOrders:tl.currentOrders};
   }
   const criticalStation=cartStations.length?cartStations.slice().sort((a,b)=>stationEstimates[b].completionMinutes-stationEstimates[a].completionMinutes)[0]:null;
   const criticalMinutes=criticalStation?stationEstimates[criticalStation].completionMinutes:0;
-  const delayingStations=cartStations.filter(s=>stationEstimates[s].waitMinutes>0&&stationEstimates[s].completionMinutes>=criticalMinutes-3);
-  const loadedStations=delayingStations.filter(s=>stationEstimates[s].level!=='NORMAL');
-  return {version:PRODUCTION_ENGINE_VERSION,calculatedAt:now,stations:stationEstimates,cartStations,criticalStation,delayingStations,loadedStations,level:loadedStations.some(s=>stationEstimates[s].level==='HIGH')?'HIGH':loadedStations.length?'ELEVATED':'NORMAL',estimatedMinutes:Math.round(criticalMinutes*100)/100};
+  const delayingStations=cartStations.filter(station=>stationEstimates[station].waitMinutes>0&&stationEstimates[station].completionMinutes>=criticalMinutes-3);
+  const loadedStations=delayingStations.filter(station=>stationEstimates[station].level!=='NORMAL');
+  return {version:PRODUCTION_ENGINE_VERSION,calculatedAt:now,stations:stationEstimates,cartStations,criticalStation,delayingStations,loadedStations,level:loadedStations.some(station=>stationEstimates[station].level==='HIGH')?'HIGH':loadedStations.length?'ELEVATED':'NORMAL',estimatedMinutes:Math.round(criticalMinutes*100)/100};
 }
 function estimateCurrentCartProduction(now=Date.now()){return calculateProductionLoad({now,hypotheticalItems:state.cart||[]});}
 
-function preparationLoadData(){
-  const productionActive=(state.productionOrders||[]).filter(o=>productionCountsAsCurrentLoad(o));
-  const orders=productionActive.length?productionActive.map(o=>({items:o.items||[],source:o.sourceType||'production'})):[];
-  if(!productionActive.length){
-    if(state.cart?.length)orders.push({items:state.cart,source:'current'});
-    for(const o of (state.parked||[])){
-      if(!Array.isArray(o.items)||!o.items.length)continue;
-      if(o.webOrderStatus==='ready'||o.webReadyAt)continue;
-      orders.push({items:o.items,source:o.source||'parked'});
-    }
-  }
-  const stations={bar:{key:'bar',name:'Бар',points:0,qty:0,lines:0},kitchen:{key:'kitchen',name:'Кухня',points:0,qty:0,lines:0}};
-  for(const order of orders)for(const item of (order.items||[])){
-    const p=getProduct(item.productId),prep=item.prep||productPrepSnapshot(p),qty=Math.max(0,Number(item.qty)||0);
-    if(prep.station!=='none'){
-      const station=prep.station==='bar'?'bar':'kitchen',difficulty=Math.max(1,Math.min(5,Number(prep.difficulty)||1));
-      stations[station].points+=qty*difficulty;stations[station].qty+=qty;stations[station].lines++;
-    }
-    for(const m of (item.selectedModifiers||[])){
-      const mp=m.prep||productPrepSnapshot(getProduct(m.productId));if(mp.station==='none')continue;
-      const station=mp.station==='bar'?'bar':'kitchen',modifierQty=qty*Math.max(0,Number(m.qty)||0),difficulty=Math.max(1,Math.min(5,Number(mp.difficulty)||1));
-      stations[station].points+=modifierQty*difficulty;stations[station].qty+=modifierQty;stations[station].lines++;
-    }
-  }
-  return {orders:orders.length,stations:[stations.bar,stations.kitchen]};
-}
-function preparationLoadLevel(points){
-  const n=Number(points)||0;
-  if(n<=0)return {label:'Нет загрузки',percent:0};
-  if(n<=5)return {label:'Низкая',percent:25};
-  if(n<=12)return {label:'Средняя',percent:50};
-  if(n<=22)return {label:'Высокая',percent:75};
-  return {label:'Очень высокая',percent:100};
+function preparationLoadLevel(level,hasWork){
+  if(!hasWork)return {label:'Нет загрузки',percent:0};
+  if(level==='HIGH')return {label:'Высокая',percent:100};
+  if(level==='ELEVATED')return {label:'Повышенная',percent:65};
+  return {label:'Нормальная',percent:30};
 }
 function renderPreparationLoad(){
-  const load=preparationLoadData();
-  return `<div class="analytics-card" style="margin-bottom:14px;"><div class="analytics-title">Текущая загруженность</div><div class="analytics-sub">Активные заказы · сложность × количество. Заказов в работе: ${load.orders}</div>
-    <div class="analytics-grid-2" style="margin-top:14px;">${load.stations.map(s=>{const level=preparationLoadLevel(s.points);return `<div style="padding:14px;border:1px solid var(--border);border-radius:14px;background:var(--surface);"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><strong>${s.name}</strong><span style="font-weight:850;">${level.label}</span></div><div style="height:8px;background:var(--bg);border-radius:99px;overflow:hidden;margin:10px 0;"><div style="height:100%;width:${level.percent}%;background:var(--accent);border-radius:inherit;"></div></div><div class="analytics-sub">${s.points} балл. нагрузки · ${s.qty} шт. · ${s.lines} поз.</div></div>`}).join('')}</div>
-    <div class="analytics-sub" style="margin-top:12px;">Баллы являются относительной оценкой нагрузки. Эта модель подготовлена для последующего расчёта ориентировочного времени приготовления и доставки.</div>
+  const load=calculateProductionLoad(),active=(state.productionOrders||[]).filter(o=>o&&o.status!=='READY'&&o.status!=='CANCELLED');
+  const stations=PRODUCTION_STATIONS.map(key=>({key,name:key==='bar'?'Бар':'Кухня',...load.stations[key]}));
+  return `<div class="analytics-card" style="margin-bottom:14px;"><div class="analytics-title">Текущая загруженность</div><div class="analytics-sub">Production Load Engine v${load.version} · активных production-заказов: ${active.length}</div>
+    <div class="analytics-grid-2" style="margin-top:14px;">${stations.map(st=>{const hasWork=st.currentOrders>0||st.futureReservations>0,level=preparationLoadLevel(st.level,hasWork);return `<div style="padding:14px;border:1px solid var(--border);border-radius:14px;background:var(--surface);"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><strong>${st.name}</strong><span style="font-weight:850;">${level.label}</span></div><div style="height:8px;background:var(--bg);border-radius:99px;overflow:hidden;margin:10px 0;"><div style="height:100%;width:${level.percent}%;background:var(--accent);border-radius:inherit;"></div></div><div class="analytics-sub">Текущая очередь ≈ ${Math.round(st.waitMinutes)} мин · ${st.workPoints} балл. · будущих броней: ${st.futureReservations}</div></div>`}).join('')}</div>
+    <div class="analytics-sub" style="margin-top:12px;">Кухня и Бар считаются независимо. Будущий scheduled-заказ резервирует только своё производственное окно и не увеличивает текущую очередь заранее.</div>
   </div>`;
 }
 
