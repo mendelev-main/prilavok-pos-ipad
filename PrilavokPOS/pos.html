@@ -1791,7 +1791,7 @@ function productionPrepEntries(items){
 function productionStationWork(items){
   const result={bar:{station:'bar',workPoints:0,durationMinutes:0,qty:0},kitchen:{station:'kitchen',workPoints:0,durationMinutes:0,qty:0}};
   for(const e of productionPrepEntries(items)){
-    const batch=productionBatchFactor(e.qty),difficulty=productionDifficultyMultiplier(e.difficulty),work=e.qty*e.difficulty,duration=e.minutes*batch*difficulty;
+    const batch=productionBatchFactor(e.qty),work=e.qty*productionDifficultyMultiplier(e.difficulty),duration=e.minutes*batch;
     const row=result[e.station];row.workPoints+=work;row.durationMinutes+=duration;row.qty+=e.qty;
   }
   for(const row of Object.values(result)){row.workPoints=Math.round(row.workPoints*100)/100;row.durationMinutes=Math.round(row.durationMinutes*100)/100;row.qty=Math.round(row.qty*100)/100;}
@@ -1866,8 +1866,8 @@ function runProductionLoadEngineTests(){
   check('ready and cancelled excluded',r.stations.kitchen.waitMinutes===0&&r.stations.bar.waitMinutes===0,JSON.stringify(r.stations));
   const one=productionStationWork([item('kitchen',10,1)]).kitchen.durationMinutes,many=productionStationWork([item('kitchen',10,3)]).kitchen.durationMinutes;
   check('batch policy grows sub-linearly',many>one&&many<one*3,`one=${one}, many=${many}`);
-  const low=productionStationWork([item('kitchen',10,1,1)]).kitchen.durationMinutes,hard=productionStationWork([item('kitchen',10,1,5)]).kitchen.durationMinutes;
-  check('difficulty increases duration',hard>low,`low=${low}, hard=${hard}`);
+  const low=productionStationWork([item('kitchen',10,1,1)]).kitchen,hard=productionStationWork([item('kitchen',10,1,5)]).kitchen;
+  check('difficulty increases workload only',hard.workPoints>low.workPoints&&hard.durationMinutes===low.durationMinutes,`low=${JSON.stringify(low)}, hard=${JSON.stringify(hard)}`);
   return {ok:checks.every(x=>x.ok),passed:checks.filter(x=>x.ok).length,total:checks.length,checks};
 }
 window.__runProductionLoadEngineTests=runProductionLoadEngineTests;
@@ -2317,7 +2317,7 @@ function testWebOrder(){const n=networkConfigFromState();fetch(n.backendUrl.repl
 
 /* ============================= OPERATIONAL CHANNEL V1 ============================= */
 const OPERATIONAL_SCHEMA_VERSION=1,OPERATIONAL_INTERVAL=15000,OPERATIONAL_TIMEOUT=2500,OPERATIONAL_MAX_BACKOFF=60000;
-let operationalTimer=null,operationalBusy=false,operationalFailures=0,operationalListening=false;
+let operationalTimer=null,operationalBusy=false,operationalFailures=0,operationalListening=false,operationalController=null;
 function buildOperationalSnapshot(now=Date.now()){
   const load=calculateProductionLoad({now}),active=(state.productionOrders||[]).filter(o=>o&&o.status!=='READY'&&o.status!=='CANCELLED');
   return {schemaVersion:OPERATIONAL_SCHEMA_VERSION,engineVersion:PRODUCTION_ENGINE_VERSION,sampledAt:new Date(now).toISOString(),device:{key:state.network?.deviceKey||'',name:state.network?.deviceName||'M POS iPad'},production:{activeOrders:active.length,stations:load.stations,level:load.level,criticalStation:load.criticalStation},scheduled:active.filter(o=>o.mode==='SCHEDULED'&&o.requestedReadyAt).map(o=>({productionOrderId:o.id,requestedReadyAt:o.requestedReadyAt,status:o.status,work:productionStationWork(o.items||[])})).sort((a,b)=>a.requestedReadyAt-b.requestedReadyAt)};
@@ -2334,28 +2334,32 @@ function queueOperationalHeartbeat(now=Date.now()){return operationalCoalesce('h
 function operationalBackoffMs(attempts){return Math.min(OPERATIONAL_MAX_BACKOFF,Math.max(1000,1000*Math.pow(2,Math.min(6,Math.max(0,Number(attempts)||0)))));}
 async function sendOperationalItem(item){
   const n=networkConfigFromState();if(!n.backendUrl||!n.deviceKey)return false;
-  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),OPERATIONAL_TIMEOUT);
+  operationalController=new AbortController();const timeout=setTimeout(()=>operationalController?.abort(),OPERATIONAL_TIMEOUT);
   try{
     const endpoint=item.type==='heartbeat'?'/api/operational/heartbeat':'/api/operational/snapshot';
-    const r=await fetch(n.backendUrl.replace(/\/+$/,'')+endpoint,{method:'POST',headers:{'Content-Type':'application/json','X-Device-Key':n.deviceKey},body:JSON.stringify(item.payload),cache:'no-store',signal:controller.signal});
+    const r=await fetch(n.backendUrl.replace(/\/+$/,'')+endpoint,{method:'POST',headers:{'Content-Type':'application/json','X-Device-Key':n.deviceKey},body:JSON.stringify(item.payload),cache:'no-store',signal:operationalController.signal});
     if(!r.ok)throw new Error('HTTP '+r.status);return true;
-  }finally{clearTimeout(timeout);}
+  }finally{clearTimeout(timeout);operationalController=null;}
 }
 async function flushOperationalOutbox(){
   if(operationalBusy||document.hidden||window._availabilityAppActive===false||!state.loaded||storageBroken)return false;
   operationalBusy=true;
   try{
-    const now=Date.now(),item=(state.operationalOutbox||[]).filter(x=>(Number(x.nextAttemptAt)||0)<=now).sort((a,b)=>a.createdAt-b.createdAt)[0];
-    if(!item)return true;
-    try{
-      if(await sendOperationalItem(item)){
-        state.operationalOutbox=state.operationalOutbox.filter(x=>x.id!==item.id);operationalFailures=0;
-        state.network.lastOperationalSyncAt=Date.now();state.network.lastOperationalStatus='ok';saveKey('network',state.network);saveKey('operationalOutbox',state.operationalOutbox);return true;
+    let sentAny=false;
+    while(!document.hidden&&window._availabilityAppActive!==false){
+      const now=Date.now(),item=(state.operationalOutbox||[]).filter(x=>(Number(x.nextAttemptAt)||0)<=now).sort((a,b)=>a.createdAt-b.createdAt)[0];
+      if(!item)return sentAny||true;
+      try{
+        if(await sendOperationalItem(item)){
+          state.operationalOutbox=state.operationalOutbox.filter(x=>x.id!==item.id);operationalFailures=0;sentAny=true;
+          state.network.lastOperationalSyncAt=Date.now();state.network.lastOperationalStatus='ok';saveKey('network',state.network);saveKey('operationalOutbox',state.operationalOutbox);continue;
+        }
+      }catch(e){
+        item.attempts=(Number(item.attempts)||0)+1;operationalFailures=item.attempts;item.nextAttemptAt=Date.now()+operationalBackoffMs(item.attempts);state.network.lastOperationalStatus='offline';saveKey('network',state.network);saveKey('operationalOutbox',state.operationalOutbox);
       }
-    }catch(e){
-      item.attempts=(Number(item.attempts)||0)+1;operationalFailures=item.attempts;item.nextAttemptAt=Date.now()+operationalBackoffMs(item.attempts);state.network.lastOperationalStatus='offline';saveKey('network',state.network);saveKey('operationalOutbox',state.operationalOutbox);
+      return false;
     }
-    return false;
+    return sentAny;
   }finally{operationalBusy=false;}
 }
 async function operationalTick(){
@@ -2364,7 +2368,7 @@ async function operationalTick(){
 }
 function startOperationalSchedule(){
   clearTimeout(operationalTimer);operationalTimer=null;
-  if(!operationalListening){document.addEventListener('visibilitychange',()=>{if(document.hidden){clearTimeout(operationalTimer);operationalTimer=null;}else startOperationalSchedule();});operationalListening=true;}
+  if(!operationalListening){document.addEventListener('visibilitychange',()=>{if(document.hidden){clearTimeout(operationalTimer);operationalTimer=null;operationalController?.abort();}else startOperationalSchedule();});operationalListening=true;}
   if(document.hidden||window._availabilityAppActive===false)return;
   const delay=operationalFailures?operationalBackoffMs(operationalFailures):OPERATIONAL_INTERVAL;
   operationalTimer=setTimeout(async()=>{await operationalTick();startOperationalSchedule();},delay);
