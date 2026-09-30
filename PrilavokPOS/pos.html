@@ -3040,7 +3040,18 @@ function renderPosScreen(shift){
     ${renderCartPanel(shift)}
   </div>`;
 }
-function onSearch(v){ state.search=v; render(); const el=document.querySelector('.search-box'); if(el){ el.focus(); el.setSelectionRange(v.length,v.length); } }
+function onSearch(v){
+  state.search=String(v||'');
+  const grid=document.getElementById('sections-wrap');
+  if(!grid)return;
+  const q=state.search.trim().toLocaleLowerCase('ru');
+  grid.querySelectorAll('.layout-tile').forEach(tile=>{
+    if(!q){tile.style.display='';return;}
+    if(tile.dataset.tileType!=='product'){tile.style.display='none';return;}
+    const p=getProduct(tile.dataset.id);
+    tile.style.display=p&&String(p.name||'').toLocaleLowerCase('ru').includes(q)?'':'none';
+  });
+}
 function toggleEditMode(){
   state.editMode=!state.editMode;
   state.search='';
@@ -3208,7 +3219,18 @@ function onLayoutPointerUp(e){
   try{d.tile.releasePointerCapture(e.pointerId);}catch(_){ }
   layoutDragState=null;
 }
-function onSearch(v){ state.search=v; render(); const el=document.querySelector('.search-box'); if(el){ el.focus(); el.setSelectionRange(v.length,v.length); } }
+function onSearch(v){
+  state.search=String(v||'');
+  const grid=document.getElementById('sections-wrap');
+  if(!grid)return;
+  const q=state.search.trim().toLocaleLowerCase('ru');
+  grid.querySelectorAll('.layout-tile').forEach(tile=>{
+    if(!q){tile.style.display='';return;}
+    if(tile.dataset.tileType!=='product'){tile.style.display='none';return;}
+    const p=getProduct(tile.dataset.id);
+    tile.style.display=p&&String(p.name||'').toLocaleLowerCase('ru').includes(q)?'':'none';
+  });
+}
 function renderCartPanel(shift){
   const rows = state.cart.length ? state.cart.map(i=>`
     <div class="cart-row" data-cart-id="${escapeAttr(cartItemKey(i))}" onclick="handleCartRowClick(event, '${escapeAttr(cartItemKey(i))}')" ontouchstart="cartRowTouchStart(event, this)" ontouchmove="cartRowTouchMove(event, this)" ontouchend="cartRowTouchEnd(event, this)" ontouchcancel="cartRowTouchCancel(event, this)">
@@ -3337,6 +3359,7 @@ function readModifierSelection(productId){const p=getProduct(productId),groups=(
 function updateModifierSelectionTotal(productId){try{const p=getProduct(productId),mods=readModifierSelection(productId),total=(Number(p?.price)||0)+mods.reduce((x,m)=>x+Number(m.priceDelta||0),0),el=document.getElementById('modifier-selection-total');if(el)el.textContent=fullMoney(total);}catch(e){const p=getProduct(productId),selected=[...document.querySelectorAll('.modifier-choice.selected')],groups=(p?.modifierGroups||[]).map(normalizeModifierGroup),delta=selected.reduce((sum,input)=>{const g=groups[Number(input.dataset.modifierGroup)],o=g?.options.find(x=>x.id===input.dataset.modifierOption);return sum+(Number(o?.priceDelta)||0);},0),el=document.getElementById('modifier-selection-total');if(el)el.textContent=fullMoney((Number(p?.price)||0)+delta);}}
 function confirmModifierSelection(productId){try{const p=getProduct(productId);if(!p)return;const mods=readModifierSelection(productId);if(productNeedsManualPrice(p)){openManualPriceModal(p,mods);return;}addConfiguredCartItem(p,mods);}catch(e){flash(e.message);}}
 function changeQty(id,delta){const item=state.cart.find(i=>cartItemKey(i)===id);if(!item)return;const q=item.qty+delta;if(q<=0){state.cart=state.cart.filter(i=>cartItemKey(i)!==id);saveCurrentOrderSession();render();return;}if(!canFulfillCart(state.cart.map(i=>({...i,qty:cartItemKey(i)===id?q:i.qty}))))return;item.qty=q;saveCurrentOrderSession();render();}
+function isFormControlTarget(target){return !!target?.closest?.('input,textarea,select,[contenteditable="true"]');}
 function handleCartRowClick(e,id){
   if(e.target.closest('button,.qty-stepper')) return;
   if(cartSwipeState && cartSwipeState.suppressClick){
@@ -6153,6 +6176,14 @@ function importBackup(){
 /* ============================= UTIL ============================= */
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 function escapeAttr(s){ return escapeHtml(s); }
+
+// Keep native iPad text editing responsive inside WKWebView: form controls must own their touch sequence.
+document.addEventListener('touchstart',function(e){
+  if(isFormControlTarget(e.target))e.stopPropagation();
+},{capture:true,passive:true});
+document.addEventListener('touchmove',function(e){
+  if(isFormControlTarget(e.target))e.stopPropagation();
+},{capture:true,passive:true});
 
 /* ============================= INIT ============================= */
 loadAll();
