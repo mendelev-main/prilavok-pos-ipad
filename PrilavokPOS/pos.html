@@ -2936,7 +2936,7 @@ async function deleteLoyaltyProgram(id){try{await loyaltyApi('/api/loyalty/progr
 async function toggleLoyaltyProgram(id,isActive){try{await loyaltyApi('/api/loyalty/programs/'+encodeURIComponent(id)+'/active',{method:'PATCH',body:JSON.stringify({isActive})});flash(isActive?'Программа включена':'Программа выключена');openLoyaltyAdminScreen()}catch(e){flash(e.message||'Не удалось изменить программу')}}
 
 
-function openLoyaltyAdminScreen(){if(!currentShiftEmployeeIsAdmin())return showAdminOnlyInfo('Программа лояльности');state.settingsAdminPanel=false;state.loyaltyAdminScreen=true;state.loyaltyAdminSection=state.loyaltyAdminSection||'programs';render();loadLoyaltyAdminScreen()}
+function openLoyaltyAdminScreen(){if(!state.settingsAdminPanel && !state.loyaltyAdminScreen)return showAdminOnlyInfo('Программа лояльности');state.settingsAdminPanel=false;state.loyaltyAdminScreen=true;state.loyaltyAdminSection=state.loyaltyAdminSection||'programs';render();loadLoyaltyAdminScreen()}
 function closeLoyaltyAdminScreen(){state.loyaltyAdminScreen=false;state.settingsAdminPanel=true;render()}
 async function loadLoyaltyAdminScreen(){try{if(state.loyaltyAdminSection==='clients'){window.__loyaltyAdminCustomers=await searchCustomers('375')}else{const d=await loyaltyApi('/api/loyalty/programs');window.__loyaltyAdminPrograms=d.programs||[]}render()}catch(e){flash('Не удалось загрузить данные программы лояльности')}}
 function setLoyaltyAdminSection(section){state.loyaltyAdminSection=section;loadLoyaltyAdminScreen()}
@@ -2975,7 +2975,7 @@ function renderAdminPanel(){
     </div>`;
 }
 function renderSettingsScreen(){
-  if(state.loyaltyAdminScreen && currentShiftEmployeeIsAdmin()) return renderLoyaltyAdminScreen();
+  if(state.loyaltyAdminScreen) return renderLoyaltyAdminScreen();
   if(state.settingsAdminPanel && currentShiftEmployeeIsAdmin()){
     return `
     <div class="screen content-screen ${state.tab==='settings'?'active':''}">
