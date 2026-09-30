@@ -6038,7 +6038,7 @@ window.addEventListener('error',function(e){
   const app=document.getElementById('app');
   if(app && !state.loaded) app.innerHTML='<div class="center-note" style="margin:auto;padding:32px;text-align:center;">Не удалось запустить M POS.<br><small>'+escapeHtml(e?.message||'Ошибка JavaScript')+'</small></div>';
 });
-render();
+if(document.getElementById('app')) render();
 loadAll().catch(function(e){
   console.error('M POS startup:',e);
   const app=document.getElementById('app');
