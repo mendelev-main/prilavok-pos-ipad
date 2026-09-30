@@ -3623,9 +3623,57 @@ function setProductionStatusFromParked(id,status){
   updateProductionStatus(production.id,status);saveKey('parked',state.parked);openParkedModal();
 }
 function activeProductionOrders(){return state.productionOrders.filter(o=>o.status!=='READY'&&o.status!=='CANCELLED').sort((a,b)=>(a.requestedReadyAt||a.queuedAt)-(b.requestedReadyAt||b.queuedAt));}
+function productionStationItems(order,station){
+  const rows=[];
+  (order?.items||[]).forEach(item=>{
+    const qty=Math.max(0,Number(item.qty)||0);
+    if(item.prep?.station===station) rows.push({name:item.name||getProduct(item.productId)?.name||'Товар',qty});
+    (item.selectedModifiers||[]).forEach(mod=>{
+      if(mod.prep?.station===station) rows.push({name:mod.name||getProduct(mod.productId)?.name||'Модификатор',qty:qty*Math.max(1,Number(mod.qty)||1)});
+    });
+  });
+  return rows.filter(x=>x.qty>0);
+}
+function productionOrderStations(order){
+  return ['kitchen','bar'].filter(station=>productionStationItems(order,station).length);
+}
+function productionStationLabel(station){return station==='bar'?'Бар':'Кухня';}
+function productionQueueCard(order,station){
+  const items=productionStationItems(order,station);
+  const timing=order.mode==='SCHEDULED'&&order.requestedReadyAt?'к '+fmtDate(order.requestedReadyAt):'как можно скорее';
+  return `<div style="border:1px solid var(--border);border-radius:16px;padding:14px;background:var(--surface);box-shadow:var(--shadow);">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
+      <div style="min-width:0;"><div class="list-row-name">${escapeHtml(order.orderLabel||order.webOrderId||'Заказ')}</div><div class="list-row-sub">${productionStatusLabel(order.status)} · ${timing}</div></div>
+      <span class="badge">${productionStationLabel(station)}</span>
+    </div>
+    <div style="margin-top:10px;display:flex;flex-direction:column;gap:5px;">${items.map(item=>`<div style="display:flex;justify-content:space-between;gap:12px;font-size:13px;"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(item.name)}</span><strong style="white-space:nowrap;">× ${item.qty}</strong></div>`).join('')}</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
+      ${order.status==='QUEUED'?`<button class="btn btn-outline" onclick="updateProductionStatus('${escapeAttr(order.id)}','IN_PROGRESS');openProductionModal()">Начать</button>`:''}
+      <button class="btn btn-primary" onclick="updateProductionStatus('${escapeAttr(order.id)}','READY');openProductionModal()">Готов</button>
+      <button class="icon-btn danger" title="Отменить" onclick="updateProductionStatus('${escapeAttr(order.id)}','CANCELLED');openProductionModal()">✕</button>
+    </div>
+  </div>`;
+}
+function renderProductionStationColumn(station,list){
+  const orders=list.filter(o=>productionOrderStations(o).includes(station));
+  const queued=orders.filter(o=>o.status==='QUEUED').length,inProgress=orders.filter(o=>o.status==='IN_PROGRESS').length;
+  return `<section style="min-width:0;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;"><div style="font-size:17px;font-weight:800;">${productionStationLabel(station)}</div><div class="list-row-sub">Ожидают: ${queued} · Готовятся: ${inProgress}</div></div>
+    <div style="display:flex;flex-direction:column;gap:10px;">${orders.length?orders.map(o=>productionQueueCard(o,station)).join(''):'<div class="center-note" style="padding:28px 12px;border:1px dashed var(--border);border-radius:16px;">Очередь пуста</div>'}</div>
+  </section>`;
+}
 function openProductionModal(){
   const list=activeProductionOrders();
-  showModal(`<div style="width:min(900px,86vw);max-width:100%;"><div class="modal-title">Производство</div><div class="settings-note" style="margin-bottom:12px;">Локальная очередь сохраняется на iPad и восстанавливается после перезапуска.</div><div style="max-height:68vh;overflow:auto;">${list.length?list.map(o=>`<div class="list-row"><div style="flex:1;min-width:0;"><div class="list-row-name">${escapeHtml(o.orderLabel||o.webOrderId||'Заказ')}</div><div class="list-row-sub">${productionStatusLabel(o.status)} · ${o.mode==='SCHEDULED'&&o.requestedReadyAt?'к '+fmtDate(o.requestedReadyAt):'как можно скорее'} · ${(o.items||[]).reduce((s,i)=>s+Number(i.qty||0),0)} шт.</div></div><div style="display:flex;gap:8px;flex:none;">${o.status==='QUEUED'? `<button class="btn btn-outline" onclick="updateProductionStatus('${escapeAttr(o.id)}','IN_PROGRESS');openProductionModal()">Готовится</button>`:''}<button class="btn btn-primary" onclick="updateProductionStatus('${escapeAttr(o.id)}','READY');openProductionModal()">Готов</button><button class="icon-btn danger" title="Отменить" onclick="updateProductionStatus('${escapeAttr(o.id)}','CANCELLED');openProductionModal()">✕</button></div></div>`).join(''):'<div class="center-note">Нет заказов в производстве</div>'}</div><div class="modal-actions"><button class="btn btn-secondary" style="width:100%;" onclick="closeModal()">Закрыть</button></div></div>`);
+  const noStation=list.filter(o=>!productionOrderStations(o).length);
+  showModal(`<div style="width:min(1040px,88vw);max-width:100%;">
+    <div class="modal-title">Производство</div>
+    <div class="settings-note" style="margin-bottom:14px;">Кухня и бар показаны отдельно. Статус остаётся единым для заказа; mixed-заказ отображается в обеих участвующих станциях.</div>
+    <div style="max-height:68vh;overflow:auto;padding-right:2px;">
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;">${renderProductionStationColumn('kitchen',list)}${renderProductionStationColumn('bar',list)}</div>
+      ${noStation.length?`<div style="margin-top:16px;"><div style="font-size:15px;font-weight:800;margin-bottom:8px;">Без производства</div><div class="settings-note">В очереди есть ${noStation.length} заказ(а) без позиций кухни/бара. Они не создают производственную нагрузку.</div></div>`:''}
+    </div>
+    <div class="modal-actions"><button class="btn btn-secondary" style="width:100%;" onclick="closeModal()">Закрыть</button></div>
+  </div>`,true);
 }
 
 /* ---- Park (save receipt for later) ---- */
