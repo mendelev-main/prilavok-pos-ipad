@@ -912,6 +912,7 @@ let state = {
   orders: [],
   parked: [],
   productionOrders: [],
+  productionHistory: [],
   receivings: [],
   suppliers: [],
   purchaseOrders: [],
@@ -1015,13 +1016,14 @@ async function loadAll(){
     markStorageBroken('localStorage test write failed');
   }
   storageCheckedOnce = true;
-  const [products, shifts, employees, orders, parked, productionOrders, receivings, suppliers, purchaseOrders, discounts, layout, printer, theme, company, deliveryRates, telegram, network, currentOrderSession, hallTables, bookings, webEvents, posNavigation, inventoryConfig, inventoryHistory, inventoryDraft] = await Promise.all([
+  const [products, shifts, employees, orders, parked, productionOrders, productionHistory, receivings, suppliers, purchaseOrders, discounts, layout, printer, theme, company, deliveryRates, telegram, network, currentOrderSession, hallTables, bookings, webEvents, posNavigation, inventoryConfig, inventoryHistory, inventoryDraft] = await Promise.all([
     loadKey('products', null),
     loadKey('shifts', []),
     loadKey('employees', []),
     loadKey('orders', []),
     loadKey('parked', []),
     loadKey('productionOrders', []),
+    loadKey('productionHistory', []),
     loadKey('receivings', []),
     loadKey('suppliers', []),
     loadKey('purchaseOrders', []),
@@ -1049,6 +1051,7 @@ async function loadAll(){
   state.orders = orders;
   state.parked = Array.isArray(parked) ? parked : [];
   state.productionOrders = (Array.isArray(productionOrders) ? productionOrders : []).map(normalizeProductionOrder).filter(Boolean);
+  state.productionHistory = Array.isArray(productionHistory) ? productionHistory : [];
   state.receivings = receivings;
   state.suppliers = Array.isArray(suppliers) ? suppliers : [];
   state.purchaseOrders = Array.isArray(purchaseOrders) ? purchaseOrders : [];
@@ -3684,13 +3687,42 @@ function ensureProductionOrder(sourceOrder,sourceType='parked'){
   const created=normalizeProductionOrder({id,sourceType,sourceOrderId:sourceOrder?.id||'',webOrderId:sourceOrder?.webOrderId||state.currentWebOrderId||'',orderLabel:sourceOrder?.orderLabel||state.orderLabel||'',items:productionItemsSnapshot(sourceOrder?.items||state.cart),status:'QUEUED',mode,requestedReadyAt,createdAt:now,queuedAt:now,updatedAt:now});
   state.productionOrders.push(created);saveProductionOrders();return created;
 }
+function productionNormativeSnapshot(order){
+  const work=productionStationWork(order?.items||[]);
+  const stations={};
+  for(const station of PRODUCTION_STATIONS)stations[station]={durationMinutes:work[station].durationMinutes,workPoints:work[station].workPoints,qty:work[station].qty};
+  return {engineVersion:PRODUCTION_ENGINE_VERSION,stations,normativeMinutes:Math.max(...PRODUCTION_STATIONS.map(station=>stations[station].durationMinutes),0)};
+}
+function productionActualMetrics(order){
+  const startedAt=Number(order?.startedAt)||null,readyAt=Number(order?.readyAt)||null,queuedAt=Number(order?.queuedAt)||null;
+  const preparationMinutes=startedAt&&readyAt&&readyAt>=startedAt?(readyAt-startedAt)/60000:null;
+  const queueMinutes=queuedAt&&startedAt&&startedAt>=queuedAt?(startedAt-queuedAt)/60000:null;
+  return {queueMinutes:queueMinutes===null?null:Math.round(queueMinutes*100)/100,preparationMinutes:preparationMinutes===null?null:Math.round(preparationMinutes*100)/100};
+}
+function productionLoadContextFor(order,at=Date.now()){
+  const others=(state.productionOrders||[]).filter(x=>x.id!==order.id);
+  const estimate=calculateProductionLoad({now:at,orders:others,hypotheticalItems:order.items||[]});
+  return {capturedAt:at,engineVersion:estimate.version,criticalStation:estimate.criticalStation,delayingStations:[...estimate.delayingStations],loadedStations:[...estimate.loadedStations],level:estimate.level,predictedMinutes:estimate.estimatedMinutes,stations:JSON.parse(JSON.stringify(estimate.stations))};
+}
+function ensureProductionHistoryRecord(order){
+  if(!order||!['READY','CANCELLED'].includes(order.status))return null;
+  const existing=state.productionHistory.find(x=>x.productionOrderId===order.id);
+  if(existing)return existing;
+  const actual=productionActualMetrics(order),normative=order.normativeSnapshot||productionNormativeSnapshot(order),prediction=order.predictionSnapshot||null;
+  const record={version:1,id:uid(),productionOrderId:order.id,sourceType:order.sourceType||'',sourceOrderId:order.sourceOrderId||'',webOrderId:order.webOrderId||'',orderLabel:order.orderLabel||'',status:order.status,mode:order.mode,requestedReadyAt:order.requestedReadyAt||null,items:productionItemsSnapshot(order.items||[]),queuedAt:order.queuedAt||null,startedAt:order.startedAt||null,readyAt:order.readyAt||null,cancelledAt:order.cancelledAt||null,completedAt:order.readyAt||order.cancelledAt||Date.now(),normativeSnapshot:JSON.parse(JSON.stringify(normative)),predictionSnapshot:prediction?JSON.parse(JSON.stringify(prediction)):null,actual,scheduledWaitingExcluded:order.mode==='SCHEDULED'};
+  if(record.status==='READY'&&actual.preparationMinutes!==null&&prediction?.predictedMinutes!=null)record.predictionErrorMinutes=Math.round((actual.preparationMinutes-Number(prediction.predictedMinutes))*100)/100;
+  state.productionHistory.unshift(record);saveKey('productionHistory',state.productionHistory);return record;
+}
 function updateProductionStatus(id,status){
   const o=productionOrderById(id);if(!o||!PRODUCTION_STATUSES.has(status)||o.status===status)return o;
-  const now=Date.now();o.status=status;o.updatedAt=now;
-  if(status==='IN_PROGRESS'&&!o.startedAt)o.startedAt=now;
-  if(status==='READY')o.readyAt=o.readyAt||now;
+  const now=Date.now();
+  if(status==='IN_PROGRESS'&&!o.startedAt){o.startedAt=now;o.normativeSnapshot=o.normativeSnapshot||productionNormativeSnapshot(o);o.predictionSnapshot=o.predictionSnapshot||productionLoadContextFor(o,now);}
+  o.status=status;o.updatedAt=now;
+  if(status==='READY'){o.startedAt=o.startedAt||now;o.normativeSnapshot=o.normativeSnapshot||productionNormativeSnapshot(o);o.predictionSnapshot=o.predictionSnapshot||productionLoadContextFor(o,o.startedAt);o.readyAt=o.readyAt||now;}
   if(status==='CANCELLED')o.cancelledAt=o.cancelledAt||now;
-  saveProductionOrders();return o;
+  saveProductionOrders();
+  if(status==='READY'||status==='CANCELLED')ensureProductionHistoryRecord(o);
+  return o;
 }
 function cancelProductionForOrder(order){if(order?.productionOrderId)updateProductionStatus(order.productionOrderId,'CANCELLED');}
 function productionCountsAsCurrentLoad(o,now=Date.now()){
