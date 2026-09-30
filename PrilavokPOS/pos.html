@@ -2119,6 +2119,7 @@ function webOrderDate(o){return fmtDate(new Date(o.created_at).getTime());}
 function openWebEventsModal(){const list=state.webEvents.slice().sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));showModal(`<div class="modal-title">События</div>${list.length?list.map(o=>`<div class="list-row" style="cursor:pointer;" onclick="openWebOrder('${escapeAttr(o.id)}')"><div style="flex:1;min-width:0;"><div class="list-row-name">Заказ с сайта ${escapeHtml(o.external_id||'')}</div><div class="list-row-sub">${escapeHtml(o.customer_name||'Клиент')} · ${fullMoney(o.total)} · ${webOrderDate(o)}</div></div><div style="font-size:22px;">›</div></div>`).join(''):`<div class="center-note">Новых событий нет</div>`}<div class="modal-actions"><button class="btn btn-secondary" style="width:100%;" onclick="closeModal()">Закрыть</button></div>`);}
 function openWebOrder(id){const o=state.webEvents.find(x=>x.id===id);if(!o)return;showModal(`<div class="modal-title">Заказ с сайта ${escapeHtml(o.external_id||'')}</div><div class="setting-sub" style="margin-bottom:14px;">${escapeHtml(o.customer_name||'Клиент')}${o.phone?' · '+escapeHtml(o.phone):''}</div>${(o.order_items||[]).map(i=>`<div class="receipt-line"><span>${escapeHtml(i.product_name)} × ${Number(i.quantity||0)}</span><span>${fullMoney(Number(i.price||0)*Number(i.quantity||0))}</span></div>`).join('')}${o.delivery_fee?`<div class="receipt-line"><span>Доставка</span><span>${fullMoney(o.delivery_fee)}</span></div>`:''}<div class="receipt-total"><span>Итого</span><span>${fullMoney(o.total)}</span></div><div style="margin-top:14px;font-size:13px;line-height:1.55;color:var(--muted);">${o.address?`<div><b>Адрес:</b> ${escapeHtml(o.address)}</div>`:''}${o.comment?`<div><b>Комментарий:</b> ${escapeHtml(o.comment)}</div>`:''}<div><b>Тип:</b> ${escapeHtml(o.order_type||'На месте')}</div></div><div class="modal-actions"><button class="btn btn-secondary" onclick="openWebEventsModal()">Назад</button><button class="btn btn-primary" onclick="acceptWebOrder('${escapeAttr(o.id)}')">Взять в работу</button></div>`);}
 let webAcceptBusy=false;
+function webRequestedReadyAt(o){for(const key of ['requested_ready_at','requestedReadyAt','scheduled_for','scheduledFor','ready_at']){const raw=o?.[key];if(!raw)continue;const ts=typeof raw==='number'?raw:new Date(raw).getTime();if(Number.isFinite(ts)&&ts>Date.now())return ts;}return null;}
 function webOrderCartItems(o){
   if(!Array.isArray(o.order_items)||!o.order_items.length)throw new Error('В заказе нет товаров');
   return o.order_items.map(i=>{
@@ -2157,8 +2158,8 @@ async function acceptWebOrder(id){
       const existing=state.parked.find(p=>p.webOrderId===id);
       const rawType=String(o.order_type||'').trim().toLocaleLowerCase('ru');
       const orderType=(rawType==='delivery'||rawType==='доставка')?'Доставка':((rawType==='pickup'||rawType==='самовывоз'||rawType==='с собой')?'С собой':(o.order_type||'На месте'));
-      const acceptedAt=Date.now();
-      journal[id]={stage:existing?'local':'prepared',parked:existing||{id:uid(),receiptDisplayNumber:'#'+String(o.external_id||o.id||'—'),items:cartItems,total:Number(o.total||0),subtotal:Number(o.total||0)-Number(o.delivery_fee||0),deliveryFee:Number(o.delivery_fee||0),orderLabel:'Веб '+(o.external_id||''),orderType,customer:{name:o.customer_name||'',phone:o.phone||'',address:o.address||''},comment:o.comment||'',source:'web',webOrderId:o.id,webOrderStatus:'accepted',timestamp:acceptedAt,createdAt:acceptedAt,kitchenPrinted:false,printedItems:[]}};
+      const acceptedAt=Date.now(),requestedReadyAt=webRequestedReadyAt(o),productionMode=requestedReadyAt?'SCHEDULED':'ASAP';
+      journal[id]={stage:existing?'local':'prepared',parked:existing||{id:uid(),receiptDisplayNumber:'#'+String(o.external_id||o.id||'—'),items:cartItems,total:Number(o.total||0),subtotal:Number(o.total||0)-Number(o.delivery_fee||0),deliveryFee:Number(o.delivery_fee||0),orderLabel:'Веб '+(o.external_id||''),orderType,customer:{name:o.customer_name||'',phone:o.phone||'',address:o.address||''},comment:o.comment||'',source:'web',webOrderId:o.id,webOrderStatus:'accepted',productionMode,requestedReadyAt,timestamp:acceptedAt,createdAt:acceptedAt,kitchenPrinted:false,printedItems:[]}};
       await window.PrilavokCore.Storage.set('webOrderAcceptances',journal);
     }
     const record=journal[id];
@@ -2169,6 +2170,8 @@ async function acceptWebOrder(id){
       record.stage='local';await window.PrilavokCore.Storage.set('webOrderAcceptances',journal);
       state.parked=parked;
     }
+    const production=ensureProductionOrder(record.parked,'web');record.parked.productionOrderId=production.id;
+    const parkedProductionIndex=state.parked.findIndex(p=>p.webOrderId===id);if(parkedProductionIndex>=0){state.parked[parkedProductionIndex].productionOrderId=production.id;await window.PrilavokCore.Storage.set('parked',state.parked);}
     // WEB-заказ печатаем на кухню один раз в момент "Взять в работу".
     // Снимок printedItems сохраняет идемпотентность и позволяет позже допечатать только добавленные позиции.
     if(!record.parked.kitchenPrinted){
