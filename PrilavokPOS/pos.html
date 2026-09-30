@@ -960,7 +960,9 @@ let state = {
   posFolder: '',
   posNavigation: {version:1,categories:[]},
   orderType: 'На месте',
-  customer: {name:'', phone:'', address:''},
+  customer: {name:'', phone:'', address:'', id:''},
+  loyaltyPrograms: [],
+  loyaltyRedemptions: {},
   orderLabel: '',
   printer: {enabled:false, autoPrint:false, ip:'', port:9100 },
   company: {establishmentName:'', legalName:'', address:'', deliveryAddress:''},
@@ -1315,6 +1317,38 @@ function saveCurrentOrderSession(){
 
 function clearCurrentOrderSession(){
   saveKey('currentOrderSession', {items:[],orderLabel:'',orderType:'На месте',customer:{name:'',phone:'',address:''},deliveryFee:0,orderComment:'',source:'',webOrderId:'',webOrderStatus:'',kitchenPrinted:false,printedItems:[],updatedAt:Date.now()});
+}
+
+function loyaltyApi(path,options={}){
+ const n=networkConfigFromState();return fetch(n.backendUrl+path,{...options,headers:{'Content-Type':'application/json','X-Device-Key':n.deviceKey,...(options.headers||{})},cache:'no-store'}).then(async r=>{const d=await r.json().catch(()=>null);if(!r.ok)throw new Error(d?.error||('HTTP '+r.status));return d});
+}
+async function searchCustomers(q){
+ const term=String(q||'').trim();if(term.length<2)return [];
+ const data=await loyaltyApi('/api/customers/search?q='+encodeURIComponent(term));return data.customers||[];
+}
+async function loadCustomerLoyalty(customerId){
+ if(!customerId){state.loyaltyPrograms=[];state.loyaltyRedemptions={};return}
+ const data=await loyaltyApi('/api/customers/'+encodeURIComponent(customerId)+'/loyalty');
+ state.customer={...state.customer,id:data.customer.id,name:data.customer.name,phone:data.customer.normalized_phone};
+ state.loyaltyPrograms=data.programs||[];state.loyaltyRedemptions={};render();
+}
+function loyaltySummaryHtml(){
+ if(!state.customer?.id)return '<div class="setting-sub">Выберите клиента, чтобы использовать программу лояльности.</div>';
+ if(!state.loyaltyPrograms.length)return '<div class="setting-sub">Для клиента пока нет активных программ.</div>';
+ return state.loyaltyPrograms.map(p=>`<div class="list-row"><div style="flex:1"><div class="list-row-name">${escapeHtml(p.name)}</div><div class="list-row-sub">Прогресс: ${Number(p.progress)||0} / ${Number(p.required_quantity)||0} · Подарков: ${Number(p.rewards)||0}</div></div>${Number(p.rewards)>0?`<select onchange="state.loyaltyRedemptions['${escapeAttr(p.id)}']=Number(this.value)||0"><option value="0">Не использовать</option>${Array.from({length:Number(p.rewards)},(_,i)=>`<option value="${i+1}">Использовать ${i+1}</option>`).join('')}</select>`:''}</div>`).join('');
+}
+async function openCustomerPicker(){
+ showModal(`<div class="modal-title">Клиент</div><div class="field"><label>Имя или телефон</label><input id="customer-search" autocomplete="off" oninput="window.customerSearchChanged(this.value)"></div><div id="customer-search-results" class="settings-note">Введите минимум 2 символа</div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Закрыть</button><button class="btn btn-primary" onclick="openCreateCustomer()">Новый клиент</button></div>`,true);
+}
+let customerSearchSeq=0;
+async function customerSearchChanged(value){const seq=++customerSearchSeq,el=document.getElementById('customer-search-results');try{const rows=await searchCustomers(value);if(seq!==customerSearchSeq||!el)return;el.innerHTML=rows.length?rows.map(x=>`<button class="list-row" style="width:100%;text-align:left" onclick="selectCustomer('${escapeAttr(x.id)}','${escapeAttr(x.name)}','${escapeAttr(x.normalized_phone)}')"><div><div class="list-row-name">${escapeHtml(x.name)}</div><div class="list-row-sub">${escapeHtml(x.normalized_phone)}</div></div></button>`).join(''):'Клиент не найден';}catch(e){if(el)el.textContent='Не удалось загрузить клиентов'}}
+async function selectCustomer(id,name,phone){state.customer={...state.customer,id,name,phone};closeModal();try{await loadCustomerLoyalty(id)}catch(e){flash('Клиент выбран, но loyalty недоступна');render()}}
+function openCreateCustomer(){showModal(`<div class="modal-title">Новый клиент</div><div class="field"><label>Имя</label><input id="new-customer-name"></div><div class="field"><label>Телефон</label><input id="new-customer-phone" inputmode="tel"></div><div class="modal-actions"><button class="btn btn-secondary" onclick="openCustomerPicker()">Назад</button><button class="btn btn-primary" onclick="createCustomerFromPos()">Создать</button></div>`,true)}
+async function createCustomerFromPos(){try{const data=await loyaltyApi('/api/customers',{method:'POST',body:JSON.stringify({name:document.getElementById('new-customer-name')?.value,phone:document.getElementById('new-customer-phone')?.value})});await selectCustomer(data.customer.id,data.customer.name,data.customer.normalized_phone)}catch(e){flash(e.message||'Не удалось создать клиента')}}
+async function publishPaidOrderLoyalty(order){
+ if(!order?.customer?.id)return;
+ try{const data=await loyaltyApi('/api/loyalty/sales',{method:'POST',body:JSON.stringify({orderId:order.id,customerId:order.customer.id,items:(order.items||[]).map(x=>({productId:x.productId,quantity:x.qty})),redemptions:order.loyaltyRedemptions||{}})});order.loyaltySync={status:'synced',at:Date.now(),events:data.events||[]};saveKey('orders',state.orders)}
+ catch(e){order.loyaltySync={status:'pending',error:String(e?.message||e),at:Date.now()};saveKey('orders',state.orders)}
 }
 
 function cartTotal(){
@@ -4820,7 +4854,7 @@ function finalizePayment(payments){
   const kitchenPrinted=!!window.__currentOrderKitchenPrinted;
   const receiptSequence=(state.orders.filter(o=>o.shiftId===shift.id).length+1);
   const shiftEmployee=state.employees.find(e=>e.id===shift.employeeId);
-  const order={id:uid(),shiftId:shift.id,receiptNumber:receiptSequence,receiptDisplayNumber:`#${receiptSequence}`,employeeId:shift.employeeId||'',employeeName:shiftEmployee?.name||shiftEmployee?.fullName||'Сотрудник',registerName:'POS 1',method,total,payments:clean,cashGiven:method==='cash'?clean[0].cashGiven:null,change:method==='cash'?clean[0].change:null,orderLabel:state.orderLabel||'',orderType:state.orderType,deliveryFee:deliveryFee,customer:JSON.parse(JSON.stringify(state.customer)),items:state.cart.map(i=>{const d=state.discounts.find(x=>x.id===i.discountId),product=getProduct(i.productId);return {...i,category:product?.category||i.category||'',discountName:d?.name||'',discountType:d?.type||'',discountValue:Number(d?.value)||0,cost:product?(product.type==='simple'?product.cost:compositeCost(product)):0};}),timestamp:Date.now(),kitchenPrinted,printedItems:JSON.parse(JSON.stringify(window.__currentOrderPrintedItems||[]))};
+  const order={id:uid(),loyaltyRedemptions:JSON.parse(JSON.stringify(state.loyaltyRedemptions||{})),shiftId:shift.id,receiptNumber:receiptSequence,receiptDisplayNumber:`#${receiptSequence}`,employeeId:shift.employeeId||'',employeeName:shiftEmployee?.name||shiftEmployee?.fullName||'Сотрудник',registerName:'POS 1',method,total,payments:clean,cashGiven:method==='cash'?clean[0].cashGiven:null,change:method==='cash'?clean[0].change:null,orderLabel:state.orderLabel||'',orderType:state.orderType,deliveryFee:deliveryFee,customer:JSON.parse(JSON.stringify(state.customer)),items:state.cart.map(i=>{const d=state.discounts.find(x=>x.id===i.discountId),product=getProduct(i.productId);return {...i,category:product?.category||i.category||'',discountName:d?.name||'',discountType:d?.type||'',discountValue:Number(d?.value)||0,cost:product?(product.type==='simple'?product.cost:compositeCost(product)):0};}),timestamp:Date.now(),kitchenPrinted,printedItems:JSON.parse(JSON.stringify(window.__currentOrderPrintedItems||[]))};
   order.stockConsumption=stockConsumption;
   for(const item of stockConsumption.items){
     const p=getProduct(item.productId);
@@ -4831,7 +4865,7 @@ function finalizePayment(payments){
   saveKey('products',state.products);saveKey('orders',state.orders);saveKey('shifts',state.shifts);
   resetCurrentOrderState();state.paymentPage='receipt';state._splitPayments=[];state._splitCount=0;
   clearCurrentOrderSession();
-  closeModal();showPaymentReceipt(order);setTimeout(()=>{if(typeof window.printCompletedOrder==='function')window.printCompletedOrder(order);else if(state.printer?.autoPrint)sendOrderToPrint(order);window.__currentOrderKitchenPrinted=false},250);
+  closeModal();showPaymentReceipt(order);void publishPaidOrderLoyalty(order);setTimeout(()=>{if(typeof window.printCompletedOrder==='function')window.printCompletedOrder(order);else if(state.printer?.autoPrint)sendOrderToPrint(order);window.__currentOrderKitchenPrinted=false},250);
 }
 function openCashModal(){openPaymentModal();}
 function openCardModal(){openPaymentModal();}
