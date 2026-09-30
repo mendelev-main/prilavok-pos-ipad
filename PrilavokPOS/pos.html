@@ -2262,7 +2262,14 @@ async function recoverWebAcceptanceJournal(){
   // ACK recovery is best-effort and only happens for records already durably committed locally.
   for(const [id,record] of records.filter(([,r])=>r?.stage==='local')){
     const local=state.parked.some(p=>p.webOrderId===record.parked?.webOrderId);
-    if(local)await confirmWebAcceptance(id,record,journal);
+    if(local){
+      const confirmed=await confirmWebAcceptance(id,record,journal);
+      if(confirmed){
+        const before=state.webEvents.length;
+        state.webEvents=state.webEvents.filter(event=>event?.id!==id);
+        if(state.webEvents.length!==before)await window.PrilavokCore.Storage.set('webEvents',state.webEvents);
+      }
+    }
   }
   return true;
   }finally{webAcceptanceRecoveryBusy=false;}
