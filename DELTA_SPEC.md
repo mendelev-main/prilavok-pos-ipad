@@ -390,6 +390,25 @@ Backend/Web:
 6. при stale/offline POS сайт не показывает старый demand status как актуальный.
 
 
+## D13B — Финальный regression-план ручного статуса загрузки — ACTIVE
+
+Старые P1–P9, R1–R10 и acceptance criteria внутри архивного D13 относятся к отменённой automatic ETA-модели и **не являются требованиями текущего продукта**. Их статусы не должны использоваться для планирования или приёмки D13A.
+
+Актуальная приёмка новой модели:
+
+1. ✅ **A1 — POS cleanup.** Production Load Engine, ProductionOrder/history/calibration, prepStation/prepDifficulty/basePrepMinutes и production UI/session state удалены из рабочего POS-кода.
+2. ✅ **A2 — POS automated regression.** GitHub Actions после cleanup: **124/124, 0 fail, 0 skipped**. WEB acceptance/recovery и operational outbox продолжают проходить.
+3. ✅ **A3 — WEB business status.** Обычные POS/отложенные чеки не имеют production lifecycle; WEB-заказ сохраняет только действие `Готов`, независимое от demand status.
+4. ✅ **A4 — Operational contract.** POS persistent хранит `demandOverload` и публикует `demand.overload: boolean` через существующие revision/outbox/heartbeat/retry механизмы.
+5. ✅ **A5 — Backend cleanup.** Удалены ETA engine version, Kitchen/Bar queue contract, prep catalog и автоматические workload/duration/range calculations. Freshness требует только совместимую operational schema, свежие timestamps и boolean `demand.overload`.
+6. ✅ **A6 — Backend automated regression.** Backend GitHub Actions после cleanup: **25/25, 0 fail, 0 skipped**. Контракт NORMAL/OVERLOAD/UNAVAILABLE и неблокирующий checkout покрыты тестами.
+7. ✅ **A7 — Web contract.** Fresh OFF → `Обычная загрузка`; fresh ON → `Повышенный спрос / Время приготовления заказа увеличено`; stale/missing → `Статус загрузки временно недоступен`. Минуты, Kitchen/Bar и fallback ETA не показываются.
+8. ⬜ **A8 — Physical integration.** На реальном iPad проверить OFF → NORMAL, ON → OVERLOAD, persistence после restart, WEB `Готов`, отсутствие production-кнопок у обычного чека.
+9. ⬜ **A9 — Offline/stale integration.** На реальной цепочке iPad → backend → web подтвердить, что после потери свежего POS state сайт переходит в UNAVAILABLE и не показывает последнее NORMAL/OVERLOAD как актуальное.
+10. ⬜ **A10 — Final mobile visual check.** Проверить карточку статуса в опубликованной мобильной корзине: тексты, переносы, отсутствие старой надписи `Примерное время приготовления` до загрузки JS и отсутствие визуальных следов ETA.
+
+После A8–A10 D13A можно считать полностью принятым на физическом окружении.
+
 ## D13 — [HISTORICAL / SUPERSEDED BY D13A] Production Load Engine, ETA web-заказов и аналитика времени приготовления
 
 **Статус: архитектура согласована; частично заложены поля `prepStation` и `prepDifficulty` и базовый UI текущей нагрузки. Полная система ниже ещё не реализована. Приоритет: высокий для следующего этапа web-order.**
@@ -1218,7 +1237,7 @@ ETA нужен состав производства и статусы, а не 
 
 Контроль P9: аналитическое ядро основано на immutable production history и не изменяет модель автоматически. До накопления достаточной реальной выборки система только измеряет и предлагает безопасные рекомендации.
 
-## Final Regression Plan — обязательный порядок перед production rollout
+## [HISTORICAL] Final Regression Plan старой automatic ETA-модели
 
 Статусы этого плана выставляются только после фактической проверки. Реальный iPad intentionally оставлен на финальный этап; до него выполняются статические, deterministic и backend/integration проверки.
 
@@ -1237,7 +1256,7 @@ ETA нужен состав производства и статусы, а не 
 
 **Обязательный порядок реализации:** P1 → P2 → P3 → P4/P5 → P6 → P7 → P8 → P9 → единый финальный regression/smoke test на физическом iPad и реальном web-клиенте. Backend ETA нельзя считать готовым раньше P7, публичный web UX — раньше P8.
 
-### 30. Acceptance criteria
+### [HISTORICAL] 30. Acceptance criteria automatic ETA
 
 Система не считается завершённой, пока не пройдены сценарии:
 
