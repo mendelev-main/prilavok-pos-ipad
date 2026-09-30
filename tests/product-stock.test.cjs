@@ -660,3 +660,17 @@ test('WEB local write failure never sends confirmation',async()=>{
 test('prepared WEB acceptance recovers persisted parked row on restart without another copy',async()=>{
  const f=webAcceptFixture();const parked={id:'p',webOrderId:'web-1',items:[]};f.state.parked=[parked];await f.c.saveKey('webOrderAcceptances',{'web-1':{stage:'prepared',parked}});await f.c.recoverWebAcceptanceJournal();assert.equal(JSON.parse(f.data.get('prilavok_webOrderAcceptances'))['web-1'].stage,'local');assert.equal(f.state.parked.length,1);
 });
+
+test('production deterministic suite passes against real POS code',()=>{
+ const f=fixture();const result=f.c.__runProductionDeterministicTests();
+ assert.equal(result.ok,true,JSON.stringify(result.suites.filter(x=>!x.ok)));
+ assert.equal(result.passed,result.total);
+ assert.ok(result.total>=15,'expected production regression coverage');
+});
+test('operational deterministic suite restores outbox and revision',()=>{
+ const f=fixture();f.state.operationalRevision=41;f.state.operationalOutbox=[{id:'existing',type:'snapshot',payload:{revision:41},attempts:2,nextAttemptAt:9999}];
+ const before=plain({revision:f.state.operationalRevision,outbox:f.state.operationalOutbox});
+ const result=f.c.__runOperationalChannelTests();
+ assert.equal(result.ok,true,JSON.stringify(result.checks.filter(x=>!x.ok)));
+ assert.deepEqual(plain({revision:f.state.operationalRevision,outbox:f.state.operationalOutbox}),before);
+});
