@@ -57,6 +57,12 @@ test('cash, card and split payments create one receipt and retain payment data',
  }
 });
 
+test('WEB ready action has no retired production gate',()=>{
+ const source=inline;
+ assert.doesNotMatch(source,/currentProductionOrderId/);
+ assert.doesNotMatch(source,/productionOrderById/);
+ assert.doesNotMatch(source,/Сначала завершите приготовление на всех участвующих станциях/);
+});
 test('web order context is cleared after payment and after removing the last cart item',()=>{
  const paid=fixture();paid.state.orderComment='Комментарий с WEB';paid.state.currentOrderSource='web';paid.state.currentWebOrderId='web-1';paid.state.currentWebOrderStatus='accepted';
  paid.sale();assert.equal(paid.state.orderComment,'');assert.equal(paid.state.currentOrderSource,'');assert.equal(paid.state.currentWebOrderId,'');assert.equal(paid.state.currentWebOrderStatus,'');
