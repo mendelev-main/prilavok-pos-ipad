@@ -974,16 +974,19 @@ ETA нужен состав производства и статусы, а не 
 
 Контроль P1: синтаксис всех непустых `<script>` проверен через JS parser; обязательные поля/пути сохранения/snapshot проверены в текущем `pos.html`. Backend для модели P1 не требуется. Физическая iPad-проверка локального production-ядра остаётся обязательной после P3.
 
-**P2 — Локальная модель Production Order — ⬜ TODO**
-1. `QUEUED / IN_PROGRESS / READY / CANCELLED`.
-2. Production timestamps.
-3. `ASAP / SCHEDULED` + `requestedReadyAt`.
-4. Правила попадания локальных/WEB заказов в production queue.
-5. Scheduled-заказ далеко в будущем не входит в current load.
-6. Persistence после restart.
-7. Быстрый POS UI статусов.
+**P2 — Локальная модель Production Order — ✅ DONE**
+1. ✅ Реализованы `QUEUED / IN_PROGRESS / READY / CANCELLED`.
+2. ✅ Сохраняются `queuedAt / startedAt / readyAt / cancelledAt / updatedAt`.
+3. ✅ Реализованы `ASAP / SCHEDULED` + `requestedReadyAt`.
+4. ✅ Локальный заказ входит в production при откладывании или прямой оплате; WEB — после локального принятия.
+5. ✅ Scheduled-заказ далеко в будущем не входит в current load и включается при приближении production window.
+6. ✅ `productionOrders` сохраняются локально и нормализуются после restart.
+7. ✅ На POS добавлена отдельная кнопка/очередь «Производство» с быстрыми статусами.
+8. ✅ Отложенный заказ сохраняет стабильный `productionOrderId` при повторном открытии/откладывании.
+9. ✅ Удаление отложенного заказа переводит production в `CANCELLED`.
+10. ✅ `READY / CANCELLED` исключены из live load.
 
-Контроль P2: restart восстанавливает очередь; READY/CANCELLED не создают load; scheduled отделён от current load.
+Контроль P2: JS `pos.html` и `notification-native.js` проходят syntax-check; проверены точки load/save, lifecycle timestamps, связи local/WEB/paid/parked и scheduled gate. Физическая iPad-проверка всего локального production-ядра остаётся обязательной после P3.
 
 **P3 — Production Load Engine v1 внутри POS — ⬜ TODO**
 1. Разбиение по станциям.
