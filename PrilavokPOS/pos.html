@@ -1010,10 +1010,12 @@ async function saveKey(key, value){
   catch(e){ markStorageBroken(e); }
 }
 async function loadAll(){
+  window.__posStartupStage='storage-check';
   if(!hasCloudStorage && !testLocalStorage()){
     markStorageBroken('localStorage test write failed');
   }
   storageCheckedOnce = true;
+  window.__posStartupStage='storage-read';
   const [products, shifts, employees, orders, parked, demandOverload, operationalOutbox, operationalRevision, receivings, suppliers, purchaseOrders, discounts, layout, printer, theme, company, deliveryRates, telegram, network, currentOrderSession, hallTables, bookings, webEvents, posNavigation, inventoryConfig, inventoryHistory, inventoryDraft] = await Promise.all([
     loadKey('products', null),
     loadKey('shifts', []),
@@ -1043,6 +1045,7 @@ async function loadAll(){
     loadKey('inventoryHistory', []),
     loadKey('inventoryDraft', null)
   ]);
+  window.__posStartupStage='normalize';
   state.products = Array.isArray(products) ? products.filter(p=>p && typeof p==='object') : (products === null ? seedProducts() : []);
   state.shifts = Array.isArray(shifts) ? shifts : [];
   state.employees = Array.isArray(employees) ? employees : [];
@@ -1089,6 +1092,7 @@ async function loadAll(){
   if(!state.bookingDate) state.bookingDate = localDateString(new Date());
   if(!state.hallTables.length) saveKey('hallTables', state.hallTables);
 
+  window.__posStartupStage='restore-session';
   // Восстанавливаем незавершённый текущий заказ после перезапуска приложения.
   // Сохраняются позиции, количество, комментарии/скидки и параметры заказа.
   if(currentOrderSession && Array.isArray(currentOrderSession.items)){
@@ -1108,6 +1112,7 @@ async function loadAll(){
   state.theme = theme === 'dark' ? 'dark' : 'light';
   applyTheme();
 
+  window.__posStartupStage='normalize-products';
   // Валюта приложения: белорусский рубль. Старые данные сохраняются без пересчёта сумм.
   state.currency = 'Br';
 
@@ -1135,8 +1140,10 @@ async function loadAll(){
 
   // First paint must never wait for network-backed WEB acceptance recovery.
   // Open the local POS immediately; recovery continues best-effort in background.
+  window.__posStartupStage='first-render';
   state.loaded = true;
   render();
+  window.__posStartupStage='background-services';
   startWebOrderEvents();
   startAvailabilitySchedule();
   queueOperationalHeartbeat();
@@ -6044,7 +6051,7 @@ if(document.getElementById('app')){
   loadAll().catch(function(e){
     console.error('M POS startup:',e);
     const app=document.getElementById('app');
-    if(app) app.innerHTML='<div class="center-note" style="margin:auto;padding:32px;text-align:center;">Не удалось загрузить данные M POS.<br><small>'+escapeHtml(e?.message||'Ошибка запуска')+'</small></div>';
+    if(app) app.innerHTML='<div class="center-note" style="margin:auto;padding:32px;text-align:center;">Не удалось загрузить данные M POS.<br><small>'+escapeHtml((window.__posStartupStage||'startup')+': '+(e?.message||String(e)||'Ошибка запуска'))+'</small></div>';
   });
 }
 </script>
