@@ -1754,6 +1754,82 @@ function exportWarehousePDF(documentsOnly=false){
   }catch(e){flash(e.message);}
 }
 
+/* ============================= PRODUCTION LOAD ENGINE V1 ============================= */
+const PRODUCTION_ENGINE_VERSION=1;
+const PRODUCTION_STATIONS=['bar','kitchen'];
+function productionDifficultyMultiplier(value){
+  const d=Math.max(1,Math.min(5,Number(value)||1));
+  return [0,0.80,0.95,1.10,1.30,1.55][d];
+}
+function productionBatchFactor(qty){
+  const q=Math.max(0,Number(qty)||0);
+  if(q<=1)return q;
+  return 1+(q-1)*0.72;
+}
+function productionPrepEntries(items){
+  const entries=[];
+  for(const item of (items||[])){
+    const qty=Math.max(0,Number(item.qty)||0),prep=item.prep||productPrepSnapshot(getProduct(item.productId));
+    if(prep.station!=='none'&&qty>0)entries.push({station:prep.station==='bar'?'bar':'kitchen',qty,minutes:Math.max(1,Number(prep.basePrepMinutes)||1),difficulty:Math.max(1,Math.min(5,Number(prep.difficulty)||1))});
+    for(const mod of (item.selectedModifiers||[])){
+      const mp=mod.prep||productPrepSnapshot(getProduct(mod.productId)),mq=qty*Math.max(0,Number(mod.qty)||0);
+      if(mp.station!=='none'&&mq>0)entries.push({station:mp.station==='bar'?'bar':'kitchen',qty:mq,minutes:Math.max(1,Number(mp.basePrepMinutes)||1),difficulty:Math.max(1,Math.min(5,Number(mp.difficulty)||1))});
+    }
+  }
+  return entries;
+}
+function productionStationWork(items){
+  const result={bar:{station:'bar',workPoints:0,durationMinutes:0,qty:0},kitchen:{station:'kitchen',workPoints:0,durationMinutes:0,qty:0}};
+  for(const e of productionPrepEntries(items)){
+    const batch=productionBatchFactor(e.qty),difficulty=productionDifficultyMultiplier(e.difficulty),work=e.qty*e.difficulty,duration=e.minutes*batch*difficulty;
+    const row=result[e.station];row.workPoints+=work;row.durationMinutes+=duration;row.qty+=e.qty;
+  }
+  for(const row of Object.values(result)){row.workPoints=Math.round(row.workPoints*100)/100;row.durationMinutes=Math.round(row.durationMinutes*100)/100;row.qty=Math.round(row.qty*100)/100;}
+  return result;
+}
+function productionLoadLevel(waitMinutes){
+  const n=Math.max(0,Number(waitMinutes)||0);
+  if(n>=30)return 'HIGH';
+  if(n>=15)return 'ELEVATED';
+  return 'NORMAL';
+}
+function productionOrderReservationStart(order,work){
+  if(order?.mode!=='SCHEDULED'||!order.requestedReadyAt)return null;
+  const maxDuration=Math.max(...PRODUCTION_STATIONS.map(s=>Number(work[s]?.durationMinutes)||0),0);
+  return Number(order.requestedReadyAt)-maxDuration*60000;
+}
+function calculateProductionLoad(options={}){
+  const now=Number(options.now)||Date.now(),orders=Array.isArray(options.orders)?options.orders:state.productionOrders||[],hypotheticalItems=Array.isArray(options.hypotheticalItems)?options.hypotheticalItems:[];
+  const timelines={bar:{station:'bar',cursorAt:now,currentMinutes:0,reservations:[],workPoints:0},kitchen:{station:'kitchen',cursorAt:now,currentMinutes:0,reservations:[],workPoints:0}};
+  const active=orders.filter(o=>o&&o.status!=='READY'&&o.status!=='CANCELLED').map(o=>({order:o,work:productionStationWork(o.items||[])}));
+  const current=[],future=[];
+  for(const entry of active){
+    const start=productionOrderReservationStart(entry.order,entry.work);
+    (start!==null&&start>now?future:current).push({...entry,reservationStart:start});
+  }
+  current.sort((a,b)=>(a.order.startedAt||a.order.queuedAt||a.order.createdAt||0)-(b.order.startedAt||b.order.queuedAt||b.order.createdAt||0));
+  for(const entry of current)for(const station of PRODUCTION_STATIONS){
+    const work=entry.work[station];if(!work.durationMinutes)continue;
+    const tl=timelines[station],start=tl.cursorAt,end=start+work.durationMinutes*60000;tl.cursorAt=end;tl.currentMinutes+=(end-start)/60000;tl.workPoints+=work.workPoints;
+  }
+  future.sort((a,b)=>a.reservationStart-b.reservationStart);
+  for(const entry of future)for(const station of PRODUCTION_STATIONS){
+    const work=entry.work[station];if(!work.durationMinutes)continue;
+    const tl=timelines[station],start=Math.max(entry.reservationStart,tl.cursorAt),end=start+work.durationMinutes*60000;tl.reservations.push({orderId:entry.order.id,startAt:start,endAt:end,durationMinutes:work.durationMinutes});tl.cursorAt=Math.max(tl.cursorAt,end);
+  }
+  const cartWork=productionStationWork(hypotheticalItems),cartStations=PRODUCTION_STATIONS.filter(s=>cartWork[s].durationMinutes>0),stationEstimates={};
+  for(const station of PRODUCTION_STATIONS){
+    const tl=timelines[station],work=cartWork[station],waitMinutes=Math.max(0,(tl.cursorAt-now)/60000),completionMinutes=waitMinutes+work.durationMinutes;
+    stationEstimates[station]={station,waitMinutes:Math.round(waitMinutes*100)/100,cartDurationMinutes:work.durationMinutes,completionMinutes:Math.round(completionMinutes*100)/100,workPoints:Math.round(tl.workPoints*100)/100,level:productionLoadLevel(waitMinutes),futureReservations:tl.reservations.length};
+  }
+  const criticalStation=cartStations.length?cartStations.slice().sort((a,b)=>stationEstimates[b].completionMinutes-stationEstimates[a].completionMinutes)[0]:null;
+  const criticalMinutes=criticalStation?stationEstimates[criticalStation].completionMinutes:0;
+  const delayingStations=cartStations.filter(s=>stationEstimates[s].waitMinutes>0&&stationEstimates[s].completionMinutes>=criticalMinutes-3);
+  const loadedStations=delayingStations.filter(s=>stationEstimates[s].level!=='NORMAL');
+  return {version:PRODUCTION_ENGINE_VERSION,calculatedAt:now,stations:stationEstimates,cartStations,criticalStation,delayingStations,loadedStations,level:loadedStations.some(s=>stationEstimates[s].level==='HIGH')?'HIGH':loadedStations.length?'ELEVATED':'NORMAL',estimatedMinutes:Math.round(criticalMinutes*100)/100};
+}
+function estimateCurrentCartProduction(now=Date.now()){return calculateProductionLoad({now,hypotheticalItems:state.cart||[]});}
+
 function preparationLoadData(){
   const productionActive=(state.productionOrders||[]).filter(o=>productionCountsAsCurrentLoad(o));
   const orders=productionActive.length?productionActive.map(o=>({items:o.items||[],source:o.sourceType||'production'})):[];
