@@ -1073,17 +1073,18 @@ ETA нужен состав производства и статусы, а не 
 
 Контроль P8: код показывает сообщение только по `loadedStations` текущей корзины; kitchen-only никогда не получает bar warning и наоборот, mixed order называет фактическую задерживающую станцию/станции.
 
-**P9 — Аналитика и калибровка — ⬜ TODO**
-1. Median/P75/P90.
-2. Товар/станция/сложность/размер заказа.
-3. Load buckets.
-4. Predicted vs actual.
-5. Попадание в ETA range.
-6. Рекомендации по `basePrepMinutes`.
-7. Ручное подтверждение корректировок.
-8. Только после достаточной выборки — controlled automatic adaptation.
+**P9 — Аналитика и калибровка — 🟡 ANALYTICS CORE DONE / UI + REAL SAMPLE VALIDATION PENDING**
+1. ✅ Median/P75/P90 рассчитываются детерминированно по фактической production history.
+2. ✅ Добавлены разрезы по station, difficulty, размеру заказа (SMALL/MEDIUM/LARGE).
+3. ✅ Добавлены load buckets NORMAL/ELEVATED/HIGH по сохранённому prediction context.
+4. ✅ Predicted vs actual разделён корректно: ETA accuracy = predicted ready timestamp vs actual `readyAt`; preparation calibration = actual preparation vs normative duration. Queue/scheduled waiting не смешивается с preparation duration.
+5. 🟡 Поддержка попадания в ETA range предусмотрена аналитикой; для новых prediction snapshots нужно накопить реальные range observations после P7/P8 integration.
+6. ✅ Рекомендации по `basePrepMinutes` создаются только после ≥10 изолированных наблюдений одного товара qty=1 и отклонения median ≥15%; mixed/batch duration не приписывается одному товару.
+7. ✅ Любая рекомендация помечена `requiresManualConfirmation=true`; автоматического изменения карточки товара нет.
+8. ✅ Controlled automatic adaptation явно выключена (`automaticAdaptationEnabled=false`) до достаточной реальной выборки и отдельного решения/версии алгоритма.
+9. ⬜ Административный UI просмотра аналитики/подтверждения рекомендации и валидация на реальной накопленной выборке остаются перед production calibration rollout.
 
-Контроль P9: изменения модели основаны на измеряемой истории.
+Контроль P9: аналитическое ядро основано на immutable production history и не изменяет модель автоматически. До накопления достаточной реальной выборки система только измеряет и предлагает безопасные рекомендации.
 
 **Обязательный порядок реализации:** P1 → P2 → P3 → P4/P5 → P6 → P7 → P8 → P9 → единый финальный regression/smoke test на физическом iPad и реальном web-клиенте. Backend ETA нельзя считать готовым раньше P7, публичный web UX — раньше P8.
 
