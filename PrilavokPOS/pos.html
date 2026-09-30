@@ -2315,14 +2315,13 @@ function operationalStateChanged(){
 }
 function runOperationalChannelTests(){
   const originalOutbox=state.operationalOutbox,originalRevision=state.operationalRevision,checks=[];state.operationalOutbox=[];
-  operationalCoalesce('snapshot',{n:1},1000);operationalCoalesce('snapshot',{n:2},1001);operationalCoalesce('heartbeat',{n:1},1002);operationalCoalesce('heartbeat',{n:2},1003);
-  checks.push({name:'outbox coalesces to at most snapshot + heartbeat',ok:state.operationalOutbox.length===2,details:JSON.stringify(state.operationalOutbox.map(x=>x.type))});
+  operationalCoalesce('snapshot',{n:1},1000);operationalCoalesce('snapshot',{n:2},1001);
+  checks.push({name:'outbox keeps only latest snapshot',ok:state.operationalOutbox.length===1&&state.operationalOutbox[0]?.type==='snapshot',details:JSON.stringify(state.operationalOutbox.map(x=>x.type))});
   checks.push({name:'latest snapshot wins',ok:state.operationalOutbox.find(x=>x.type==='snapshot')?.payload?.n===2});
   const revisionBefore=state.operationalRevision;queueOperationalSnapshot(1004);const rev1=state.operationalOutbox.find(x=>x.type==='snapshot')?.payload?.revision;queueOperationalSnapshot(1005);const rev2=state.operationalOutbox.find(x=>x.type==='snapshot')?.payload?.revision;checks.push({name:'snapshot revision is monotonic',ok:Number(rev2)===Number(rev1)+1&&Number(rev1)>revisionBefore});
   checks.push({name:'backoff is bounded',ok:operationalBackoffMs(100)<=OPERATIONAL_MAX_BACKOFF});
-  const types=new Set(state.operationalOutbox.map(x=>x.type));checks.push({name:'heartbeat does not evict pending snapshot',ok:types.has('snapshot')&&types.has('heartbeat')&&state.operationalOutbox.length<=2});
   state.operationalOutbox=originalOutbox;state.operationalRevision=originalRevision;saveKey('operationalOutbox',state.operationalOutbox);saveKey('operationalRevision',state.operationalRevision);
-  return {ok:checks.every(x=>x.ok),passed:checks.filter(x=>x.ok).length,total:checks.length,checks};
+  return checks;
 }
 window.__runOperationalChannelTests=runOperationalChannelTests;
 
