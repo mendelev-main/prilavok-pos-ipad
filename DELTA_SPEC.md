@@ -1041,21 +1041,21 @@ ETA нужен состав производства и статусы, а не 
 
 Контроль P6: логика reconnect/idempotency/ACK реализована; перед полным `✅ DONE` остаётся integration regression с реальным backend/iPad.
 
-**P7 — Backend ETA v1 — 🟡 IN PROGRESS**
-1. ✅ Добавлен публичный `POST /api/eta/estimate`; endpoint принимает только состав корзины, без PII/платёжных данных.
-2. ✅ Freshness gate проверяет server heartbeat age, snapshot received age, POS sampledAt/clock skew, operational schema и engine version.
-3. ✅ Hypothetical cart строится backend по web productId → manual-sync externalId → prep catalog из свежего POS operational snapshot. При отсутствии prep-конфигурации ETA недоступен, fallback запрещён.
-4. ✅ Бар/Кухня считаются независимыми station timelines; current wait берётся только из свежего POS snapshot, future scheduled reservations учитываются как интервалы.
+**P7 — Backend ETA v1 — 🟡 IMPLEMENTATION DONE / MIGRATION + INTEGRATION TEST PENDING**
+1. ✅ Публичный `POST /api/eta/estimate` принимает только состав корзины и optional `requestedReadyAt`, без PII/платёжных данных.
+2. ✅ Freshness gate проверяет heartbeat age, snapshot sampled/received age, clock skew, operational schema, engine version и prepCatalog version.
+3. ✅ Hypothetical cart строится backend по web product UUID → manual-sync `external_id` → prep catalog свежего POS snapshot; отсутствие prep fail-closed.
+4. ✅ Бар/Кухня считаются независимыми station timelines; current wait берётся только из свежего snapshot, future scheduled reservations учитываются интервалами.
 5. ✅ Итог определяется через `criticalStation`.
-6. ✅ Рассчитываются `delayingStations`; существенность v1 централизована в ETA policy constant.
-7. ✅ Customer load NORMAL/ELEVATED/HIGH вычисляется только для станций текущей корзины; публичный `loadedStations` не содержит посторонних станций.
-8. ✅ Точечный прогноз преобразуется в пользовательский диапазон 10–15 / 15–20 / 20–30 / 30–40 / 40–50 / 50–60 / 60+ с safety buffer.
-9. ✅ stale/missing/incompatible/ambiguous POS state → `available=false`, без load state и минут.
-10. ✅ Никакого fallback ETA: ошибка engine/backend и отсутствующая prep-конфигурация возвращают нейтральный unavailable-контракт.
-11. ✅ Operational snapshot расширен минимальным versioned `prepCatalog`; это часть operational ETA channel и не запускает/не заменяет manual catalog sync.
-12. ⬜ Добавить отдельный deterministic backend test suite для range/freshness/station isolation/mixed/scheduled и завершить контракт `requestedReadyAt`.
+6. ✅ Рассчитываются `delayingStations`; существенность v1 централизована policy constant.
+7. ✅ NORMAL/ELEVATED/HIGH и публичный `loadedStations` относятся только к участвующим станциям, реально увеличивающим ожидание.
+8. ✅ Точечный прогноз преобразуется в пользовательский min/max range с safety buffer.
+9. ✅ stale/missing/incompatible/ambiguous POS state → `available=false`, без старых минут/load state.
+10. ✅ Fallback ETA отсутствует: engine/backend/prep incompatibility возвращает нейтральный unavailable contract.
+11. ✅ `requestedReadyAt` поддержан: hypothetical scheduled cart начинает production не раньше требуемого окна и учитывает конфликтующие reservations.
+12. ✅ Backend workload синхронизирован с P3: difficulty влияет на workload, но не duration. Добавлен deterministic ETA suite и `npm test`.
 
-Контроль P7: основной ASAP ETA pipeline реализован; P7 не помечается DONE до deterministic backend tests и scheduled/requestedReadyAt контракта. Без свежего POS backend принципиально не выдаёт минуты.
+Контроль P7: реализация завершена на уровне кода. Для полного `✅ DONE` остаются применение operational migration и integration test с реальным Supabase/Railway state; без свежего POS backend принципиально не выдаёт минуты.
 
 **P8 — Web UX — ⬜ TODO**
 - NORMAL → только диапазон.
