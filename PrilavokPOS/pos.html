@@ -1156,7 +1156,6 @@ async function loadAll(){
   render();
   startWebOrderEvents();
   startAvailabilitySchedule();
-  queueOperationalHeartbeat();
   queueOperationalSnapshot();
   void flushOperationalOutbox();
   startOperationalSchedule();
@@ -2248,7 +2247,7 @@ async function testBackendConnection(){
   }
 }
 /* ============================= OPERATIONAL CHANNEL V1 ============================= */
-const OPERATIONAL_SCHEMA_VERSION=1,OPERATIONAL_INTERVAL=15000,OPERATIONAL_TIMEOUT=2500,OPERATIONAL_MAX_BACKOFF=60000;
+const OPERATIONAL_SCHEMA_VERSION=1,OPERATIONAL_TIMEOUT=2500,OPERATIONAL_MAX_BACKOFF=60000;
 let operationalTimer=null,operationalBusy=false,operationalFailures=0,operationalListening=false,operationalController=null;
 function buildOperationalSnapshot(now=Date.now()){
   return {schemaVersion:OPERATIONAL_SCHEMA_VERSION,sampledAt:new Date(now).toISOString(),device:{key:state.network?.deviceKey||'',name:state.network?.deviceName||'M POS iPad'},demand:{overload:state.demandOverload===true}};
@@ -2269,13 +2268,12 @@ function operationalCoalesce(type,payload,now=Date.now()){
   saveKey('operationalOutbox',state.operationalOutbox);return item;
 }
 function queueOperationalSnapshot(now=Date.now()){state.operationalRevision=Math.max(0,Number(state.operationalRevision)||0)+1;saveKey('operationalRevision',state.operationalRevision);const payload=buildOperationalSnapshot(now);payload.revision=state.operationalRevision;return operationalCoalesce('snapshot',payload,now);}
-function queueOperationalHeartbeat(now=Date.now()){return operationalCoalesce('heartbeat',{schemaVersion:OPERATIONAL_SCHEMA_VERSION,sampledAt:new Date(now).toISOString(),device:{key:state.network?.deviceKey||'',name:state.network?.deviceName||'M POS iPad'}},now);}
 function operationalBackoffMs(attempts){return Math.min(OPERATIONAL_MAX_BACKOFF,Math.max(1000,1000*Math.pow(2,Math.min(6,Math.max(0,Number(attempts)||0)))));}
 async function sendOperationalItem(item){
   const n=networkConfigFromState();if(!n.backendUrl||!n.deviceKey)return false;
   operationalController=new AbortController();const timeout=setTimeout(()=>operationalController?.abort(),OPERATIONAL_TIMEOUT);
   try{
-    const endpoint=item.type==='heartbeat'?'/api/operational/heartbeat':'/api/operational/snapshot';
+    const endpoint='/api/operational/snapshot';
     const r=await fetch(n.backendUrl.replace(/\/+$/,'')+endpoint,{method:'POST',headers:{'Content-Type':'application/json','X-Device-Key':n.deviceKey},body:JSON.stringify(item.payload),cache:'no-store',signal:operationalController.signal});
     if(!r.ok)throw new Error('HTTP '+r.status);return true;
   }finally{clearTimeout(timeout);operationalController=null;}
@@ -2301,20 +2299,14 @@ async function flushOperationalOutbox(){
     return sentAny;
   }finally{operationalBusy=false;}
 }
-async function operationalTick(){
-  if(document.hidden||window._availabilityAppActive===false||!state.loaded)return;
-  queueOperationalHeartbeat();queueOperationalSnapshot();await flushOperationalOutbox();
-}
 function operationalReconnect(){
   if(!state.loaded||document.hidden||window._availabilityAppActive===false)return;
-  operationalFailures=0;void recoverWebAcceptanceJournal();queueOperationalHeartbeat();queueOperationalSnapshot();void flushOperationalOutbox();startOperationalSchedule();
+  operationalFailures=0;void recoverWebAcceptanceJournal();
+  if((state.operationalOutbox||[]).some(x=>x.type==='snapshot'))void flushOperationalOutbox();
 }
 function startOperationalSchedule(){
   clearTimeout(operationalTimer);operationalTimer=null;
-  if(!operationalListening){document.addEventListener('visibilitychange',()=>{if(document.hidden){clearTimeout(operationalTimer);operationalTimer=null;operationalController?.abort();}else operationalReconnect();});window.addEventListener('online',operationalReconnect);operationalListening=true;}
-  if(document.hidden||window._availabilityAppActive===false)return;
-  const delay=operationalFailures?operationalBackoffMs(operationalFailures):OPERATIONAL_INTERVAL;
-  operationalTimer=setTimeout(async()=>{await operationalTick();startOperationalSchedule();},delay);
+  if(!operationalListening){document.addEventListener('visibilitychange',()=>{if(document.hidden){operationalController?.abort();}else operationalReconnect();});window.addEventListener('online',operationalReconnect);operationalListening=true;}
 }
 function operationalStateChanged(){
   if(!state.loaded)return;
