@@ -95,6 +95,30 @@
     box-shadow:0 1px 2px rgba(49,85,143,.08);
   }
   :root[data-theme='dark'] .park-btn{background:#26334A;border-color:#3C506F;color:#BFD5FF;}
+  .demand-btn{
+    border-color:rgba(52,199,89,.48);
+    box-shadow:0 0 0 1px rgba(52,199,89,.10),0 0 10px rgba(52,199,89,.18);
+  }
+  .demand-btn.active{
+    background:rgba(255,59,48,.10);
+    border-color:#FF453A;
+    color:#B42318;
+    animation:demand-neon-pulse 1.65s ease-in-out infinite;
+  }
+  :root[data-theme='dark'] .demand-btn{
+    border-color:rgba(48,209,88,.42);
+    box-shadow:0 0 0 1px rgba(48,209,88,.08),0 0 11px rgba(48,209,88,.16);
+  }
+  :root[data-theme='dark'] .demand-btn.active{
+    background:rgba(255,69,58,.12);
+    border-color:#FF453A;
+    color:#FF9B95;
+  }
+  @keyframes demand-neon-pulse{
+    0%,100%{box-shadow:0 0 0 1px rgba(255,69,58,.30),0 0 7px rgba(255,59,48,.30),inset 0 0 4px rgba(255,69,58,.08);}
+    50%{box-shadow:0 0 0 2px rgba(255,69,58,.88),0 0 17px rgba(255,59,48,.72),0 0 28px rgba(255,59,48,.30),inset 0 0 8px rgba(255,69,58,.16);}
+  }
+  @media (prefers-reduced-motion:reduce){.demand-btn.active{animation:none;box-shadow:0 0 0 2px rgba(255,69,58,.72),0 0 14px rgba(255,59,48,.48);}}
   .zone-title-btn{
     background:#F0E9FF;border:1px solid #D7C8F5;color:#5E4691;border-radius:var(--radius-m);
     padding:11px 16px;font-weight:800;font-size:14.5px;display:flex;align-items:center;gap:8px;
@@ -3870,7 +3894,7 @@ function renderPosScreen(shift){
         </div>
         <div class="pos-actions-left">
           <button class="park-btn ${editing?'chip active':''}" onclick="toggleEditMode()" title="Настроить рабочую зону">${editing?'✓ Готово':'✎ Раскладка'}</button>
-          <button class="park-btn ${state.demandOverload?'active':''}" onclick="setDemandOverload(!state.demandOverload)" ${editing?'disabled':''} title="Сообщить гостям о повышенном спросе">${state.demandOverload?'Повышенный спрос':'Обычная загрузка'}</button>
+          <button class="park-btn demand-btn ${state.demandOverload?'active':''}" onclick="setDemandOverload(!state.demandOverload)" ${editing?'disabled':''} title="Сообщить гостям о повышенном спросе">${state.demandOverload?'Повышенный спрос':'Обычная загрузка'}</button>
           <button class="park-btn" onclick="openParkedModal()" ${editing?'disabled':''}>Отложенные ${parkCount?`<span class="park-badge">${parkCount}</span>`:''}</button>
         </div>
       </div>
