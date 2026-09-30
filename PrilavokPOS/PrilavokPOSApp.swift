@@ -177,7 +177,10 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
             webView.loadHTMLString("<html><body style='font-family:-apple-system;text-align:center;padding:40px'><h2>Ошибка</h2><p>\(message)</p></body></html>", baseURL: nil)
             return
         }
-        webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
+        // Give WebKit one stable read scope for the complete application bundle.
+        // pos.html loads sibling JS plus Web/js/* resources; allowing only the HTML
+        // parent has produced sandbox-extension failures on physical iPad builds.
+        webView.loadFileURL(url, allowingReadAccessTo: Bundle.main.bundleURL)
         armStartupWatchdog()
     }
 
