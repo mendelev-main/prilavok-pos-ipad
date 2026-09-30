@@ -1752,9 +1752,16 @@ function preparationLoadData(){
   }
   const stations={bar:{key:'bar',name:'Бар',points:0,qty:0,lines:0},kitchen:{key:'kitchen',name:'Кухня',points:0,qty:0,lines:0}};
   for(const order of orders)for(const item of (order.items||[])){
-    const p=getProduct(item.productId);if(!p)continue;
-    const station=p.prepStation==='bar'?'bar':'kitchen',qty=Math.max(0,Number(item.qty)||0),difficulty=Math.max(1,Math.min(5,Number(p.prepDifficulty)||1));
-    stations[station].points+=qty*difficulty;stations[station].qty+=qty;stations[station].lines++;
+    const p=getProduct(item.productId),prep=item.prep||productPrepSnapshot(p),qty=Math.max(0,Number(item.qty)||0);
+    if(prep.station!=='none'){
+      const station=prep.station==='bar'?'bar':'kitchen',difficulty=Math.max(1,Math.min(5,Number(prep.difficulty)||1));
+      stations[station].points+=qty*difficulty;stations[station].qty+=qty;stations[station].lines++;
+    }
+    for(const m of (item.selectedModifiers||[])){
+      const mp=m.prep||productPrepSnapshot(getProduct(m.productId));if(mp.station==='none')continue;
+      const station=mp.station==='bar'?'bar':'kitchen',modifierQty=qty*Math.max(0,Number(m.qty)||0),difficulty=Math.max(1,Math.min(5,Number(mp.difficulty)||1));
+      stations[station].points+=modifierQty*difficulty;stations[station].qty+=modifierQty;stations[station].lines++;
+    }
   }
   return {orders:orders.length,stations:[stations.bar,stations.kitchen]};
 }
