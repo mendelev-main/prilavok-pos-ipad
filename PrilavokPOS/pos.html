@@ -270,10 +270,14 @@
   .cart-row{position:relative;padding:0;border-bottom:1px solid var(--border);touch-action:pan-y;background:var(--surface);overflow:hidden;}
   .cart-row-swipe-bg{position:absolute;inset:0;display:flex;align-items:center;justify-content:flex-end;background:linear-gradient(90deg,#E45858,#D62F3D);color:#fff;pointer-events:none;z-index:0;overflow:hidden;opacity:0;transition:opacity .08s linear;}
   .cart-row.swiping .cart-row-swipe-bg,.cart-row.swipe-ready .cart-row-swipe-bg,.cart-row.swipe-delete .cart-row-swipe-bg{opacity:1;}
-  @keyframes cartItemAdded{0%{transform:translateY(-5px) scale(.985);opacity:.45;background:color-mix(in srgb,var(--accent) 12%,var(--surface));}55%{transform:translateY(0) scale(1.01);opacity:1;}100%{transform:none;background:var(--surface);}}
-  @keyframes cartItemUpdated{0%,100%{transform:scale(1);}45%{transform:scale(1.018);background:color-mix(in srgb,var(--accent) 10%,var(--surface));}}
-  .cart-row.cart-item-added .cart-row-content{animation:cartItemAdded .34s cubic-bezier(.2,.8,.2,1);}
-  .cart-row.cart-item-updated .cart-row-content{animation:cartItemUpdated .28s ease-out;}
+  .cart-add-feedback{display:inline-flex;align-items:center;gap:5px;max-width:0;opacity:0;overflow:hidden;white-space:nowrap;color:var(--accent);font-size:12px;font-weight:800;transform:translateX(6px);transition:max-width .22s ease,opacity .18s ease,transform .22s cubic-bezier(.2,.8,.2,1);}
+  .cart-add-feedback.show{max-width:110px;opacity:1;transform:translateX(0);}
+  .cart-add-feedback::before{content:'✓';display:grid;place-items:center;width:17px;height:17px;border-radius:50%;background:var(--accent);color:#fff;font-size:11px;flex:none;}
+  .cart-row-content.cart-item-added{animation:cartItemAdded .30s cubic-bezier(.2,.8,.2,1);}
+  .cart-row-content.cart-item-updated{animation:cartItemUpdated .24s cubic-bezier(.2,.8,.2,1);}
+  @keyframes cartItemAdded{0%{transform:translateY(6px);opacity:.25;}100%{transform:translateY(0);opacity:1;}}
+  @keyframes cartItemUpdated{0%{transform:scale(1);}48%{transform:scale(.985);}100%{transform:scale(1);}}
+  @media (prefers-reduced-motion:reduce){.cart-add-feedback,.cart-row-content.cart-item-added,.cart-row-content.cart-item-updated{transition:none!important;animation:none!important;}}
   .cart-swipe-delete-action{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;width:86px;height:100%;transform:scale(.78);opacity:.18;transition:transform .16s ease,opacity .16s ease;}
   .cart-swipe-delete-action svg{width:26px;height:26px;display:block;}
   .cart-swipe-delete-action span{font-size:11px;font-weight:800;line-height:1;}
@@ -1302,6 +1306,7 @@ function shiftTotals(shiftId){
 
 /* ============================= RENDER ROOT ============================= */
 function render(){
+  const cartScrollBefore=document.querySelector('.cart-items')?.scrollTop;
   clearCompositeCostCache();
   if(!state.loaded){
     document.getElementById('app').innerHTML = `<div class="center-note" style="margin:auto;">Загрузка…</div>`;
@@ -1327,14 +1332,24 @@ function render(){
     </div>
   `;
   if(state.tab==='pos'){
+    const cartScroller=document.querySelector('.cart-items');
+    if(cartScroller&&Number.isFinite(cartScrollBefore))cartScroller.scrollTop=cartScrollBefore;
     if(window.__cartAnimation){
       const animation=window.__cartAnimation;window.__cartAnimation=null;
       requestAnimationFrame(()=>{
         const row=[...document.querySelectorAll('.cart-row')].find(x=>x.dataset.cartId===String(animation.id));
-        if(row){
-          row.classList.add(animation.className);
-          row.scrollIntoView({block:'nearest',behavior:'smooth'});
-          setTimeout(()=>row.classList.remove(animation.className),420);
+        const scroller=document.querySelector('.cart-items');
+        const content=row?.querySelector('.cart-row-content');
+        const visible=!!(row&&scroller&&row.getBoundingClientRect().bottom>scroller.getBoundingClientRect().top&&row.getBoundingClientRect().top<scroller.getBoundingClientRect().bottom);
+        if(content&&visible){
+          content.classList.add(animation.className);
+          setTimeout(()=>content.classList.remove(animation.className),340);
+        }
+        const feedback=document.getElementById('cart-add-feedback');
+        if(feedback){
+          feedback.classList.add('show');
+          clearTimeout(window.__cartFeedbackTimer);
+          window.__cartFeedbackTimer=setTimeout(()=>feedback.classList.remove('show'),650);
         }
       });
     }
@@ -3225,7 +3240,7 @@ function renderCartPanel(shift){
   const hasItems = state.cart.length>0;
   return `
   <div class="cart-panel">
-    <div class="cart-head">Текущий заказ <span>${state.cart.reduce((s,i)=>s+i.qty,0)} поз.</span></div>
+    <div class="cart-head"><span style="font:inherit;color:inherit;">Текущий заказ</span><div style="display:flex;align-items:center;gap:8px;"><span id="cart-add-feedback" class="cart-add-feedback">Добавлено</span><span>${state.cart.reduce((s,i)=>s+i.qty,0)} поз.</span></div></div>
     <div class="order-meta">
       <button class="order-type-btn" onclick="openOrderSettings()">${state.orderLabel?'<b>'+escapeHtml(state.orderLabel)+'</b> · ':''}${escapeHtml(state.orderType)}${state.customer.name||state.customer.phone?' · '+escapeHtml(state.customer.name||state.customer.phone):''}</button>
       ${state.orderComment?`<div class="cart-row-sub" style="color:var(--text);margin-top:6px;">💬 ${escapeHtml(state.orderComment)}</div>`:''}
