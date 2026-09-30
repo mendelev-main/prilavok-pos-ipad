@@ -2326,7 +2326,9 @@ async function markCurrentWebOrderReady(){
   try{
     const r=await fetch(n.backendUrl.replace(/\/+$/,'')+'/api/orders/'+encodeURIComponent(id)+'/ready',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Key':n.deviceKey},body:'{}',cache:'no-store'});
     const d=await r.json().catch(()=>null); if(!r.ok)throw new Error(d?.error||('HTTP '+r.status));
-    state.currentWebOrderStatus='ready';if(state.currentProductionOrderId)updateProductionStatus(state.currentProductionOrderId,'READY'); saveCurrentOrderSession(); render(); flash('Веб-заказ отмечен как готовый');
+    const production=state.currentProductionOrderId?productionOrderById(state.currentProductionOrderId):null;
+    if(production&&production.status!=='READY')throw new Error('Сначала завершите приготовление на всех участвующих станциях');
+    state.currentWebOrderStatus='ready';saveCurrentOrderSession();render();flash('Веб-заказ отмечен как готовый');
   }catch(e){flash('Не удалось отметить заказ готовым: '+(e?.message||'Ошибка сети'));}
 }
 
@@ -3865,15 +3867,14 @@ function ensureProductionHistoryRecord(order){
   state.productionHistory.unshift(record);saveKey('productionHistory',state.productionHistory);return record;
 }
 function updateProductionStatus(id,status){
-  const o=productionOrderById(id);if(!o||!PRODUCTION_STATUSES.has(status)||o.status===status)return o;
-  const now=Date.now();
+  const o=productionOrderById(id);if(!o||!PRODUCTION_STATUSES.has(status))return o;
+  const now=Date.now(),stations=productionOrderStations(o);o.stationStates=o.stationStates||{};
   if(status==='IN_PROGRESS'&&!o.startedAt){o.startedAt=now;o.normativeSnapshot=o.normativeSnapshot||productionNormativeSnapshot(o);o.predictionSnapshot=o.predictionSnapshot||productionLoadContextFor(o,now);}
+  for(const station of stations){const current=o.stationStates[station]||{status:o.status||'QUEUED'};if(current.status===status)continue;current.status=status;current.updatedAt=now;if(status==='IN_PROGRESS')current.startedAt=current.startedAt||now;if(status==='READY'){current.startedAt=current.startedAt||o.startedAt||now;current.readyAt=current.readyAt||now;}if(status==='CANCELLED')current.cancelledAt=current.cancelledAt||now;o.stationStates[station]=current;}
   o.status=status;o.updatedAt=now;
-  if(status==='READY'){o.startedAt=o.startedAt||now;o.normativeSnapshot=o.normativeSnapshot||productionNormativeSnapshot(o);o.predictionSnapshot=o.predictionSnapshot||productionLoadContextFor(o,o.startedAt);o.readyAt=o.readyAt||now;}
-  if(status==='CANCELLED')o.cancelledAt=o.cancelledAt||now;
-  saveProductionOrders();
-  if(status==='READY'||status==='CANCELLED')ensureProductionHistoryRecord(o);
-  return o;
+  if(status==='READY'){o.startedAt=o.startedAt||now;o.normativeSnapshot=o.normativeSnapshot||productionNormativeSnapshot(o);o.predictionSnapshot=o.predictionSnapshot||productionLoadContextFor(o,o.startedAt);o.readyAt=o.readyAt||now;o.cancelledAt=null;}
+  if(status==='CANCELLED'){o.cancelledAt=o.cancelledAt||now;o.readyAt=null;}
+  saveProductionOrders();if(status==='READY'||status==='CANCELLED')ensureProductionHistoryRecord(o);operationalStateChanged();return o;
 }
 function runProductionStationStateTests(){
   const now=Date.UTC(2026,0,1,12,0,0),items=[{productId:'k',name:'K',qty:1,prep:{station:'kitchen',basePrepMinutes:10,difficulty:1},selectedModifiers:[]},{productId:'b',name:'B',qty:1,prep:{station:'bar',basePrepMinutes:5,difficulty:1},selectedModifiers:[]}];
