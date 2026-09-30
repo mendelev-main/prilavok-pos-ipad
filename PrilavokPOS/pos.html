@@ -1791,7 +1791,7 @@ function productionPrepEntries(items){
 function productionStationWork(items){
   const result={bar:{station:'bar',workPoints:0,durationMinutes:0,qty:0},kitchen:{station:'kitchen',workPoints:0,durationMinutes:0,qty:0}};
   for(const e of productionPrepEntries(items)){
-    const batch=productionBatchFactor(e.qty),work=e.qty*e.difficulty,duration=e.minutes*batch;
+    const batch=productionBatchFactor(e.qty),work=e.qty*productionDifficultyMultiplier(e.difficulty),duration=e.minutes*batch;
     const row=result[e.station];row.workPoints+=work;row.durationMinutes+=duration;row.qty+=e.qty;
   }
   for(const row of Object.values(result)){row.workPoints=Math.round(row.workPoints*100)/100;row.durationMinutes=Math.round(row.durationMinutes*100)/100;row.qty=Math.round(row.qty*100)/100;}
@@ -3875,6 +3875,17 @@ function updateProductionStatus(id,status){
   if(status==='READY'||status==='CANCELLED')ensureProductionHistoryRecord(o);
   return o;
 }
+function runProductionStationStateTests(){
+  const now=Date.UTC(2026,0,1,12,0,0),items=[{productId:'k',name:'K',qty:1,prep:{station:'kitchen',basePrepMinutes:10,difficulty:1},selectedModifiers:[]},{productId:'b',name:'B',qty:1,prep:{station:'bar',basePrepMinutes:5,difficulty:1},selectedModifiers:[]}];
+  const o=normalizeProductionOrder({id:'station-test',status:'IN_PROGRESS',mode:'ASAP',queuedAt:now,startedAt:now,items,stationStates:{kitchen:{status:'IN_PROGRESS',startedAt:now},bar:{status:'READY',startedAt:now,readyAt:now+300000}}});
+  const remaining=productionOrderRemainingWork(o),checks=[
+    {name:'mixed station states preserved',ok:o.stationStates.kitchen.status==='IN_PROGRESS'&&o.stationStates.bar.status==='READY'},
+    {name:'ready station has no remaining load',ok:remaining.bar.durationMinutes===0&&remaining.kitchen.durationMinutes>0}
+  ];
+  return {ok:checks.every(x=>x.ok),passed:checks.filter(x=>x.ok).length,total:checks.length,checks};
+}
+window.__runProductionStationStateTests=runProductionStationStateTests;
+
 function updateProductionStationStatus(id,station,status){
   const o=productionOrderById(id);if(!o||!PRODUCTION_STATIONS.includes(station)||!PRODUCTION_STATUSES.has(status))return o;
   o.stationStates=o.stationStates||{};const current=o.stationStates[station]||{status:'QUEUED'},now=Date.now();if(current.status===status)return o;
