@@ -3435,6 +3435,8 @@ function openOrderSettings(){
     <div class="field"><label>Тип заказа</label><div class="radio-row">
       ${['На месте','С собой','Доставка'].map(t=>`<button class="radio-opt ${state.orderType===t?'selected':''}" onclick="setOrderType('${t}')">${t}</button>`).join('')}
     </div></div>
+    <div class="field"><label>Приготовление</label><div class="radio-row"><button class="radio-opt ${state.productionMode!=='SCHEDULED'?'selected':''}" onclick="setProductionMode('ASAP')">Как можно скорее</button><button class="radio-opt ${state.productionMode==='SCHEDULED'?'selected':''}" onclick="setProductionMode('SCHEDULED')">К определённому времени</button></div></div>
+    ${state.productionMode==='SCHEDULED'?`<div class="field"><label>Готовность к</label><input id="requested-ready-at" type="datetime-local" value="${state.requestedReadyAt?localDateTimeInputValue(state.requestedReadyAt):''}"><div class="settings-note">Будущий заказ не учитывается в текущей загрузке слишком рано.</div></div>`:''}
     <div class="field"><label>Название / подпись чека</label><input id="order-label" value="${escapeAttr(state.orderLabel)}" placeholder="Например: Иван · стол 4"></div>
     <div class="field"><label>Имя клиента</label><input id="customer-name" value="${escapeAttr(state.customer.name)}" placeholder="Необязательно"></div>
     <div class="field"><label>Телефон</label><input id="customer-phone" inputmode="tel" value="${escapeAttr(state.customer.phone)}" placeholder="Необязательно"></div>
