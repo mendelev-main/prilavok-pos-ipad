@@ -4871,9 +4871,9 @@ async function beginPaymentWithLoyaltyGuard(action){
  if(valid===false){flash('Подарок уже недоступен. Обновите клиента и повторите оплату');return}
  showModal(`<div class="modal-title">Нет связи с программой лояльности</div><div class="center-note" style="padding:10px 0 18px;">Продажу и оплату можно продолжить без интернета. Подарок сейчас подтвердить нельзя, поэтому он не будет списан и скидка по нему не применится.</div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Вернуться</button><button class="btn btn-primary" onclick="state.loyaltyRedemptions={};closeModal();render();window.__offlinePaymentAction&&window.__offlinePaymentAction()">Продолжить без подарка</button></div>`,true);window.__offlinePaymentAction=()=>{window.__offlinePaymentAction=null;action()};
 }
-function confirmPaymentScreen(method){
+function confirmPaymentScreen(method,loyaltyValidated=false){
   if(!canFulfillCart()) return;
-  if(hasSelectedLoyaltyReward()){beginPaymentWithLoyaltyGuard(()=>confirmPaymentScreen(method));return;}
+  if(hasSelectedLoyaltyReward()&&!loyaltyValidated){beginPaymentWithLoyaltyGuard(()=>confirmPaymentScreen(method,true));return;}
   const total=cartTotal();
   if(method==='cash'){
     const given=Math.round(paymentGivenValue()*100)/100;
