@@ -961,18 +961,22 @@ ETA нужен состав производства и статусы, а не 
 
 Реализация идёт снизу вверх: сначала POS корректно моделирует производство полностью локально, затем появляется неблокирующий transport, и только после этого backend/web используют эти данные.
 
-**P1 — Данные товара и snapshot строки заказа**
-1. Добавить `basePrepMinutes`.
-2. Сохранить `prepStation` и `prepDifficulty`.
-3. Добавить `none/no-prep`.
-4. Validation и backward-compatible миграцию.
-5. При добавлении товара фиксировать prep snapshot строки.
-6. Фиксировать production contribution модификаторов.
-7. Изменение карточки товара не меняет уже созданную строку.
+**P1 — Данные товара и snapshot строки заказа — ✅ DONE**
+1. ✅ Добавлен `basePrepMinutes` с validation 1–240 минут.
+2. ✅ Сохранены `prepStation` и `prepDifficulty`.
+3. ✅ Добавлен `none/no-prep`.
+4. ✅ Добавлена backward-compatible нормализация старых товаров.
+5. ✅ Новая локальная строка корзины фиксирует prep snapshot.
+6. ✅ Принятый WEB-заказ фиксирует prep snapshot.
+7. ✅ Производственные модификаторы фиксируют собственный prep snapshot.
+8. ✅ Текущая v0-аналитика не считает `none` и использует snapshot там, где он уже существует.
+9. ✅ Изменение карточки товара не переписывает уже созданный snapshot.
 
-Контроль P1: всё работает offline, старые товары/чеки не ломаются, backend не нужен.
+Контроль P1: синтаксис всех непустых `<script>` проверен через JS parser; обязательные поля/пути сохранения/snapshot проверены в текущем `pos.html`. Backend для модели P1 не требуется. Физическая iPad-проверка локального production-ядра остаётся обязательной после P3.
 
-**P2 — Локальная модель Production Order**
+**P2 — Локальная модель Production Order — ⬜ TODO**
+
+**P2 — Локальная модель Production Order — ⬜ TODO**
 1. `QUEUED / IN_PROGRESS / READY / CANCELLED`.
 2. Production timestamps.
 3. `ASAP / SCHEDULED` + `requestedReadyAt`.
@@ -983,7 +987,7 @@ ETA нужен состав производства и статусы, а не 
 
 Контроль P2: restart восстанавливает очередь; READY/CANCELLED не создают load; scheduled отделён от current load.
 
-**P3 — Production Load Engine v1 внутри POS**
+**P3 — Production Load Engine v1 внутри POS — ⬜ TODO**
 1. Разбиение по станциям.
 2. Work points.
 3. Base duration.
@@ -1000,7 +1004,7 @@ ETA нужен состав производства и статусы, а не 
 
 Контроль P3: POS без сети знает фактическую загрузку, задерживающую станцию и прогноз новой корзины. После P3 обязательна проверка на iPad.
 
-**P4 — Сбор фактических production timestamps**
+**P4 — Сбор фактических production timestamps — ⬜ TODO**
 1. История production orders.
 2. Normative prep snapshot.
 3. Actual started/ready.
@@ -1009,7 +1013,7 @@ ETA нужен состав производства и статусы, а не 
 
 Контроль P4: завершённый заказ даёт пригодные данные для будущей калибровки; scheduled waiting не считается временем приготовления.
 
-**P5 — Неблокирующий POS → backend operational channel**
+**P5 — Неблокирующий POS → backend operational channel — ⬜ TODO**
 1. Device/location identity.
 2. Schema version.
 3. Heartbeat.
@@ -1023,7 +1027,7 @@ ETA нужен состав производства и статусы, а не 
 
 Контроль P5: отключение сети никак не меняет кассовую работу; после восстановления backend получает свежий state.
 
-**P6 — Надёжная доставка web-order → POS**
+**P6 — Надёжная доставка web-order → POS — ⬜ TODO**
 1. Durable save backend.
 2. Transport states.
 3. ACK только после local commit.
@@ -1034,7 +1038,7 @@ ETA нужен состав производства и статусы, а не 
 
 Контроль P6: reconnect не теряет и не дублирует web-заказы.
 
-**P7 — Backend ETA v1**
+**P7 — Backend ETA v1 — ⬜ TODO**
 1. `POST /api/eta/estimate`.
 2. Freshness gate.
 3. Hypothetical cart.
@@ -1048,7 +1052,7 @@ ETA нужен состав производства и статусы, а не 
 
 Контроль P7: без свежего POS backend принципиально не выдаёт минуты.
 
-**P8 — Web UX**
+**P8 — Web UX — ⬜ TODO**
 - NORMAL → только диапазон.
 - ELEVATED kitchen → «Сейчас повышенная загрузка кухни».
 - ELEVATED bar → «Сейчас повышенная загрузка бара».
@@ -1060,7 +1064,7 @@ ETA нужен состав производства и статусы, а не 
 
 Контроль P8: сообщение относится именно к корзине пользователя; mixed order называет фактическую задерживающую станцию/станции.
 
-**P9 — Аналитика и калибровка**
+**P9 — Аналитика и калибровка — ⬜ TODO**
 1. Median/P75/P90.
 2. Товар/станция/сложность/размер заказа.
 3. Load buckets.
