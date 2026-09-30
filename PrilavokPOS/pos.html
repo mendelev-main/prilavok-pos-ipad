@@ -971,6 +971,8 @@ let state = {
   analyticsFrom: '',
   analyticsTo: '',
   analyticsSensitiveUnlocked: false,
+  loyaltyAnalytics: null,
+  loyaltyAnalyticsKey: '',
   hallTables: [],
   bookings: [],
   webEvents: [],
@@ -1509,6 +1511,7 @@ function analyticsRange(){
 }
 function setAnalyticsDate(which,value){
   if(!value) return;
+  state.loyaltyAnalyticsKey='';
   if(which==='from') state.analyticsFrom=value;
   if(which==='to') state.analyticsTo=value;
   const from=state.analyticsFrom||value;
@@ -1520,6 +1523,7 @@ function setAnalyticsDate(which,value){
   render();
 }
 function setAnalyticsPreset(days){
+  state.loyaltyAnalyticsKey='';
   const now=new Date();
   const to=new Date(now.getFullYear(),now.getMonth(),now.getDate());
   const from=new Date(to); from.setDate(from.getDate()-Math.max(0,days-1));
@@ -1800,6 +1804,7 @@ function exportWarehousePDF(documentsOnly=false){
   }catch(e){flash(e.message);}
 }
 
+async function loadLoyaltyAnalytics(from,to){const key=from+'|'+to;if(state.loyaltyAnalyticsKey===key)return;state.loyaltyAnalyticsKey=key;try{state.loyaltyAnalytics=await loyaltyApi('/api/analytics/loyalty?from='+encodeURIComponent(from)+'&to='+encodeURIComponent(to));if(state.tab==='analytics')render()}catch(e){state.loyaltyAnalytics={error:true};if(state.tab==='analytics')render()}}
 function renderAnalyticsScreen(){
   const d=analyticsData();
   const today=localDateString(new Date());
@@ -1808,6 +1813,9 @@ function renderAnalyticsScreen(){
   const topProducts=d.products.slice(0,10);
   const admin=currentShiftEmployeeIsAdmin();
   const paymentTotal=d.cash+d.card;
+  if(admin) loadLoyaltyAnalytics(from,to);
+  const la=state.loyaltyAnalytics;
+  const loyaltyKpis=admin?`<div class="analytics-card" style="margin-bottom:14px"><div class="analytics-title">Клиенты и лояльность</div><div class="analytics-sub">Центральные данные POS + онлайн-заказы за выбранный период</div>${la?.error?'<div class="center-note">Нет связи с сервером. Продажи POS продолжают работать офлайн.</div>':!la||state.loyaltyAnalyticsKey!==(from+'|'+to)?'<div class="center-note">Загрузка…</div>':`<div class="analytics-kpis" style="margin-top:12px"><div class="analytics-kpi"><div class="k-label">Клиентов</div><div class="k-value">${la.customers||0}</div></div><div class="analytics-kpi"><div class="k-label">Новых</div><div class="k-value">${la.newCustomers||0}</div></div><div class="analytics-kpi"><div class="k-label">Повторных</div><div class="k-value">${la.repeatCustomers||0}</div></div><div class="analytics-kpi"><div class="k-label">Средний чек клиента</div><div class="k-value">${money(la.averageCustomerCheck||0)}</div></div><div class="analytics-kpi"><div class="k-label">Активных в лояльности</div><div class="k-value">${la.activeLoyaltyUsers||0}</div></div><div class="analytics-kpi"><div class="k-label">Подарков начислено</div><div class="k-value">${la.rewardsGranted||0}</div></div><div class="analytics-kpi"><div class="k-label">Подарков использовано</div><div class="k-value">${la.rewardsRedeemed||0}</div></div></div>`}</div>`:'';
   const adminKpis=admin?`<div class="analytics-kpis" style="margin-bottom:14px;">
       <div class="analytics-kpi"><div class="k-label">Выручка</div><div class="k-value">${money(d.revenue)}</div></div>
       <div class="analytics-kpi"><div class="k-label">Заказов</div><div class="k-value">${d.orders.length}</div></div>
@@ -1833,6 +1841,7 @@ function renderAnalyticsScreen(){
       </div>
     </div>
     ${adminKpis}
+    ${loyaltyKpis}
     <div class="analytics-grid-2" style="margin-bottom:14px;">
       <div class="analytics-card"><div class="analytics-title">Продажи сотрудников</div><div class="analytics-sub">${admin?'Выручка по сотруднику за выбранный период':'Продажи по сотруднику за выбранный период'}</div>${admin?renderHbars(d.employees,true):renderHbars(d.employees,false)}</div>
       <div class="analytics-card"><div class="analytics-title">Способы оплаты</div><div class="analytics-sub">Распределение оплат</div>${renderAnalyticsBars([{name:'Наличные',value:d.cash},{name:'Карта',value:d.card}],{format:'money',percentTotal:paymentTotal,percentOnly:!admin})}</div>
