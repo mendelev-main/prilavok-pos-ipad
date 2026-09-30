@@ -1015,7 +1015,7 @@ ETA нужен состав производства и статусы, а не 
 
 Контроль P4: завершённый заказ сохраняет пригодный для будущей калибровки snapshot predicted-vs-actual. Физическая проверка выполняется в едином финальном regression/smoke test.
 
-**P5 — Неблокирующий POS → backend operational channel — 🟡 POS SIDE DONE / BACKEND PENDING**
+**P5 — Неблокирующий POS → backend operational channel — 🟡 CODE COMPLETE / DB MIGRATION + FINAL TEST PENDING**
 1. ✅ Device identity использует существующий persistent `deviceKey/deviceName`; location identity будет закреплён backend-конфигурацией.
 2. ✅ Operational schema version = 1 + engine version.
 3. ✅ Добавлен heartbeat.
@@ -1024,10 +1024,10 @@ ETA нужен состав производства и статусы, а не 
 6. ✅ Короткий operational timeout 2.5 сек; кассовые действия его не await-ят.
 7. ✅ Bounded exponential retry/backoff до 60 сек.
 8. ✅ Self-healing: каждый tick coalesce-ит полный свежий snapshot, после restart outbox восстанавливается из local storage.
-9. 🟡 POS отправляет существующий `X-Device-Key`; серверная проверка operational endpoints ещё должна быть реализована/проверена.
-10. ⬜ Backend freshness state ещё не реализован в этом iPad-репозитории.
+9. ✅ POS отправляет существующий `X-Device-Key`; backend проверяет ключ по активной записи `devices` и отклоняет неизвестное устройство.
+10. ✅ В `prilavok-backend` добавлены durable `operational_states`, heartbeat/snapshot endpoints и freshness gate: missing/stale/incompatible → `available=false`, старый snapshot наружу не выдаётся.
 
-Контроль P5: POS-часть operational channel реализована и не блокирует локальную кассовую работу. Для полного `✅ DONE` нужны backend endpoints `/api/operational/heartbeat` и `/api/operational/snapshot`, серверная auth/freshness модель и проверка восстановления после разрыва сети.
+Контроль P5: код POS и backend реализован. Перед `✅ DONE` нужно применить миграцию `20260930153000_operational_states.sql` в Supabase и включить сценарии operational channel в единый финальный regression/smoke test (включая разрыв/восстановление сети).
 
 **P6 — Надёжная доставка web-order → POS — ⬜ TODO**
 1. Durable save backend.
