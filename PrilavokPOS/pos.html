@@ -3583,33 +3583,6 @@ function openCompanyDetailsModal(){
   }
   openCompanyEditModal();
 }
-function renderAdminPanel(){
-  return `
-    <div class="content-head" style="align-items:center;">
-      <div style="display:flex;align-items:center;gap:12px;">
-        <button class="btn btn-secondary" style="width:auto;padding:10px 16px;" onclick="closeAdminPanel()">← Назад</button>
-        <div class="content-title">Панель администратора</div>
-      </div>
-    </div>
-    <div class="settings-grid">
-      <button class="settings-card" style="text-align:left;cursor:pointer;font:inherit;color:inherit;" onclick="setTab('network')">
-        <div style="font-size:16px;font-weight:800;">Сетевые настройки</div>
-        <div class="setting-sub" style="margin-top:6px;">Синхронизация, подключение принтера и сетевые конфигурации.</div>
-      </button>
-      <button class="settings-card" style="text-align:left;cursor:pointer;font:inherit;color:inherit;" onclick="openCompanyDetailsModal()">
-        <div style="font-size:16px;font-weight:800;">Реквизиты организации</div>
-        <div class="setting-sub" style="margin-top:6px;">Название заведения, юридическое лицо, адрес и адрес доставки.</div>
-      </button>
-      <button class="settings-card" style="text-align:left;cursor:pointer;font:inherit;color:inherit;" onclick="setTab('inventory')">
-        <div style="font-size:16px;font-weight:800;">Инвентаризация</div>
-        <div class="setting-sub" style="margin-top:6px;">График пересчёта, список товаров, проведение и история.</div>
-      </button>
-      <button class="settings-card" style="text-align:left;cursor:pointer;font:inherit;color:inherit;" onclick="openWarehousePage()">
-        <div style="font-size:16px;font-weight:800;">Складской учёт</div>
-        <div class="setting-sub" style="margin-top:6px;">Остатки, движение товаров, поставщики и складские отчёты.</div>
-      </button>
-    </div>`;
-}
 function renderSettingsScreen(){
   if(state.settingsAdminPanel && currentShiftEmployeeIsAdmin()){
     return `
