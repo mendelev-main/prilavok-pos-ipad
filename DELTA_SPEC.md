@@ -1086,6 +1086,23 @@ ETA нужен состав производства и статусы, а не 
 
 Контроль P9: аналитическое ядро основано на immutable production history и не изменяет модель автоматически. До накопления достаточной реальной выборки система только измеряет и предлагает безопасные рекомендации.
 
+## Final Regression Plan — обязательный порядок перед production rollout
+
+Статусы этого плана выставляются только после фактической проверки. Реальный iPad intentionally оставлен на финальный этап; до него выполняются статические, deterministic и backend/integration проверки.
+
+1. ⬜ **R1 — Сквозной аудит P1–P9.** Проверить цепочку Product prep → Cart → Production Order → Kitchen/Bar → operational snapshot → backend state → ETA → web → terminal production history → calibration analytics. Отдельно: modifiers, SCHEDULED, mixed stations, READY/CANCELLED, offline/stale.
+2. ⬜ **R2 — Надёжность POS → Backend (P5).** Fresh heartbeat + fresh snapshot, защита от out-of-order snapshot, coalescing/outbox/reconnect. Никогда не использовать stale state для публичного ETA.
+3. ⬜ **R3 — Надёжность Backend → POS web orders (P6).** Durable backend order, local save before ACK, idempotency, reconnect retry pending ACK без обязательного restart, отсутствие дублей.
+4. ⬜ **R4 — Supabase operational storage.** Проверить/применить migration `operational_states`, структуру, RLS/service-role access и timestamps.
+5. ⬜ **R5 — Backend ETA integration.** Kitchen-only, Bar-only, mixed, small/large, NORMAL/ELEVATED/HIGH, scheduled/future reservation, READY/CANCELLED, POS offline/stale.
+6. ⬜ **R6 — Web ETA integration.** Корректные customer-facing сообщения, изменение cart, race/abort, unavailable, checkout nonblocking, mobile layout.
+7. ⬜ **R7 — Calibration analytics.** Median/P75/P90, station/size/load buckets, ETA error/range hit, threshold ≥10 isolated samples + ≥15%, manual confirmation, immutable old snapshots.
+8. ⬜ **R8 — Automated/deterministic tests.** Запустить и дополнить POS deterministic tests и весь backend test suite; убедиться, что `npm test` не пропускает существующие тестовые файлы.
+9. ⬜ **R9 — Финальная сверка DELTA_SPEC.** P1–P9 получают DONE только по acceptance criteria; всё, что требует устройства, остаётся явно IPAD TEST PENDING.
+10. ⬜ **R10 — Physical iPad + real web regression.** Пошаговые реальные сценарии: kitchen/bar/mixed, scheduled, load, reconnect/offline/stale, ETA UX, production history и admin calibration.
+
+**Порядок неизменяемый:** R1 → R2 → R3 → R4 → R5 → R6 → R7 → R8 → R9 → R10.
+
 **Обязательный порядок реализации:** P1 → P2 → P3 → P4/P5 → P6 → P7 → P8 → P9 → единый финальный regression/smoke test на физическом iPad и реальном web-клиенте. Backend ETA нельзя считать готовым раньше P7, публичный web UX — раньше P8.
 
 ### 30. Acceptance criteria
