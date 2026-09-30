@@ -3131,6 +3131,7 @@ function renderPosScreen(shift){
         </div>
         <div class="pos-actions-left">
           <button class="park-btn ${editing?'chip active':''}" onclick="toggleEditMode()" title="Настроить рабочую зону">${editing?'✓ Готово':'✎ Раскладка'}</button>
+          <button class="park-btn" onclick="openProductionModal()" ${editing?'disabled':''}>Производство ${activeProductionOrders().length?`<span class="park-badge">${activeProductionOrders().length}</span>`:''}</button>
           <button class="park-btn" onclick="openParkedModal()" ${editing?'disabled':''}>Отложенные ${parkCount?`<span class="park-badge">${parkCount}</span>`:''}</button>
         </div>
       </div>
@@ -3617,6 +3618,11 @@ function setProductionStatusFromParked(id,status){
   const parked=state.parked.find(x=>x.id===id);if(!parked)return;
   const production=ensureProductionOrder(parked,'parked');parked.productionOrderId=production.id;
   updateProductionStatus(production.id,status);saveKey('parked',state.parked);openParkedModal();
+}
+function activeProductionOrders(){return state.productionOrders.filter(o=>o.status!=='READY'&&o.status!=='CANCELLED').sort((a,b)=>(a.requestedReadyAt||a.queuedAt)-(b.requestedReadyAt||b.queuedAt));}
+function openProductionModal(){
+  const list=activeProductionOrders();
+  showModal(`<div style="width:min(900px,86vw);max-width:100%;"><div class="modal-title">Производство</div><div class="settings-note" style="margin-bottom:12px;">Локальная очередь сохраняется на iPad и восстанавливается после перезапуска.</div><div style="max-height:68vh;overflow:auto;">${list.length?list.map(o=>`<div class="list-row"><div style="flex:1;min-width:0;"><div class="list-row-name">${escapeHtml(o.orderLabel||o.webOrderId||'Заказ')}</div><div class="list-row-sub">${productionStatusLabel(o.status)} · ${o.mode==='SCHEDULED'&&o.requestedReadyAt?'к '+fmtDate(o.requestedReadyAt):'как можно скорее'} · ${(o.items||[]).reduce((s,i)=>s+Number(i.qty||0),0)} шт.</div></div><div style="display:flex;gap:8px;flex:none;">${o.status==='QUEUED'? `<button class="btn btn-outline" onclick="updateProductionStatus('${escapeAttr(o.id)}','IN_PROGRESS');openProductionModal()">Готовится</button>`:''}<button class="btn btn-primary" onclick="updateProductionStatus('${escapeAttr(o.id)}','READY');openProductionModal()">Готов</button><button class="icon-btn danger" title="Отменить" onclick="updateProductionStatus('${escapeAttr(o.id)}','CANCELLED');openProductionModal()">✕</button></div></div>`).join(''):'<div class="center-note">Нет заказов в производстве</div>'}</div><div class="modal-actions"><button class="btn btn-secondary" style="width:100%;" onclick="closeModal()">Закрыть</button></div></div>`);
 }
 
 /* ---- Park (save receipt for later) ---- */
