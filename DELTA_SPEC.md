@@ -416,7 +416,14 @@ Backend/Web:
    - ✅ В рабочем runtime отсутствуют `productionMode`, `productionOrders`, `basePrepMinutes`, `prepDifficulty`, `prepStation`; поверх стабильной основы оставлен только изолированный manual demand channel.
    - **Зафиксированная причина белого экрана:** при rebase в `d25aa64` вместе с operational-блоком был ошибочно продублирован availability-блок, что давало parse-time `SyntaxError: Identifier 'AVAILABILITY_INTERVAL' has already been declared`. Исправлено в `9dcebb1`; operational channel затем восстановлен изолированно в `b3e1644`.
    - **Regression rule:** native `WKWebView` startup и базовую последовательность первого render из `c4782ed` считать проверенной основой. Новые operational/network функции подключать после локального first render и не смешивать с соседними availability/WEB блоками.
-9. ⬜ **A9 — Offline/stale integration.** На реальной цепочке iPad → backend → web подтвердить, что после потери свежего POS state сайт переходит в UNAVAILABLE и не показывает последнее NORMAL/OVERLOAD как актуальное.
+9. 🟡 **A9 — Manual WEB ready estimate + offline/stale integration.**
+   - ✅ Для принятого WEB-заказа в списке отложенных доступны ручные варианты: **5 мин / 15 мин / 30 мин / 40 мин / Больше часа**.
+   - ✅ Выбор не сохраняется в заказе, parked state, аналитике или production state; это одноразовая команда уведомления.
+   - ✅ POS вызывает `POST /api/orders/:id/ready-estimate`; backend проверяет device key, существование заказа и статус `accepted`, находит `checkout_sessions.telegram_user_id` и отправляет гостю Telegram-сообщение с ориентировочным временем.
+   - ✅ Ошибка Telegram/network не меняет статус заказа и показывается сотруднику как ошибка отправки.
+   - ✅ После статуса `Готов` кнопки ориентировочного времени скрываются.
+   - ✅ CI после реализации: POS **126/126**, backend workflow green.
+   - ⬜ Физически проверить Telegram-доставку каждого типа времени и затем stale/offline demand status.
 10. ⬜ **A10 — Final mobile visual check.** Проверить карточку статуса в опубликованной мобильной корзине: тексты, переносы, отсутствие старой надписи `Примерное время приготовления` до загрузки JS и отсутствие визуальных следов ETA.
 
 После A8–A10 D13A можно считать полностью принятым на физическом окружении.
