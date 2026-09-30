@@ -3836,6 +3836,35 @@ function activeProductionOrders(){return state.productionOrders.filter(o=>o.stat
 function productionHistorySummary(limit=50){
   return (state.productionHistory||[]).slice(0,limit).map(record=>({productionOrderId:record.productionOrderId,status:record.status,mode:record.mode,criticalStation:record.predictionSnapshot?.criticalStation||null,predictedMinutes:record.predictionSnapshot?.predictedMinutes??null,normativeMinutes:record.normativeSnapshot?.normativeMinutes??null,actualPreparationMinutes:record.actual?.preparationMinutes??null,etaErrorMinutes:record.etaErrorMinutes??null,preparationErrorMinutes:record.preparationErrorMinutes??null,startedAt:record.startedAt||null,readyAt:record.readyAt||null}));
 }
+function productionPercentile(values,p){
+  const a=values.map(Number).filter(Number.isFinite).sort((x,y)=>x-y);if(!a.length)return null;
+  const index=(a.length-1)*p,lo=Math.floor(index),hi=Math.ceil(index);return Math.round((a[lo]+(a[hi]-a[lo])*(index-lo))*100)/100;
+}
+function productionHistoryFeatures(record){
+  const items=record?.items||[],work=productionStationWork(items),stations=PRODUCTION_STATIONS.filter(x=>work[x].durationMinutes>0);
+  const qty=items.reduce((sum,item)=>sum+Math.max(0,Number(item.qty)||0),0);
+  const difficulties=[];items.forEach(item=>{if(item.prep?.station&&item.prep.station!=='none')difficulties.push(Number(item.prep.difficulty)||1);(item.selectedModifiers||[]).forEach(mod=>{if(mod.prep?.station&&mod.prep.station!=='none')difficulties.push(Number(mod.prep.difficulty)||1);});});
+  const avgDifficulty=difficulties.length?difficulties.reduce((a,b)=>a+b,0)/difficulties.length:0;
+  const loadMinutes=Math.max(0,...PRODUCTION_STATIONS.map(st=>Number(record?.predictionSnapshot?.stations?.[st]?.waitMinutes)||0));
+  const loadBucket=loadMinutes>=30?'HIGH':loadMinutes>=15?'ELEVATED':'NORMAL';
+  const sizeBucket=qty>=8?'LARGE':qty>=4?'MEDIUM':'SMALL';
+  return {stations,qty,sizeBucket,avgDifficulty:Math.round(avgDifficulty*100)/100,loadBucket,work};
+}
+function productionCalibrationAnalytics(records=state.productionHistory||[]){
+  const ready=records.filter(r=>r?.status==='READY'&&r.actual?.preparationMinutes!=null);
+  const prep=ready.map(r=>Number(r.actual.preparationMinutes)),etaErrors=ready.map(r=>Number(r.etaErrorMinutes)).filter(Number.isFinite);
+  const rangeHits=ready.filter(r=>{const p=r.predictionSnapshot;if(!p||!r.readyAt||!p.capturedAt)return false;const actual=(Number(r.readyAt)-Number(p.capturedAt))/60000,min=Number(p.rangeMinMinutes),max=Number(p.rangeMaxMinutes);return Number.isFinite(min)&&Number.isFinite(max)&&actual>=min&&actual<=max;});
+  const groups={station:{},difficulty:{},size:{},load:{}};
+  const add=(bucket,key,value)=>{if(!Number.isFinite(value))return;(bucket[key]||(bucket[key]=[])).push(value);};
+  ready.forEach(r=>{const f=productionHistoryFeatures(r),v=Number(r.actual.preparationMinutes);f.stations.forEach(st=>add(groups.station,st,v));add(groups.difficulty,String(Math.max(1,Math.min(5,Math.round(f.avgDifficulty||1)))),v);add(groups.size,f.sizeBucket,v);add(groups.load,f.loadBucket,v);});
+  const summarize=obj=>Object.fromEntries(Object.entries(obj).map(([k,v])=>[k,{count:v.length,median:productionPercentile(v,.5),p75:productionPercentile(v,.75),p90:productionPercentile(v,.9)}]));
+  const productSamples={};
+  ready.forEach(r=>(r.items||[]).forEach(item=>{const base=Number(item.prep?.basePrepMinutes),actual=Number(r.actual.preparationMinutes);if(!item.productId||!base||!actual)return;(productSamples[item.productId]||(productSamples[item.productId]={name:item.name||'',base,samples:[]})).samples.push(actual);}));
+  const recommendations=Object.entries(productSamples).map(([productId,x])=>{const median=productionPercentile(x.samples,.5),count=x.samples.length,ratio=median/x.base;return {productId,name:x.name,count,currentBasePrepMinutes:x.base,observedMedianMinutes:median,suggestedBasePrepMinutes:count>=10&&Math.abs(ratio-1)>=.15?Math.round(median*10)/10:null,requiresManualConfirmation:true};}).filter(x=>x.suggestedBasePrepMinutes!=null);
+  return {sampleSize:ready.length,preparation:{median:productionPercentile(prep,.5),p75:productionPercentile(prep,.75),p90:productionPercentile(prep,.9)},etaError:{median:productionPercentile(etaErrors,.5),p75:productionPercentile(etaErrors,.75),p90:productionPercentile(etaErrors,.9)},rangeHitRate:rangeHits.length&&ready.length?Math.round(rangeHits.length/ready.length*1000)/10:null,groups:{station:summarize(groups.station),difficulty:summarize(groups.difficulty),size:summarize(groups.size),load:summarize(groups.load)},recommendations,automaticAdaptationEnabled:false};
+}
+window.__productionCalibrationAnalytics=productionCalibrationAnalytics;
+
 function runProductionHistoryTests(){
   const base=Date.UTC(2026,0,1,12,0,0),scheduled={mode:'SCHEDULED',queuedAt:base,startedAt:base+5*60*60000,readyAt:base+5*60*60000+12*60000};
   const actual=productionActualMetrics(scheduled),checks=[];
