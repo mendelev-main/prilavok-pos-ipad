@@ -2226,16 +2226,30 @@ function webOrderCartItems(o){
     return {productId:p.id,name:p.name,price,qty,comment:i.comment||'',category:p.category||'',prep:productPrepSnapshot(p),selectedModifiers:modifierPrepSnapshot(i.selectedModifiers||[])};
   });
 }
+async function confirmWebAcceptance(id,record,journal){
+  if(record?.stage==='confirmed')return true;
+  const n=networkConfigFromState();if(!n.backendUrl||!n.deviceKey)return false;
+  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),5000);
+  try{
+    const r=await fetch(n.backendUrl.replace(/\/+$/,'')+'/api/orders/'+encodeURIComponent(id)+'/accept',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Key':n.deviceKey},body:'{}',cache:'no-store',signal:controller.signal});
+    const d=await r.json().catch(()=>null);if(!r.ok)throw new Error(d?.error||('HTTP '+r.status));
+    record.stage='confirmed';record.confirmedAt=Date.now();await window.PrilavokCore.Storage.set('webOrderAcceptances',journal);return true;
+  }catch(e){return false;}finally{clearTimeout(timeout);}
+}
 async function recoverWebAcceptanceJournal(){
   const journal=await loadKey('webOrderAcceptances',{});
-  const pending=Object.values(journal||{}).filter(x=>x?.stage==='prepared'&&state.parked.some(p=>p.webOrderId===x.parked?.webOrderId));
-  if(!pending.length)return;
-  pending.forEach(x=>{x.stage='local';});
-  try{await window.PrilavokCore.Storage.set('webOrderAcceptances',journal);}
-  catch(e){
-    // Keep an unpublished intent recoverable; do not expose it twice after a restart.
-    const ids=new Set(pending.map(x=>x.parked.webOrderId));
-    state.parked=state.parked.filter(p=>!ids.has(p.webOrderId));markStorageBroken(e);
+  const records=Object.entries(journal||{});
+  let changed=false;
+  for(const [id,record] of records){
+    if(!record?.parked)continue;
+    const local=state.parked.find(p=>p.webOrderId===record.parked.webOrderId);
+    if(record.stage==='prepared'&&local){record.stage='local';changed=true;}
+  }
+  if(changed){try{await window.PrilavokCore.Storage.set('webOrderAcceptances',journal);}catch(e){markStorageBroken(e);return;}}
+  // ACK recovery is best-effort and only happens for records already durably committed locally.
+  for(const [id,record] of records.filter(([,r])=>r?.stage==='local')){
+    const local=state.parked.some(p=>p.webOrderId===record.parked?.webOrderId);
+    if(local)await confirmWebAcceptance(id,record,journal);
   }
 }
 async function acceptWebOrder(id){
@@ -2287,12 +2301,8 @@ async function acceptWebOrder(id){
       }
     }
     if(record.stage!=='confirmed'){
-      const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),30000);
-      try{
-        const r=await fetch(n.backendUrl.replace(/\/+$/,'')+'/api/orders/'+encodeURIComponent(id)+'/accept',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Key':n.deviceKey},body:'{}',cache:'no-store',signal:controller.signal});
-        const d=await r.json().catch(()=>null);if(!r.ok)throw new Error(d?.error||('HTTP '+r.status));
-      }finally{clearTimeout(timeout);}
-      record.stage='confirmed';await window.PrilavokCore.Storage.set('webOrderAcceptances',journal);
+      const confirmed=await confirmWebAcceptance(id,record,journal);
+      if(!confirmed)throw new Error('Заказ сохранён локально, подтверждение backend будет повторено после восстановления связи');
     }
     const events=state.webEvents.filter(x=>x.id!==id);
     await window.PrilavokCore.Storage.set('webEvents',events);state.webEvents=events;
