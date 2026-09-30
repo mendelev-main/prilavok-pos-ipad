@@ -405,7 +405,13 @@ Backend/Web:
 6. ✅ **A6 — Backend automated regression.** Backend GitHub Actions после cleanup: **25/25, 0 fail, 0 skipped**. Контракт NORMAL/OVERLOAD/UNAVAILABLE и неблокирующий checkout покрыты тестами.
 7. ✅ **A7 — Web contract.** Fresh OFF → `Обычная загрузка`; fresh ON → `Повышенный спрос / Время приготовления заказа увеличено`; stale/missing → `Статус загрузки временно недоступен`. Минуты, Kitchen/Bar и fallback ETA не показываются.
    - Startup regression: первый render POS не зависит от WEB acceptance recovery; сетевой recovery выполняется best-effort после первого экрана. Это предотвращает пустой/тёмный экран при медленном или недоступном backend.
-8. ⬜ **A8 — Physical integration.** На реальном iPad проверить OFF → NORMAL, ON → OVERLOAD, persistence после restart, WEB `Готов`, отсутствие production-кнопок у обычного чека.
+8. 🟡 **A8 — Physical integration / stable baseline.**
+   - ✅ **30.09.2026: физический запуск на iPad подтверждён пользователем.** Рабочая baseline-точка: `b3e1644`; native startup восстановлен из ранее физически рабочей утренней реализации `c4782ed`.
+   - ✅ POS снова открывается штатно после startup-регрессии.
+   - ✅ В рабочем runtime отсутствуют `productionMode`, `productionOrders`, `basePrepMinutes`, `prepDifficulty`, `prepStation`; поверх стабильной основы оставлен только изолированный manual demand channel.
+   - ⬜ Осталось физически проверить OFF → NORMAL, ON → OVERLOAD, persistence после restart, WEB `Готов`, отсутствие production-кнопок у обычного чека.
+   - **Зафиксированная причина белого экрана:** при rebase в `d25aa64` вместе с operational-блоком был ошибочно продублирован availability-блок, что давало parse-time `SyntaxError: Identifier 'AVAILABILITY_INTERVAL' has already been declared`. Исправлено в `9dcebb1`; operational channel затем восстановлен изолированно в `b3e1644`.
+   - **Regression rule:** native `WKWebView` startup и базовую последовательность первого render из `c4782ed` считать проверенной основой. Новые operational/network функции подключать после локального first render и не смешивать с соседними availability/WEB блоками.
 9. ⬜ **A9 — Offline/stale integration.** На реальной цепочке iPad → backend → web подтвердить, что после потери свежего POS state сайт переходит в UNAVAILABLE и не показывает последнее NORMAL/OVERLOAD как актуальное.
 10. ⬜ **A10 — Final mobile visual check.** Проверить карточку статуса в опубликованной мобильной корзине: тексты, переносы, отсутствие старой надписи `Примерное время приготовления` до загрузки JS и отсутствие визуальных следов ETA.
 
