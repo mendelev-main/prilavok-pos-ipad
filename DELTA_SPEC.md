@@ -1015,19 +1015,19 @@ ETA нужен состав производства и статусы, а не 
 
 Контроль P4: завершённый заказ сохраняет пригодный для будущей калибровки snapshot predicted-vs-actual. Физическая проверка выполняется в едином финальном regression/smoke test.
 
-**P5 — Неблокирующий POS → backend operational channel — ⬜ TODO**
-1. Device/location identity.
-2. Schema version.
-3. Heartbeat.
-4. Operational snapshot.
-5. Bounded/coalesced outbox.
-6. Короткий timeout.
-7. Retry/backoff.
-8. Self-healing snapshot.
-9. Authentication.
-10. Backend freshness state.
+**P5 — Неблокирующий POS → backend operational channel — 🟡 POS SIDE DONE / BACKEND PENDING**
+1. ✅ Device identity использует существующий persistent `deviceKey/deviceName`; location identity будет закреплён backend-конфигурацией.
+2. ✅ Operational schema version = 1 + engine version.
+3. ✅ Добавлен heartbeat.
+4. ✅ Добавлен operational snapshot с active production, station state и scheduled reservations.
+5. ✅ Persistent bounded/coalesced outbox: максимум актуальные heartbeat + snapshot, без бесконечного event backlog.
+6. ✅ Короткий operational timeout 2.5 сек; кассовые действия его не await-ят.
+7. ✅ Bounded exponential retry/backoff до 60 сек.
+8. ✅ Self-healing: каждый tick coalesce-ит полный свежий snapshot, после restart outbox восстанавливается из local storage.
+9. 🟡 POS отправляет существующий `X-Device-Key`; серверная проверка operational endpoints ещё должна быть реализована/проверена.
+10. ⬜ Backend freshness state ещё не реализован в этом iPad-репозитории.
 
-Контроль P5: отключение сети никак не меняет кассовую работу; после восстановления backend получает свежий state.
+Контроль P5: POS-часть operational channel реализована и не блокирует локальную кассовую работу. Для полного `✅ DONE` нужны backend endpoints `/api/operational/heartbeat` и `/api/operational/snapshot`, серверная auth/freshness модель и проверка восстановления после разрыва сети.
 
 **P6 — Надёжная доставка web-order → POS — ⬜ TODO**
 1. Durable save backend.
