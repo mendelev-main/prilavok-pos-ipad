@@ -1041,19 +1041,21 @@ ETA нужен состав производства и статусы, а не 
 
 Контроль P6: логика reconnect/idempotency/ACK реализована; перед полным `✅ DONE` остаётся integration regression с реальным backend/iPad.
 
-**P7 — Backend ETA v1 — ⬜ TODO**
-1. `POST /api/eta/estimate`.
-2. Freshness gate.
-3. Hypothetical cart.
-4. Station timelines.
-5. `criticalStation`.
-6. `delayingStations`.
-7. NORMAL/ELEVATED/HIGH.
-8. min/max range.
-9. `available=false` при stale/missing/incompatible POS.
-10. Никакого fallback ETA.
+**P7 — Backend ETA v1 — 🟡 IN PROGRESS**
+1. ✅ Добавлен публичный `POST /api/eta/estimate`; endpoint принимает только состав корзины, без PII/платёжных данных.
+2. ✅ Freshness gate проверяет server heartbeat age, snapshot received age, POS sampledAt/clock skew, operational schema и engine version.
+3. ✅ Hypothetical cart строится backend по web productId → manual-sync externalId → prep catalog из свежего POS operational snapshot. При отсутствии prep-конфигурации ETA недоступен, fallback запрещён.
+4. ✅ Бар/Кухня считаются независимыми station timelines; current wait берётся только из свежего POS snapshot, future scheduled reservations учитываются как интервалы.
+5. ✅ Итог определяется через `criticalStation`.
+6. ✅ Рассчитываются `delayingStations`; существенность v1 централизована в ETA policy constant.
+7. ✅ Customer load NORMAL/ELEVATED/HIGH вычисляется только для станций текущей корзины; публичный `loadedStations` не содержит посторонних станций.
+8. ✅ Точечный прогноз преобразуется в пользовательский диапазон 10–15 / 15–20 / 20–30 / 30–40 / 40–50 / 50–60 / 60+ с safety buffer.
+9. ✅ stale/missing/incompatible/ambiguous POS state → `available=false`, без load state и минут.
+10. ✅ Никакого fallback ETA: ошибка engine/backend и отсутствующая prep-конфигурация возвращают нейтральный unavailable-контракт.
+11. ✅ Operational snapshot расширен минимальным versioned `prepCatalog`; это часть operational ETA channel и не запускает/не заменяет manual catalog sync.
+12. ⬜ Добавить отдельный deterministic backend test suite для range/freshness/station isolation/mixed/scheduled и завершить контракт `requestedReadyAt`.
 
-Контроль P7: без свежего POS backend принципиально не выдаёт минуты.
+Контроль P7: основной ASAP ETA pipeline реализован; P7 не помечается DONE до deterministic backend tests и scheduled/requestedReadyAt контракта. Без свежего POS backend принципиально не выдаёт минуты.
 
 **P8 — Web UX — ⬜ TODO**
 - NORMAL → только диапазон.
