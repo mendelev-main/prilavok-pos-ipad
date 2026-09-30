@@ -975,8 +975,6 @@ ETA нужен состав производства и статусы, а не 
 Контроль P1: синтаксис всех непустых `<script>` проверен через JS parser; обязательные поля/пути сохранения/snapshot проверены в текущем `pos.html`. Backend для модели P1 не требуется. Физическая iPad-проверка локального production-ядра остаётся обязательной после P3.
 
 **P2 — Локальная модель Production Order — ⬜ TODO**
-
-**P2 — Локальная модель Production Order — ⬜ TODO**
 1. `QUEUED / IN_PROGRESS / READY / CANCELLED`.
 2. Production timestamps.
 3. `ASAP / SCHEDULED` + `requestedReadyAt`.
