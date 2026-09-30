@@ -1340,10 +1340,20 @@ function render(){
         const row=[...document.querySelectorAll('.cart-row')].find(x=>x.dataset.cartId===String(animation.id));
         const scroller=document.querySelector('.cart-items');
         const content=row?.querySelector('.cart-row-content');
-        const visible=!!(row&&scroller&&row.getBoundingClientRect().bottom>scroller.getBoundingClientRect().top&&row.getBoundingClientRect().top<scroller.getBoundingClientRect().bottom);
-        if(content&&visible){
-          content.classList.add(animation.className);
-          setTimeout(()=>content.classList.remove(animation.className),340);
+        if(row&&scroller){
+          const rowRect=row.getBoundingClientRect(),scrollerRect=scroller.getBoundingClientRect();
+          const visible=rowRect.top>=scrollerRect.top&&rowRect.bottom<=scrollerRect.bottom;
+          if(!visible){
+            const target=Math.max(0,row.offsetTop-scroller.clientHeight/2+row.offsetHeight/2);
+            scroller.scrollTo({top:target,behavior:'smooth'});
+          }
+          if(content){
+            const delay=visible?0:180;
+            setTimeout(()=>{
+              content.classList.add(animation.className);
+              setTimeout(()=>content.classList.remove(animation.className),340);
+            },delay);
+          }
         }
         const feedback=document.getElementById('cart-add-feedback');
         if(feedback){
