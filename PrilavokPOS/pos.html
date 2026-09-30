@@ -1839,6 +1839,29 @@ function calculateProductionLoad(options={}){
   return {version:PRODUCTION_ENGINE_VERSION,calculatedAt:now,stations:stationEstimates,cartStations,criticalStation,delayingStations,loadedStations,level:loadedStations.some(station=>stationEstimates[station].level==='HIGH')?'HIGH':loadedStations.length?'ELEVATED':'NORMAL',estimatedMinutes:Math.round(criticalMinutes*100)/100};
 }
 function estimateCurrentCartProduction(now=Date.now()){return calculateProductionLoad({now,hypotheticalItems:state.cart||[]});}
+function runProductionLoadEngineTests(){
+  const now=Date.UTC(2026,0,1,12,0,0),prep=(station,minutes=10,difficulty=1)=>({station,basePrepMinutes:minutes,difficulty}),item=(station,minutes=10,qty=1,difficulty=1)=>({productId:'test-'+station,qty,prep:prep(station,minutes,difficulty),selectedModifiers:[]});
+  const order=(id,items,extra={})=>({id,status:'QUEUED',mode:'ASAP',queuedAt:now,items,...extra});
+  const checks=[],check=(name,condition,details='')=>checks.push({name,ok:!!condition,details:condition?'':details});
+  let r=calculateProductionLoad({now,orders:[order('k1',[item('kitchen',10)])],hypotheticalItems:[item('kitchen',5)]});
+  check('kitchen queue delays kitchen cart',r.stations.kitchen.waitMinutes>0&&r.stations.bar.waitMinutes===0,JSON.stringify(r.stations));
+  r=calculateProductionLoad({now,orders:[order('b1',[item('bar',10)])],hypotheticalItems:[item('kitchen',5)]});
+  check('bar queue does not delay kitchen-only cart',r.stations.kitchen.waitMinutes===0&&r.criticalStation==='kitchen',JSON.stringify(r));
+  r=calculateProductionLoad({now,orders:[order('mix',[item('bar',5),item('kitchen',20)])],hypotheticalItems:[item('bar',5),item('kitchen',5)]});
+  check('mixed cart uses latest participating station',r.criticalStation==='kitchen',JSON.stringify(r));
+  const scheduledReadyAt=now+6*60*60000;
+  r=calculateProductionLoad({now,orders:[order('future',[item('kitchen',20)],{mode:'SCHEDULED',requestedReadyAt:scheduledReadyAt})],hypotheticalItems:[item('kitchen',5)]});
+  check('far scheduled order does not create current wait',r.stations.kitchen.waitMinutes===0&&r.stations.kitchen.futureReservations===1,JSON.stringify(r.stations.kitchen));
+  r=calculateProductionLoad({now,orders:[order('ready',[item('kitchen',20)],{status:'READY'}),order('cancelled',[item('bar',20)],{status:'CANCELLED'})],hypotheticalItems:[item('kitchen',5),item('bar',5)]});
+  check('ready and cancelled excluded',r.stations.kitchen.waitMinutes===0&&r.stations.bar.waitMinutes===0,JSON.stringify(r.stations));
+  const one=productionStationWork([item('kitchen',10,1)]).kitchen.durationMinutes,many=productionStationWork([item('kitchen',10,3)]).kitchen.durationMinutes;
+  check('batch policy grows sub-linearly',many>one&&many<one*3,`one=${one}, many=${many}`);
+  const low=productionStationWork([item('kitchen',10,1,1)]).kitchen.durationMinutes,hard=productionStationWork([item('kitchen',10,1,5)]).kitchen.durationMinutes;
+  check('difficulty increases duration',hard>low,`low=${low}, hard=${hard}`);
+  return {ok:checks.every(x=>x.ok),passed:checks.filter(x=>x.ok).length,total:checks.length,checks};
+}
+window.__runProductionLoadEngineTests=runProductionLoadEngineTests;
+
 
 function preparationLoadLevel(level,hasWork){
   if(!hasWork)return {label:'Нет загрузки',percent:0};
