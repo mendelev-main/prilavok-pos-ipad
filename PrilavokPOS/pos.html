@@ -3667,9 +3667,11 @@ function parkOrderNow(){
     total:cartTotal(), subtotal:cartSubtotal(), deliveryFee:state.orderType==='Доставка'?Number(state.deliveryFee||0):0,
     orderLabel:state.orderLabel, orderType:state.orderType, customer:JSON.parse(JSON.stringify(state.customer)),
     comment:state.orderComment||'', source:state.currentOrderSource||'', webOrderId:state.currentWebOrderId||'', webOrderStatus:state.currentWebOrderStatus||'',
+    productionMode:state.productionMode==='SCHEDULED'?'SCHEDULED':'ASAP',requestedReadyAt:Number(state.requestedReadyAt)||null,productionOrderId:state.currentProductionOrderId||'',
     employeeName:employee?.name||employee?.fullName||'Сотрудник',registerName:'POS 1',timestamp:Date.now(),createdAt:Date.now(),kitchenPrinted:!!window.__currentOrderKitchenPrinted,
     printedItems:JSON.parse(JSON.stringify(window.__currentOrderPrintedItems||[]))
   };
+  const production=ensureProductionOrder(parked,'parked');parked.productionOrderId=production.id;state.currentProductionOrderId=production.id;
   const deltaItems=kitchenPrintDelta(parked.items,parked.printedItems);
   if(deltaItems.length && typeof window.printKitchenOrderNow==='function'){
     window.printKitchenOrderNow({...parked,items:deltaItems});
@@ -3698,6 +3700,7 @@ function resumeParked(id){
   state.cart=JSON.parse(JSON.stringify(o.items)); state.orderLabel=o.orderLabel||''; state.orderType=o.orderType||'На месте';
   state.customer=Object.assign({name:'',phone:'',address:''},o.customer||{}); state.deliveryFee=Number(o.deliveryFee||0);
   state.orderComment=o.comment||''; state.currentOrderSource=o.source||''; state.currentWebOrderId=o.webOrderId||''; state.currentWebOrderStatus=o.webOrderStatus||'';
+  state.productionMode=o.productionMode==='SCHEDULED'?'SCHEDULED':'ASAP';state.requestedReadyAt=Number(o.requestedReadyAt)||null;state.currentProductionOrderId=o.productionOrderId||'';
   window.__currentOrderKitchenPrinted=!!o.kitchenPrinted;
   window.__currentOrderPrintedItems=Array.isArray(o.printedItems) ? JSON.parse(JSON.stringify(o.printedItems)) : (o.kitchenPrinted ? kitchenPrintedSnapshot(o.items) : []);
   saveCurrentOrderSession();
@@ -3706,6 +3709,7 @@ function resumeParked(id){
 }
 
 function deleteParked(id){
+  const deleting=state.parked.find(x=>x.id===id);cancelProductionForOrder(deleting);
   state.parked = state.parked.filter(x=>x.id!==id);
   saveKey('parked', state.parked);
   openParkedModal();
