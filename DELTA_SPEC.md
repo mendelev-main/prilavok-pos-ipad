@@ -403,6 +403,7 @@ Backend/Web:
 5. ✅ **A5 — Backend cleanup.** Удалены ETA engine version, Kitchen/Bar queue contract, prep catalog и автоматические workload/duration/range calculations. Freshness требует только совместимую operational schema, свежие timestamps и boolean `demand.overload`.
 6. ✅ **A6 — Backend automated regression.** Backend GitHub Actions после cleanup: **25/25, 0 fail, 0 skipped**. Контракт NORMAL/OVERLOAD/UNAVAILABLE и неблокирующий checkout покрыты тестами.
 7. ✅ **A7 — Web contract.** Fresh OFF → `Обычная загрузка`; fresh ON → `Повышенный спрос / Время приготовления заказа увеличено`; stale/missing → `Статус загрузки временно недоступен`. Минуты, Kitchen/Bar и fallback ETA не показываются.
+   - Startup regression: первый render POS не зависит от WEB acceptance recovery; сетевой recovery выполняется best-effort после первого экрана. Это предотвращает пустой/тёмный экран при медленном или недоступном backend.
 8. ⬜ **A8 — Physical integration.** На реальном iPad проверить OFF → NORMAL, ON → OVERLOAD, persistence после restart, WEB `Готов`, отсутствие production-кнопок у обычного чека.
 9. ⬜ **A9 — Offline/stale integration.** На реальной цепочке iPad → backend → web подтвердить, что после потери свежего POS state сайт переходит в UNAVAILABLE и не показывает последнее NORMAL/OVERLOAD как актуальное.
 10. ⬜ **A10 — Final mobile visual check.** Проверить карточку статуса в опубликованной мобильной корзине: тексты, переносы, отсутствие старой надписи `Примерное время приготовления` до загрузки JS и отсутствие визуальных следов ETA.
