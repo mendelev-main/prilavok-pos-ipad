@@ -1150,6 +1150,10 @@ async function loadAll(){
   render();
   startWebOrderEvents();
   startAvailabilitySchedule();
+  queueOperationalHeartbeat();
+  queueOperationalSnapshot();
+  void flushOperationalOutbox();
+  startOperationalSchedule();
 }
 // поддерживаем список категорий в актуальном виде: новые — в конец, пустые — не теряем сразу
 function syncCategoryOrder(){
