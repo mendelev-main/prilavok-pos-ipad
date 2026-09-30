@@ -270,12 +270,14 @@
   .cart-row{position:relative;padding:0;border-bottom:1px solid var(--border);touch-action:pan-y;background:var(--surface);overflow:hidden;}
   .cart-row-swipe-bg{position:absolute;inset:0;display:flex;align-items:center;justify-content:flex-end;background:linear-gradient(90deg,#E45858,#D62F3D);color:#fff;pointer-events:none;z-index:0;overflow:hidden;opacity:0;transition:opacity .08s linear;}
   .cart-row.swiping .cart-row-swipe-bg,.cart-row.swipe-ready .cart-row-swipe-bg,.cart-row.swipe-delete .cart-row-swipe-bg{opacity:1;}
+  .cart-add-feedback{display:inline-flex;align-items:center;gap:5px;max-width:0;opacity:0;overflow:hidden;white-space:nowrap;color:var(--accent);font-size:12px;font-weight:800;transform:translateX(6px);transition:max-width .22s ease,opacity .18s ease,transform .22s cubic-bezier(.2,.8,.2,1);}
+  .cart-add-feedback.show{max-width:110px;opacity:1;transform:translateX(0);}
+  .cart-add-feedback::before{content:'✓';display:grid;place-items:center;width:17px;height:17px;border-radius:50%;background:var(--accent);color:#fff;font-size:11px;flex:none;}
   .cart-row-content.cart-item-added{animation:cartItemAdded .30s cubic-bezier(.2,.8,.2,1);}
   .cart-row-content.cart-item-updated{animation:cartItemUpdated .24s cubic-bezier(.2,.8,.2,1);}
-  @keyframes cartItemAdded{0%{transform:translateY(5px);opacity:.35;}100%{transform:translateY(0);opacity:1;}}
+  @keyframes cartItemAdded{0%{transform:translateY(6px);opacity:.25;}100%{transform:translateY(0);opacity:1;}}
   @keyframes cartItemUpdated{0%{transform:scale(1);}48%{transform:scale(.985);}100%{transform:scale(1);}}
-  .cart-flying-tile{position:fixed;z-index:99999;pointer-events:none;margin:0!important;transform-origin:center;will-change:transform,opacity;box-shadow:0 10px 28px rgba(0,0,0,.16)!important;}
-  @media (prefers-reduced-motion:reduce){.cart-row-content.cart-item-added,.cart-row-content.cart-item-updated{animation:none!important;}.cart-flying-tile{display:none!important;}}
+  @media (prefers-reduced-motion:reduce){.cart-add-feedback,.cart-row-content.cart-item-added,.cart-row-content.cart-item-updated{transition:none!important;animation:none!important;}}
   .cart-swipe-delete-action{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;width:86px;height:100%;transform:scale(.78);opacity:.18;transition:transform .16s ease,opacity .16s ease;}
   .cart-swipe-delete-action svg{width:26px;height:26px;display:block;}
   .cart-swipe-delete-action span{font-size:11px;font-weight:800;line-height:1;}
@@ -1342,6 +1344,12 @@ function render(){
         if(content&&visible){
           content.classList.add(animation.className);
           setTimeout(()=>content.classList.remove(animation.className),340);
+        }
+        const feedback=document.getElementById('cart-add-feedback');
+        if(feedback){
+          feedback.classList.add('show');
+          clearTimeout(window.__cartFeedbackTimer);
+          window.__cartFeedbackTimer=setTimeout(()=>feedback.classList.remove('show'),650);
         }
       });
     }
@@ -3062,12 +3070,12 @@ function handlePosGridClick(e){
   // товар сразу добавляется в текущий заказ.
   if(!state.posPath){
     if(type==='category') openPosCategory(id);
-    else if(type==='product') addToCart(id,tile);
+    else if(type==='product') addToCart(id);
     return;
   }
   // Внутри категории отображаются обычные товарные плитки.
   // Они должны добавляться в текущий заказ так же, как товары на главном экране.
-  if(type==='product') addToCart(id,tile);
+  if(type==='product') addToCart(id);
 }
 function openLayoutEditor(){
   const products=state.products.slice().sort((a,b)=>a.name.localeCompare(b.name,'ru'));
@@ -3232,7 +3240,7 @@ function renderCartPanel(shift){
   const hasItems = state.cart.length>0;
   return `
   <div class="cart-panel">
-    <div class="cart-head">Текущий заказ <span>${state.cart.reduce((s,i)=>s+i.qty,0)} поз.</span></div>
+    <div class="cart-head"><span style="font:inherit;color:inherit;">Текущий заказ</span><div style="display:flex;align-items:center;gap:8px;"><span id="cart-add-feedback" class="cart-add-feedback">Добавлено</span><span>${state.cart.reduce((s,i)=>s+i.qty,0)} поз.</span></div></div>
     <div class="order-meta">
       <button class="order-type-btn" onclick="openOrderSettings()">${state.orderLabel?'<b>'+escapeHtml(state.orderLabel)+'</b> · ':''}${escapeHtml(state.orderType)}${state.customer.name||state.customer.phone?' · '+escapeHtml(state.customer.name||state.customer.phone):''}</button>
       ${state.orderComment?`<div class="cart-row-sub" style="color:var(--text);margin-top:6px;">💬 ${escapeHtml(state.orderComment)}</div>`:''}
@@ -3319,32 +3327,10 @@ function saveOrderSettings(){
 function modifierSelectionSignature(mods){return JSON.stringify((mods||[]).map(m=>[m.groupId,m.productId,Number(m.qty)||0,Number(m.priceDelta)||0]).sort());}
 function cartItemKey(item){return item.cartLineId||item.productId;}
 function productNeedsManualPrice(p){return !!p && (!Number.isFinite(Number(p.price)) || Number(p.price)<=0);}
-function rememberCartAnimationSource(el){if(!el)return null;const r=el.getBoundingClientRect();return {left:r.left,top:r.top,width:r.width,height:r.height,html:el.outerHTML};}
-function animateProductToCart(source){
-  if(!source||window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)return;
-  const target=document.querySelector('.cart-panel');
-  if(!target)return;
-  const tr=target.getBoundingClientRect(),ghost=document.createElement('div');
-  ghost.className='cart-flying-tile';
-  ghost.innerHTML=source.html;
-  const tile=ghost.firstElementChild;
-  if(!tile)return;
-  document.body.appendChild(tile);
-  tile.classList.add('cart-flying-tile');
-  Object.assign(tile.style,{left:source.left+'px',top:source.top+'px',width:source.width+'px',height:source.height+'px'});
-  const targetX=tr.left+Math.min(70,tr.width*.22),targetY=tr.top+Math.min(95,tr.height*.18);
-  const dx=targetX-(source.left+source.width/2),dy=targetY-(source.top+source.height/2);
-  const animation=tile.animate([
-    {transform:'translate3d(0,0,0) scale(1)',opacity:.92},
-    {transform:`translate3d(${dx*.55}px,${dy*.38-16}px,0) scale(.78)`,opacity:.78,offset:.55},
-    {transform:`translate3d(${dx}px,${dy}px,0) scale(.24)`,opacity:0}
-  ],{duration:360,easing:'cubic-bezier(.22,.75,.24,1)',fill:'forwards'});
-  animation.onfinish=()=>tile.remove();animation.oncancel=()=>tile.remove();
-}
-function addToCart(id,sourceEl=null){const p=getProduct(id);if(!p)return;const source=rememberCartAnimationSource(sourceEl);if(Array.isArray(p.modifierGroups)&&p.modifierGroups.length){window.__pendingCartFlySource=source;openModifierSelection(id);return;}if(productNeedsManualPrice(p)){window.__pendingCartFlySource=source;openManualPriceModal(p,[]);return;}addConfiguredCartItem(p,[],null,source);}
+function addToCart(id){const p=getProduct(id);if(!p)return;if(Array.isArray(p.modifierGroups)&&p.modifierGroups.length){openModifierSelection(id);return;}if(productNeedsManualPrice(p)){openManualPriceModal(p,[]);return;}addConfiguredCartItem(p,[]);}
 function openManualPriceModal(p,mods=[]){if(!p)return;window._manualPriceContext={productId:p.id,mods:JSON.parse(JSON.stringify(mods||[]))};const extra=(mods||[]).reduce((x,m)=>x+Number(m.priceDelta||0),0);showModal(`<div class="modal-title">${escapeHtml(p.name)}</div><div class="settings-note">У товара не указана цена продажи. Введите цену для этой позиции заказа.</div><div class="field"><label>Цена продажи, BYN</label><input id="manual-sale-price" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="0,00" autofocus></div>${extra?`<div class="settings-note">Модификаторы: ${extra>0?'+':''}${money(extra)}</div>`:''}<div class="modal-actions"><button class="btn btn-secondary" onclick="window._manualPriceContext=null;closeModal()">Отмена</button><button class="btn btn-primary" onclick="confirmManualPrice()">Добавить в заказ</button></div>`,true);setTimeout(()=>document.getElementById('manual-sale-price')?.focus(),50);}
 function confirmManualPrice(){const context=window._manualPriceContext;if(!context)return;const input=document.getElementById('manual-sale-price'),raw=String(input?.value||'').replace(',','.'),price=Number(raw);if(!Number.isFinite(price)||price<=0){flash('Укажите цену больше 0');input?.focus();return;}const p=getProduct(context.productId);if(!p){flash('Товар не найден');return;}const mods=context.mods||[];window._manualPriceContext=null;addConfiguredCartItem(p,mods,Math.round(price*100)/100);}
-function addConfiguredCartItem(p,mods,manualBasePrice=null,animationSource=null){const extra=(mods||[]).reduce((x,m)=>x+Number(m.priceDelta||0),0),basePrice=manualBasePrice===null?(Number(p.price)||0):Number(manualBasePrice),sig=modifierSelectionSignature(mods),manual=manualBasePrice!==null;const existing=manual?null:state.cart.find(i=>i.productId===p.id&&modifierSelectionSignature(i.selectedModifiers)===sig&&!i.comment&&!i.discountId);const proposed=state.cart.map(i=>({...i,qty:i===existing?i.qty+1:i.qty}));if(!existing)proposed.push({productId:p.id,qty:1,selectedModifiers:mods});if(!canFulfillCart(proposed))return;let animatedId,animationClass;if(existing){existing.qty++;animatedId=cartItemKey(existing);animationClass='cart-item-updated';}else{const item={cartLineId:uid(),productId:p.id,name:p.name,price:basePrice+extra,basePrice,manualPrice:manual,qty:1,selectedModifiers:JSON.parse(JSON.stringify(mods||[]))};state.cart.push(item);animatedId=cartItemKey(item);animationClass='cart-item-added';}window.__cartAnimation={id:animatedId,className:animationClass};const flySource=animationSource||window.__pendingCartFlySource;window.__pendingCartFlySource=null;if(flySource)animateProductToCart(flySource);saveCurrentOrderSession();closeModal();render();}
+function addConfiguredCartItem(p,mods,manualBasePrice=null){const extra=(mods||[]).reduce((x,m)=>x+Number(m.priceDelta||0),0),basePrice=manualBasePrice===null?(Number(p.price)||0):Number(manualBasePrice),sig=modifierSelectionSignature(mods),manual=manualBasePrice!==null;const existing=manual?null:state.cart.find(i=>i.productId===p.id&&modifierSelectionSignature(i.selectedModifiers)===sig&&!i.comment&&!i.discountId);const proposed=state.cart.map(i=>({...i,qty:i===existing?i.qty+1:i.qty}));if(!existing)proposed.push({productId:p.id,qty:1,selectedModifiers:mods});if(!canFulfillCart(proposed))return;let animatedId,animationClass;if(existing){existing.qty++;animatedId=cartItemKey(existing);animationClass='cart-item-updated';}else{const item={cartLineId:uid(),productId:p.id,name:p.name,price:basePrice+extra,basePrice,manualPrice:manual,qty:1,selectedModifiers:JSON.parse(JSON.stringify(mods||[]))};state.cart.push(item);animatedId=cartItemKey(item);animationClass='cart-item-added';}window.__cartAnimation={id:animatedId,className:animationClass};saveCurrentOrderSession();closeModal();render();}
 function openModifierSelection(productId){const p=getProduct(productId);if(!p)return;const groups=(p.modifierGroups||[]).map(normalizeModifierGroup),html=groups.map((g,gi)=>'<div class="field"><label>'+escapeHtml(g.name)+'</label><div class="modifier-choice-grid">'+g.options.map(o=>{const mp=getProduct(o.productId),delta=Number(o.priceDelta)||0,displayName=String(o.posName||'').trim()||mp?.name||'Товар недоступен',priceText=delta?'<span class="modifier-choice-price">'+(delta>0?'+':'')+money(delta)+'</span>':'';return '<button type="button" class="modifier-choice" data-modifier-group="'+gi+'" data-modifier-option="'+escapeAttr(o.id)+'" data-modifier-max="'+g.max+'" aria-pressed="false" onclick="toggleModifierChoice(this,\''+escapeAttr(productId)+'\')"><span class="modifier-choice-name">'+escapeHtml(displayName)+'</span>'+priceText+'</button>';}).join('')+'</div></div>').join('');showModal('<div class="modal-title">'+escapeHtml(p.name)+'</div><div class="settings-note">Выберите модификаторы товара.</div>'+html+'<div style="font-size:22px;font-weight:850;margin-top:14px">Итого: <span id="modifier-selection-total">'+fullMoney(p.price)+'</span></div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button class="btn btn-primary" onclick="confirmModifierSelection(\''+escapeAttr(productId)+'\')">Добавить в заказ</button></div>',true);updateModifierSelectionTotal(productId);}
 function toggleModifierChoice(el,productId){const gi=el.dataset.modifierGroup,max=Math.max(1,Number(el.dataset.modifierMax)||1),selected=el.classList.contains('selected');if(max===1){document.querySelectorAll('.modifier-choice[data-modifier-group="'+gi+'"]').forEach(x=>{x.classList.remove('selected');x.setAttribute('aria-pressed','false');});if(!selected){el.classList.add('selected');el.setAttribute('aria-pressed','true');}}else{if(!selected){const count=document.querySelectorAll('.modifier-choice[data-modifier-group="'+gi+'"].selected').length;if(count>=max){flash('Можно выбрать не больше '+max);return;}}el.classList.toggle('selected');el.setAttribute('aria-pressed',el.classList.contains('selected')?'true':'false');}updateModifierSelectionTotal(productId);}
 function readModifierSelection(productId){const p=getProduct(productId),groups=(p?.modifierGroups||[]).map(normalizeModifierGroup),selected=[];for(let gi=0;gi<groups.length;gi++){const g=groups[gi],checked=[...document.querySelectorAll('.modifier-choice[data-modifier-group="'+gi+'"].selected')];if(checked.length<g.min||checked.length>g.max)throw new Error('«'+g.name+'»: выберите от '+g.min+' до '+g.max);for(const input of checked){const o=g.options.find(x=>x.id===input.dataset.modifierOption);if(!o)continue;const mp=getProduct(o.productId);if(!mp)throw new Error('Модификатор больше недоступен: '+g.name);selected.push({groupId:g.id,groupName:g.name,optionId:o.id,productId:o.productId,name:String(o.posName||'').trim()||mp.name,qty:Number(o.qty)||1,priceDelta:Number(o.priceDelta)||0});}}return selected;}
