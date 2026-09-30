@@ -2905,6 +2905,17 @@ function openCompanyDetailsModal(){
   }
   openCompanyEditModal();
 }
+async function openCustomersAdmin(){
+ try{const rows=await searchCustomers('375');showModal(`<div class="modal-title">Клиенты</div><div class="field"><label>Поиск</label><input id="admin-customer-search" oninput="adminCustomerSearch(this.value)" placeholder="Имя или телефон"></div><div id="admin-customers-list">${customerAdminRows(rows)}</div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Закрыть</button></div>`,true)}catch(e){flash('Не удалось загрузить клиентов')}
+}
+function customerAdminRows(rows){return (rows||[]).map(x=>`<button class="list-row" style="width:100%;text-align:left" onclick="openCustomerAdminCard('${escapeAttr(x.id)}')"><div><div class="list-row-name">${escapeHtml(x.name)}</div><div class="list-row-sub">${escapeHtml(x.normalized_phone)}${x.telegram_user_id?' · Telegram ✓':''}</div></div></button>`).join('')||'<div class="center-note">Клиенты не найдены</div>'}
+async function adminCustomerSearch(q){const el=document.getElementById('admin-customers-list');if(!el)return;try{el.innerHTML=customerAdminRows(await searchCustomers(q))}catch(e){el.textContent='Ошибка загрузки'}}
+async function openCustomerAdminCard(id){try{const d=await loyaltyApi('/api/customers/'+encodeURIComponent(id)+'/loyalty');showModal(`<div class="modal-title">${escapeHtml(d.customer.name)}</div><div class="settings-note">${escapeHtml(d.customer.normalized_phone)}${d.customer.telegram_user_id?' · Telegram привязан':''}</div><div style="margin-top:14px;">${(d.programs||[]).map(p=>`<div class="list-row"><div><div class="list-row-name">${escapeHtml(p.name)}</div><div class="list-row-sub">Прогресс ${p.progress}/${p.required_quantity} · подарков ${p.rewards}</div></div></div>`).join('')||'<div class="center-note">Нет активных программ</div>'}</div><div class="modal-actions"><button class="btn btn-secondary" onclick="openCustomersAdmin()">Назад</button></div>`,true)}catch(e){flash('Не удалось открыть клиента')}}
+async function openLoyaltyAdmin(){
+ try{const d=await loyaltyApi('/api/loyalty/programs');showModal(`<div class="modal-title">Программа лояльности</div>${(d.programs||[]).map(p=>`<div class="list-row"><div><div class="list-row-name">${escapeHtml(p.name)}</div><div class="list-row-sub">Купить ${p.required_quantity} → подарок ×${p.reward_quantity} · ${p.is_active?'активна':'выключена'}</div></div></div>`).join('')||'<div class="center-note">Программ пока нет</div>'}<div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Закрыть</button><button class="btn btn-primary" onclick="openLoyaltyProgramCreate()">+ Программа</button></div>`,true)}catch(e){flash('Не удалось загрузить программы')}}
+function openLoyaltyProgramCreate(){const opts=(state.products||[]).map(p=>`<label style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" class="loyalty-product" value="${escapeAttr(p.id)}"> ${escapeHtml(p.name)}</label>`).join('');showModal(`<div class="modal-title">Новая программа</div><div class="field"><label>Название</label><input id="lp-name" placeholder="Кофе"></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div class="field"><label>Купить</label><input id="lp-required" type="number" min="1" value="5"></div><div class="field"><label>Подарков</label><input id="lp-reward" type="number" min="1" value="1"></div></div><div class="field"><label>Товары программы / подарка</label><div style="max-height:260px;overflow:auto">${opts}</div></div><div class="settings-note">В первой версии выбранные товары одновременно начисляют прогресс и доступны как подарок. Backend уже поддерживает раздельные наборы.</div><div class="modal-actions"><button class="btn btn-secondary" onclick="openLoyaltyAdmin()">Назад</button><button class="btn btn-primary" onclick="createLoyaltyProgram()">Создать</button></div>`,true)}
+async function createLoyaltyProgram(){const ids=[...document.querySelectorAll('.loyalty-product:checked')].map(x=>x.value);try{await loyaltyApi('/api/loyalty/programs',{method:'POST',body:JSON.stringify({name:document.getElementById('lp-name')?.value,requiredQuantity:Number(document.getElementById('lp-required')?.value),rewardQuantity:Number(document.getElementById('lp-reward')?.value),earningProductIds:ids,rewardProductIds:ids})});flash('Программа создана');openLoyaltyAdmin()}catch(e){flash(e.message||'Не удалось создать программу')}}
+
 function renderAdminPanel(){
   return `
     <div class="content-head" style="align-items:center;">
@@ -2914,6 +2925,14 @@ function renderAdminPanel(){
       </div>
     </div>
     <div class="settings-grid">
+      <button class="settings-card" style="text-align:left;cursor:pointer;font:inherit;color:inherit;" onclick="openCustomersAdmin()">
+        <div style="font-size:16px;font-weight:800;">Клиенты</div>
+        <div class="setting-sub" style="margin-top:6px;">База клиентов, Telegram и текущий прогресс лояльности.</div>
+      </button>
+      <button class="settings-card" style="text-align:left;cursor:pointer;font:inherit;color:inherit;" onclick="openLoyaltyAdmin()">
+        <div style="font-size:16px;font-weight:800;">Программа лояльности</div>
+        <div class="setting-sub" style="margin-top:6px;">Правила «купи N → подарок» и участвующие товары.</div>
+      </button>
       <button class="settings-card" style="text-align:left;cursor:pointer;font:inherit;color:inherit;" onclick="setTab('network')">
         <div style="font-size:16px;font-weight:800;">Сетевые настройки</div>
         <div class="setting-sub" style="margin-top:6px;">Синхронизация, подключение принтера и сетевые конфигурации.</div>
