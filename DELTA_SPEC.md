@@ -405,11 +405,15 @@ Backend/Web:
 6. ✅ **A6 — Backend/web automated regression.** После финального demand UI cleanup: **26/26, 0 fail, 0 skipped** (commit `38c1658`). Контракт NORMAL/OVERLOAD/UNAVAILABLE, неблокирующий checkout и отсутствие retired ETA naming в актуальном web UI покрыты тестами.
 7. ✅ **A7 — Web contract.** Актуальный UI технически переименован с legacy `etaCard/.eta-*` на `demandCard/.demand-*`; сайт использует только `GET /api/demand/status`. Backend временно сохраняет `POST /api/eta/estimate` только как безопасный compatibility alias для уже закэшированных старых web-клиентов; автоматического ETA-расчёта в нём нет. Fresh OFF → `Обычная загрузка`; fresh ON → `Повышенный спрос / Время приготовления заказа увеличено`; stale/missing → `Статус загрузки временно недоступен`. Минуты, Kitchen/Bar и fallback ETA не показываются.
    - Startup regression: первый render POS не зависит от WEB acceptance recovery; сетевой recovery выполняется best-effort после первого экрана. Это предотвращает пустой/тёмный экран при медленном или недоступном backend.
-8. 🟡 **A8 — Physical integration / stable baseline.**
+8. ✅ **A8 — Physical integration / stable baseline.**
    - ✅ **30.09.2026: физический запуск на iPad подтверждён пользователем.** Рабочая baseline-точка: `b3e1644`; native startup восстановлен из ранее физически рабочей утренней реализации `c4782ed`.
    - ✅ POS снова открывается штатно после startup-регрессии.
+   - ✅ Физически проверено на iPad: OFF → «Обычная загрузка», ON → «Повышенный спрос».
+   - ✅ Физически проверена полная цепочка iPad → operational snapshot → backend → сайт: при OVERLOAD сайт показывает «Повышенный спрос» и «Время приготовления заказа увеличено», при OFF возвращается «Обычная загрузка».
+   - ✅ Физически проверан persistence: OVERLOAD сохраняется после полного перезапуска POS и продолжает корректно отображаться на сайте.
+   - ✅ Физически проверан WEB lifecycle: заказ приходит на POS, после принятия доступно только действие «Готов», старых «Начать/Готовится» нет, завершение работает.
+   - ✅ Физически проверан обычный отложенный POS-чек: production-кнопки «Начать/Готов/Готовится» отсутствуют.
    - ✅ В рабочем runtime отсутствуют `productionMode`, `productionOrders`, `basePrepMinutes`, `prepDifficulty`, `prepStation`; поверх стабильной основы оставлен только изолированный manual demand channel.
-   - ⬜ Осталось физически проверить OFF → NORMAL, ON → OVERLOAD, persistence после restart, WEB `Готов`, отсутствие production-кнопок у обычного чека.
    - **Зафиксированная причина белого экрана:** при rebase в `d25aa64` вместе с operational-блоком был ошибочно продублирован availability-блок, что давало parse-time `SyntaxError: Identifier 'AVAILABILITY_INTERVAL' has already been declared`. Исправлено в `9dcebb1`; operational channel затем восстановлен изолированно в `b3e1644`.
    - **Regression rule:** native `WKWebView` startup и базовую последовательность первого render из `c4782ed` считать проверенной основой. Новые operational/network функции подключать после локального first render и не смешивать с соседними availability/WEB блоками.
 9. ⬜ **A9 — Offline/stale integration.** На реальной цепочке iPad → backend → web подтвердить, что после потери свежего POS state сайт переходит в UNAVAILABLE и не показывает последнее NORMAL/OVERLOAD как актуальное.
