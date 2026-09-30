@@ -667,12 +667,20 @@ test('recovered WEB ACK clears stale event without duplicating parked order',asy
  assert.equal(JSON.parse(f.data.get('prilavok_webOrderAcceptances'))['web-1'].stage,'confirmed');
 });
 
-test('production deterministic suite passes against real POS code',()=>{
- const f=fixture();const result=f.c.__runProductionDeterministicTests();
- assert.equal(result.ok,true,JSON.stringify(result.suites.filter(x=>!x.ok)));
- assert.equal(result.passed,result.total);
- assert.ok(result.total>=15,'expected production regression coverage');
+test('manual demand status is persisted and included in operational snapshot',async()=>{
+ const f=fixture();
+ f.c.setDemandOverload(true);
+ assert.equal(f.state.demandOverload,true);
+ assert.equal(JSON.parse(f.data.get('prilavok_demandOverload')),true);
+ const snapshot=f.c.buildOperationalSnapshot(Date.UTC(2026,0,1,12,0,0));
+ assert.deepEqual(snapshot.demand,{overload:true});
+ assert.equal('production' in snapshot,false);
+ assert.equal('engineVersion' in snapshot,false);
+ f.c.setDemandOverload(false);
+ assert.equal(f.state.demandOverload,false);
+ assert.deepEqual(f.c.buildOperationalSnapshot().demand,{overload:false});
 });
+
 test('operational deterministic suite restores outbox and revision',()=>{
  const f=fixture();f.state.operationalRevision=41;f.state.operationalOutbox=[{id:'existing',type:'snapshot',payload:{revision:41},attempts:2,nextAttemptAt:9999}];
  const before=plain({revision:f.state.operationalRevision,outbox:f.state.operationalOutbox});
