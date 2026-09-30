@@ -2389,9 +2389,13 @@ async function operationalTick(){
   if(document.hidden||window._availabilityAppActive===false||!state.loaded)return;
   queueOperationalHeartbeat();queueOperationalSnapshot();await flushOperationalOutbox();
 }
+function operationalReconnect(){
+  if(!state.loaded||document.hidden||window._availabilityAppActive===false)return;
+  operationalFailures=0;queueOperationalHeartbeat();queueOperationalSnapshot();void flushOperationalOutbox();startOperationalSchedule();
+}
 function startOperationalSchedule(){
   clearTimeout(operationalTimer);operationalTimer=null;
-  if(!operationalListening){document.addEventListener('visibilitychange',()=>{if(document.hidden){clearTimeout(operationalTimer);operationalTimer=null;operationalController?.abort();}else startOperationalSchedule();});operationalListening=true;}
+  if(!operationalListening){document.addEventListener('visibilitychange',()=>{if(document.hidden){clearTimeout(operationalTimer);operationalTimer=null;operationalController?.abort();}else operationalReconnect();});window.addEventListener('online',operationalReconnect);operationalListening=true;}
   if(document.hidden||window._availabilityAppActive===false)return;
   const delay=operationalFailures?operationalBackoffMs(operationalFailures):OPERATIONAL_INTERVAL;
   operationalTimer=setTimeout(async()=>{await operationalTick();startOperationalSchedule();},delay);
@@ -2408,6 +2412,7 @@ function runOperationalChannelTests(){
   checks.push({name:'latest snapshot wins',ok:state.operationalOutbox.find(x=>x.type==='snapshot')?.payload?.n===2});
   const revisionBefore=state.operationalRevision;queueOperationalSnapshot(1004);const rev1=state.operationalOutbox.find(x=>x.type==='snapshot')?.payload?.revision;queueOperationalSnapshot(1005);const rev2=state.operationalOutbox.find(x=>x.type==='snapshot')?.payload?.revision;checks.push({name:'snapshot revision is monotonic',ok:Number(rev2)===Number(rev1)+1&&Number(rev1)>revisionBefore});
   checks.push({name:'backoff is bounded',ok:operationalBackoffMs(100)<=OPERATIONAL_MAX_BACKOFF});
+  const types=new Set(state.operationalOutbox.map(x=>x.type));checks.push({name:'heartbeat does not evict pending snapshot',ok:types.has('snapshot')&&types.has('heartbeat')&&state.operationalOutbox.length<=2});
   state.operationalOutbox=original;saveKey('operationalOutbox',state.operationalOutbox);
   return {ok:checks.every(x=>x.ok),passed:checks.filter(x=>x.ok).length,total:checks.length,checks};
 }
