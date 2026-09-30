@@ -2340,7 +2340,7 @@ async function flushOperationalOutbox(){
     return sentAny;
   }finally{operationalBusy=false;}
 }
-function retryPendingLoyalty(){for(const order of state.orders||[]){if(order?.customer?.id&&order?.loyaltySync?.status==='pending'&&!order.returnedAt)void publishPaidOrderLoyalty(order)}}
+function retryPendingLoyalty(){for(const order of state.orders||[]){if(!order?.customer?.id)continue;if(order.returnedAt){if(order?.loyaltyReversal?.status==='pending'||order?.loyaltySync?.status==='synced'&&!order.loyaltyReversal)void reverseOrderLoyalty(order)}else if(order?.loyaltySync?.status==='pending')void publishPaidOrderLoyalty(order)}}
 function operationalReconnect(){
   if(!state.loaded||document.hidden||window._availabilityAppActive===false)return;
   operationalFailures=0;void recoverWebAcceptanceJournal();void retryPendingLoyalty();
@@ -4859,8 +4859,21 @@ function openCardPartConfirmation(amount,onSuccess){
     </div>`);
   window.__cardPaymentConfirm=()=>{window.__cardPaymentConfirm=null;closeModal();onSuccess();};
 }
+function hasSelectedLoyaltyReward(){return Object.values(state.loyaltyRedemptions||{}).some(v=>Math.max(0,Math.trunc(Number(v)||0))>0)}
+async function revalidateSelectedLoyaltyReward(){
+ if(!hasSelectedLoyaltyReward()||!state.customer?.id)return true;
+ try{const data=await loyaltyApi('/api/customers/'+encodeURIComponent(state.customer.id)+'/loyalty');const byId=new Map((data.programs||[]).map(p=>[String(p.id),p]));for(const [programId,value] of Object.entries(state.loyaltyRedemptions||{})){const requested=Math.max(0,Math.trunc(Number(value)||0));if(requested>Number(byId.get(String(programId))?.rewards||0))return false}state.loyaltyPrograms=data.programs||[];return true}catch(e){return null}
+}
+async function beginPaymentWithLoyaltyGuard(action){
+ if(!hasSelectedLoyaltyReward())return action();
+ const valid=await revalidateSelectedLoyaltyReward();
+ if(valid===true)return action();
+ if(valid===false){flash('Подарок уже недоступен. Обновите клиента и повторите оплату');return}
+ showModal(`<div class="modal-title">Нет связи с программой лояльности</div><div class="center-note" style="padding:10px 0 18px;">Продажу и оплату можно продолжить без интернета. Подарок сейчас подтвердить нельзя, поэтому он не будет списан и скидка по нему не применится.</div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Вернуться</button><button class="btn btn-primary" onclick="state.loyaltyRedemptions={};closeModal();render();window.__offlinePaymentAction&&window.__offlinePaymentAction()">Продолжить без подарка</button></div>`,true);window.__offlinePaymentAction=()=>{window.__offlinePaymentAction=null;action()};
+}
 function confirmPaymentScreen(method){
   if(!canFulfillCart()) return;
+  if(hasSelectedLoyaltyReward()){beginPaymentWithLoyaltyGuard(()=>confirmPaymentScreen(method));return;}
   const total=cartTotal();
   if(method==='cash'){
     const given=Math.round(paymentGivenValue()*100)/100;
