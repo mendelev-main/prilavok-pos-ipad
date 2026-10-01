@@ -3982,17 +3982,16 @@ function parkOrder(){
   }
   parkOrderNow();
 }
-function confirmParkOrderLabel(){
+async function confirmParkOrderLabel(){
   const input=document.getElementById('park-order-label');
   const label=String(input?.value||'').trim();
   if(!label){flash('Введите подпись чека');input?.focus();return;}
   state.orderLabel=label;
-  saveCurrentOrderSession();
-  closeModal();
-  parkOrderNow();
+  if(await parkOrderNow())closeModal();
 }
-function parkOrderNow(){
-  if(!state.cart.length) return;
+async function parkOrderNow(){
+  if(!state.cart.length)return false;
+  if(criticalOperationBusy){flash('Сохранение операции ещё не завершено');return false;}
   const shift=currentShift(), employee=state.employees.find(e=>e.id===shift?.employeeId);
   const parked = {
     id:uid(), receiptDisplayNumber:'#'+(state.parked.length+1),
@@ -4004,14 +4003,26 @@ function parkOrderNow(){
     printedItems:JSON.parse(JSON.stringify(window.__currentOrderPrintedItems||[]))
   };
   const deltaItems=kitchenPrintDelta(parked.items,parked.printedItems);
-  if(deltaItems.length && typeof window.printKitchenOrderNow==='function'){
-    window.printKitchenOrderNow({...parked,items:deltaItems});
-    parked.kitchenPrinted=true;
-    parked.printedItems=kitchenPrintedSnapshot(parked.items);
+  const shouldPrint=deltaItems.length && typeof window.printKitchenOrderNow==='function';
+  const nextParked=storageSnapshot(state.parked);nextParked.push(parked);
+  criticalOperationBusy=true;
+  try{await commitCriticalStorage('park-order',{parked:nextParked,currentOrderSession:emptyCurrentOrderSession()})}
+  catch(e){criticalOperationBusy=false;flash('Чек не отложен: '+(e?.message||e));return false}
+  state.parked=nextParked;
+  resetCurrentOrderState();
+  let printWarning='';
+  if(shouldPrint){
+    try{
+      window.printKitchenOrderNow({...parked,items:deltaItems});
+      const printedParked=storageSnapshot(state.parked),printed=printedParked.find(x=>x.id===parked.id);
+      printed.kitchenPrinted=true;printed.printedItems=kitchenPrintedSnapshot(printed.items);
+      await commitCriticalStorage('park-order-print-state',{parked:printedParked});
+      state.parked=printedParked;
+    }catch(e){printWarning='Чек отложен, но статус печати кухни не сохранён: '+(e?.message||e)}
   }
-  state.parked.push(parked); saveKey('parked',state.parked);
-  resetCurrentOrderState(); clearCurrentOrderSession();
-  render(); flash('Чек отложен');
+  criticalOperationBusy=false;
+  render();flash(printWarning||'Чек отложен');
+  return true;
 }
 function openParkedModal(){
   const list=state.parked.slice().sort((a,b)=>b.createdAt-a.createdAt);
@@ -4025,17 +4036,24 @@ function openParkedModal(){
     </div>`).join(''):`<div class="center-note">Нет отложенных чеков</div>`}
     <div class="modal-actions"><button class="btn btn-secondary" style="width:100%;" onclick="closeModal()">Закрыть</button></div>`);
 }
-function resumeParked(id){
-  if(state.cart.length){flash('Сначала завершите текущий заказ');return;}
-  const o=state.parked.find(x=>x.id===id); if(!o)return;
-  state.cart=JSON.parse(JSON.stringify(o.items)); state.orderLabel=o.orderLabel||''; state.orderType=o.orderType||'На месте';
-  state.loyaltyPrograms=[];state.loyaltyRedemptions={};
-  state.customer=Object.assign({name:'',phone:'',address:''},o.customer||{}); state.deliveryFee=Number(o.deliveryFee||0);state.deliveryTariffSelected=o.deliveryTariffSelected===true;
-  state.orderComment=o.comment||''; state.currentOrderSource=o.source||''; state.currentWebOrderId=o.webOrderId||''; state.currentWebOrderStatus=o.webOrderStatus||'';
-  window.__currentOrderKitchenPrinted=!!o.kitchenPrinted;
-  window.__currentOrderPrintedItems=Array.isArray(o.printedItems) ? JSON.parse(JSON.stringify(o.printedItems)) : (o.kitchenPrinted ? kitchenPrintedSnapshot(o.items) : []);
-  saveCurrentOrderSession();
-  state.parked=state.parked.filter(x=>x.id!==id); saveKey('parked',state.parked);
+async function resumeParked(id){
+  if(state.cart.length){flash('Сначала завершите текущий заказ');return false;}
+  if(criticalOperationBusy){flash('Сохранение операции ещё не завершено');return false;}
+  const o=state.parked.find(x=>x.id===id);if(!o)return false;
+  const items=storageSnapshot(o.items||[]),customer=Object.assign({name:'',phone:'',address:''},storageSnapshot(o.customer||{}));
+  const printedItems=Array.isArray(o.printedItems)?storageSnapshot(o.printedItems):(o.kitchenPrinted?kitchenPrintedSnapshot(o.items):[]);
+  const session={items,orderLabel:o.orderLabel||'',orderType:o.orderType||'На месте',customer,deliveryFee:Number(o.deliveryFee||0),deliveryTariffSelected:o.deliveryTariffSelected===true,orderComment:o.comment||'',source:o.source||'',webOrderId:o.webOrderId||'',webOrderStatus:o.webOrderStatus||'',kitchenPrinted:!!o.kitchenPrinted,printedItems,updatedAt:Date.now()};
+  const nextParked=state.parked.filter(x=>x.id!==id).map(storageSnapshot);
+  criticalOperationBusy=true;
+  try{await commitCriticalStorage('resume-parked',{currentOrderSession:session,parked:nextParked})}
+  catch(e){flash('Чек не открыт: '+(e?.message||e));return false}
+  finally{criticalOperationBusy=false}
+  state.cart=items;state.orderLabel=session.orderLabel;state.orderType=session.orderType;
+  state.loyaltyPrograms=[];state.loyaltyRedemptions={};state.customer=customer;
+  state.deliveryFee=session.deliveryFee;state.deliveryTariffSelected=session.deliveryTariffSelected;
+  state.orderComment=session.orderComment;state.currentOrderSource=session.source;state.currentWebOrderId=session.webOrderId;state.currentWebOrderStatus=session.webOrderStatus;
+  window.__currentOrderKitchenPrinted=session.kitchenPrinted;window.__currentOrderPrintedItems=printedItems;
+  state.parked=nextParked;
   closeModal(); render();
   if(state.customer?.id){
     const selectedCustomer=state.customer;
@@ -4043,6 +4061,7 @@ function resumeParked(id){
       if(state.customer===selectedCustomer)flash('Клиент привязан. Программа лояльности временно недоступна');
     });
   }
+  return true;
 }
 
 function deleteParked(id){

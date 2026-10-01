@@ -76,6 +76,67 @@ test('failed journal creation leaves payment, stock and cart unchanged',async()=
  assert.equal(JSON.stringify(f.state),before);assert.equal(f.data.has('prilavok_orders'),false);assert.match(f.messages.at(-1),/Оплата не завершена/);
 });
 
+test('parking moves current order and session together',async()=>{
+ const f=fixture();f.cart();f.state.orderLabel='Стол 4';f.c.saveCurrentOrderSession();
+ const parked=await f.c.parkOrderNow();
+ assert.equal(parked,true);assert.equal(f.state.cart.length,0);assert.equal(f.state.parked.length,1);
+ assert.equal(JSON.parse(f.data.get('prilavok_parked'))[0].orderLabel,'Стол 4');
+ assert.deepEqual(JSON.parse(f.data.get('prilavok_currentOrderSession')).items,[]);
+ assert.equal(JSON.parse(f.data.get('prilavok_criticalStorageJournal')),null);
+});
+
+test('parking journal failure retains current order and does not print',async()=>{
+ const f=fixture();f.cart();f.state.orderLabel='Стол 5';f.c.saveCurrentOrderSession();let prints=0;f.c.printKitchenOrderNow=()=>prints++;
+ const originalSet=f.c.localStorage.setItem;
+ f.c.localStorage.setItem=(key,value)=>{if(key==='prilavok_criticalStorageJournal')throw Error('injected journal failure');originalSet(key,value)};
+ const parked=await f.c.parkOrderNow();
+ assert.equal(parked,false);assert.equal(f.state.cart.length,1);assert.equal(f.state.parked.length,0);assert.equal(prints,0);
+ assert.equal(JSON.parse(f.data.get('prilavok_currentOrderSession')).items.length,1);assert.match(f.messages.at(-1),/Чек не отложен/);
+});
+
+test('parking sends kitchen print only after durable order move',async()=>{
+ const f=fixture();f.cart();f.state.orderLabel='Стол 5А';let atPrint;
+ f.c.printKitchenOrderNow=()=>{atPrint={parked:JSON.parse(f.data.get('prilavok_parked')).length,session:JSON.parse(f.data.get('prilavok_currentOrderSession')).items.length}};
+ assert.equal(await f.c.parkOrderNow(),true);assert.deepEqual(atPrint,{parked:1,session:0});
+ assert.equal(f.state.parked[0].kitchenPrinted,true);assert.equal(JSON.parse(f.data.get('prilavok_parked'))[0].kitchenPrinted,true);
+});
+
+test('interrupted parking recovers parked order and cleared session on restart',async()=>{
+ const f=fixture();f.cart();f.state.orderLabel='Стол 6';f.c.saveCurrentOrderSession();const originalSet=f.c.localStorage.setItem;let failed=false;
+ f.c.localStorage.setItem=(key,value)=>{if(key==='prilavok_parked'&&!failed){failed=true;throw Error('injected parked failure')}originalSet(key,value)};
+ const parked=await f.c.parkOrderNow();
+ assert.equal(parked,false);assert.equal(f.state.cart.length,1);assert.ok(JSON.parse(f.data.get('prilavok_criticalStorageJournal')));
+ const restarted=fixture();for(const [key,value] of f.data)restarted.data.set(key,value);await restarted.c.loadAll();
+ assert.equal(restarted.state.parked.length,1);assert.equal(restarted.state.parked[0].orderLabel,'Стол 6');assert.equal(restarted.state.cart.length,0);
+ assert.equal(JSON.parse(restarted.data.get('prilavok_criticalStorageJournal')),null);
+});
+
+test('resume failure retains parked order and empty current cart',async()=>{
+ const f=fixture();f.state.parked=[{id:'p',items:[{productId:'pizza',name:'Пицца',price:10,qty:1}],orderLabel:'Стол 7',orderType:'На месте',customer:{}}];
+ f.data.set('prilavok_parked',JSON.stringify(plain(f.state.parked)));const originalSet=f.c.localStorage.setItem;
+ f.c.localStorage.setItem=(key,value)=>{if(key==='prilavok_criticalStorageJournal')throw Error('injected journal failure');originalSet(key,value)};
+ const resumed=await f.c.resumeParked('p');
+ assert.equal(resumed,false);assert.equal(f.state.cart.length,0);assert.equal(f.state.parked.length,1);assert.match(f.messages.at(-1),/Чек не открыт/);
+});
+
+test('interrupted resume recovers current session and removes parked copy',async()=>{
+ const f=fixture();f.state.parked=[{id:'p',items:[{productId:'pizza',name:'Пицца',price:10,qty:1}],orderLabel:'Стол 8',orderType:'Доставка',deliveryFee:5,deliveryTariffSelected:true,customer:{id:'c',name:'Анна',phone:'+375291234567'},comment:'Без лука',source:'web',webOrderId:'web-8',webOrderStatus:'accepted'}];
+ f.data.set('prilavok_parked',JSON.stringify(plain(f.state.parked)));const originalSet=f.c.localStorage.setItem;let failed=false;
+ f.c.localStorage.setItem=(key,value)=>{if(key==='prilavok_parked'&&!failed){failed=true;throw Error('injected parked failure')}originalSet(key,value)};
+ const resumed=await f.c.resumeParked('p');
+ assert.equal(resumed,false);assert.equal(f.state.cart.length,0);assert.equal(f.state.parked.length,1);
+ const restarted=fixture();for(const [key,value] of f.data)restarted.data.set(key,value);await restarted.c.loadAll();
+ assert.equal(restarted.state.parked.length,0);assert.equal(restarted.state.cart.length,1);assert.equal(restarted.state.orderLabel,'Стол 8');
+ assert.equal(restarted.state.orderComment,'Без лука');assert.equal(restarted.state.currentWebOrderId,'web-8');assert.equal(restarted.state.deliveryTariffSelected,true);
+});
+
+test('double parking action commits once',async()=>{
+ const f=fixture();f.cart();f.state.orderLabel='Стол 9';let release,calls=0;const gate=new Promise(resolve=>{release=resolve}),commit=f.c.commitCriticalStorage;
+ f.c.commitCriticalStorage=async(...args)=>{calls++;await gate;return commit(...args)};
+ const first=f.c.parkOrderNow(),second=await f.c.parkOrderNow();
+ assert.equal(second,false);assert.equal(calls,1);release();assert.equal(await first,true);assert.equal(f.state.parked.length,1);
+});
+
 test('loyalty job is durable, and overlapping programs cannot reuse one item',async()=>{
  const f=fixture();f.cart();f.state.customer={id:'customer',name:'Клиент',phone:'+375290000000'};
  f.state.loyaltyPrograms=['a','b'].map(id=>({id,loyalty_reward_products:[{product_id:'pizza'}]}));f.state.loyaltyRedemptions={a:1,b:1};
@@ -783,7 +844,7 @@ test('operational deterministic suite restores outbox and revision',()=>{
 test('verified WEB customer survives local acceptance and resumes with loyalty identity',async()=>{
  const f=webAcceptFixture();f.state.webEvents[0].customer_id='verified-customer';f.state.webEvents[0].customer_name='Анна';f.state.webEvents[0].phone='+375291234567';f.c.fetch=async()=>({ok:true,json:async()=>({ok:true})});
  await f.c.acceptWebOrder('web-1','15m');assert.equal(f.state.parked[0].customer.id,'verified-customer');assert.equal(JSON.parse(f.data.get('prilavok_parked'))[0].customer.id,'verified-customer');
- let loaded;f.c.loadCustomerLoyalty=async id=>{loaded=id};f.state.cart=[];f.c.resumeParked(f.state.parked[0].id);assert.equal(f.state.customer.id,'verified-customer');assert.equal(loaded,'verified-customer');assert.equal(JSON.parse(f.data.get('prilavok_currentOrderSession')).customer.id,'verified-customer');
+ let loaded;f.c.loadCustomerLoyalty=async id=>{loaded=id};f.state.cart=[];await f.c.resumeParked(f.state.parked[0].id);assert.equal(f.state.customer.id,'verified-customer');assert.equal(loaded,'verified-customer');assert.equal(JSON.parse(f.data.get('prilavok_currentOrderSession')).customer.id,'verified-customer');
  let sent;f.c.loyaltyApi=async(url,options)=>{sent={url,body:JSON.parse(options.body)};return {events:[]}};const order={id:'paid-1',customer:f.state.customer,items:f.state.cart};await f.c.publishPaidOrderLoyalty(order);assert.equal(sent.body.customerId,'verified-customer');assert.equal(sent.url,'/api/loyalty/sales');assert.equal(order.loyaltySync.status,'synced');
 });
 test('SSE normalization persists verified identity through acceptance, resume and paid loyalty',async()=>{
@@ -797,7 +858,7 @@ test('SSE normalization persists verified identity through acceptance, resume an
  // Reload the persisted event, then use real acceptance and resume functions.
  f.state.webEvents=JSON.parse(f.data.get('prilavok_webEvents'));f.c.fetch=async()=>({ok:true,json:async()=>({ok:true})});await f.c.acceptWebOrder('web-1','15m');
  assert.equal(f.state.parked[0].customer.id,'verified-customer');
- f.c.loadCustomerLoyalty=async()=>{};f.c.resumeParked(f.state.parked[0].id);
+ f.c.loadCustomerLoyalty=async()=>{};await f.c.resumeParked(f.state.parked[0].id);
  assert.equal(f.state.customer.id,'verified-customer');
  let payload;f.c.loyaltyApi=async(url,options)=>{payload=JSON.parse(options.body);return {events:[]}};
  await f.c.publishPaidOrderLoyalty({id:'paid',customer:f.state.customer,items:f.state.cart});assert.equal(payload.customerId,'verified-customer');
@@ -815,8 +876,8 @@ test('delivery payment requires explicit tariff, including configured free deliv
 test('delivery selection is cleared on type switch and cannot use a deleted rate',()=>{
  const f=fixture();f.state.deliveryRates=[{amount:5}];f.state.orderType='Доставка';f.c.openOrderSettings=()=>{};f.c.selectDeliveryFee(5);assert.equal(f.c.hasDeliveryTariff(),true);f.state.deliveryRates=[];assert.equal(f.c.hasDeliveryTariff(),false);f.c.setOrderType('На месте');assert.equal(f.state.deliveryTariffSelected,false);assert.equal(f.c.hasDeliveryTariff(),true);f.c.setOrderType('Доставка');assert.equal(f.c.hasDeliveryTariff(),false);
 });
-test('parked delivery restores explicit tariff choice',()=>{
- const f=fixture();f.state.deliveryRates=[{amount:5}];f.state.parked=[{id:'p',items:[{productId:'pizza',qty:1,price:10}],orderType:'Доставка',deliveryFee:5,deliveryTariffSelected:true,customer:{}}];f.c.resumeParked('p');assert.equal(f.c.hasDeliveryTariff(),true);assert.equal(JSON.parse(f.data.get('prilavok_currentOrderSession')).deliveryTariffSelected,true);
+test('parked delivery restores explicit tariff choice',async()=>{
+ const f=fixture();f.state.deliveryRates=[{amount:5}];f.state.parked=[{id:'p',items:[{productId:'pizza',qty:1,price:10}],orderType:'Доставка',deliveryFee:5,deliveryTariffSelected:true,customer:{}}];await f.c.resumeParked('p');assert.equal(f.c.hasDeliveryTariff(),true);assert.equal(JSON.parse(f.data.get('prilavok_currentOrderSession')).deliveryTariffSelected,true);
 });
 test('editing readiness time saves without remounting the picker and rejects incomplete values',()=>{
  const f=webAcceptFixture();f.fields['web-order-accept']={disabled:true};let opened=0;f.c.openWebOrder=()=>opened++;
