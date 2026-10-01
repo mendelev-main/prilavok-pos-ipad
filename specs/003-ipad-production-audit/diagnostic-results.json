@@ -1,0 +1,11 @@
+[
+  {"id":"A003-F01","reproduced":true,"observed":{"cartItems":0,"parkedStored":false,"sessionItems":0,"message":"Чек отложен"}},
+  {"id":"A003-F02","reproduced":true,"observed":{"memoryStatus":"closed","storedStatus":"open","telegramSent":1}},
+  {"id":"A003-F03","reproduced":true,"observed":{"storedStock":3,"historyRows":0,"storedDraft":null,"message":"Инвентаризация завершена"}},
+  {"id":"A003-F04","reproduced":true,"observed":{"error":"state.products.map is not a function"}},
+  {"id":"A003-F05","reproduced":true,"observed":{"countedCash":-100}},
+  {"id":"A003-F06","reproduced":true,"observed":{"loyaltyHasTimeout":false}},
+  {"id":"A003-F07","reproduced":true,"observed":{"uploadBeforeLocalSave":true,"uploadHasTimeout":false}},
+  {"id":"A003-F08","reproduced":true,"observed":{"explicitDeadline":false,"handlesWaiting":false}},
+  {"id":"A003-F09","reproduced":true,"observed":{"removesPrinter":true,"removesTelegram":false,"removesPhotoPicker":false}}
+]
