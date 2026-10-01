@@ -8,7 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		A92700000000000000000001 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A92700000000000000000002 /* SceneDelegate.swift */; };
-		027D13269429464C93FEC487 /* BluetoothPrinterManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC1540EF9CFF4C8BAFE4020A /* BluetoothPrinterManager.swift */; };
+		027D13269429464C93FEC487 /* NetworkPrinterManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC1540EF9CFF4C8BAFE4020A /* NetworkPrinterManager.swift */; };
 		3C36AC675644423788C097B1 /* pos.html in Resources */ = {isa = PBXBuildFile; fileRef = ACB1313C6C90492FAAEB667E /* pos.html */; };
 		8A3609BED8B84C1582A06B6C /* PrilavokPOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B1EEC527F85450888BA48C5 /* PrilavokPOSApp.swift */; };
 		9F4A7C2D8B3E41F0A6D9C125 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6D2B8E4F1A9C43D7B5E6F012 /* Assets.xcassets */; };
@@ -16,6 +16,9 @@
 		AA9100000000000000000001 /* network-printer.js in Resources */ = {isa = PBXBuildFile; fileRef = AA9100000000000000000002 /* network-printer.js */; };
 		AA9200000000000000000001 /* notification-native.js in Resources */ = {isa = PBXBuildFile; fileRef = AA9200000000000000000002 /* notification-native.js */; };
 		B13017000000000000000001 /* Web in Resources */ = {isa = PBXBuildFile; fileRef = B13017000000000000000002 /* Web */; };
+		D16100000000000000000001 /* WarehouseWorkbook.swift in Sources */ = {isa = PBXBuildFile; fileRef = D16100000000000000000002 /* WarehouseWorkbook.swift */; };
+		D16200000000000000000001 /* WarehouseReportPDF.swift in Sources */ = {isa = PBXBuildFile; fileRef = D16200000000000000000011 /* WarehouseReportPDF.swift */; };
+		D16200000000000000000002 /* PurchaseOrderPDF.swift in Sources */ = {isa = PBXBuildFile; fileRef = D16200000000000000000012 /* PurchaseOrderPDF.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -26,13 +29,34 @@
 		9F4A7C2D8B84C1582A06B6D /* NativeNotificationSound.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeNotificationSound.swift; sourceTree = "<group>"; };
 		AA9100000000000000000002 /* network-printer.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "network-printer.js"; sourceTree = "<group>"; };
 		AA9200000000000000000002 /* notification-native.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "notification-native.js"; sourceTree = "<group>"; };
-		AC1540EF9CFF4C8BAFE4020A /* BluetoothPrinterManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothPrinterManager.swift; sourceTree = "<group>"; };
+		AC1540EF9CFF4C8BAFE4020A /* NetworkPrinterManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkPrinterManager.swift; sourceTree = "<group>"; };
 		ACB1313C6C90492FAAEB667E /* pos.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = pos.html; sourceTree = "<group>"; };
 		B13017000000000000000002 /* Web */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Web; sourceTree = "<group>"; };
 		C8F9D29B23D44139A2644B9B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		D16100000000000000000002 /* WarehouseWorkbook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WarehouseWorkbook.swift; sourceTree = "<group>"; };
+		D16200000000000000000011 /* WarehouseReportPDF.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WarehouseReportPDF.swift; sourceTree = "<group>"; };
+		D16200000000000000000012 /* PurchaseOrderPDF.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PurchaseOrderPDF.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
+		D16200000000000000000020 /* PDF */ = {
+			isa = PBXGroup;
+			children = (D16200000000000000000011 /* WarehouseReportPDF.swift */, D16200000000000000000012 /* PurchaseOrderPDF.swift */,);
+			path = PDF;
+			sourceTree = "<group>";
+		};
+		D16100000000000000000003 /* Reports */ = {
+			isa = PBXGroup;
+			children = (D16100000000000000000004 /* Spreadsheet */, D16200000000000000000020 /* PDF */,);
+			path = Reports;
+			sourceTree = "<group>";
+		};
+		D16100000000000000000004 /* Spreadsheet */ = {
+			isa = PBXGroup;
+			children = (D16100000000000000000002 /* WarehouseWorkbook.swift */,);
+			path = Spreadsheet;
+			sourceTree = "<group>";
+		};
 		039AFE25044C423DA293D60D /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -45,8 +69,9 @@
 			isa = PBXGroup;
 			children = (
 				2B1EEC527F85450888BA48C5 /* PrilavokPOSApp.swift */,
+				D16100000000000000000003 /* Reports */,
 				A92700000000000000000002 /* SceneDelegate.swift */,
-				AC1540EF9CFF4C8BAFE4020A /* BluetoothPrinterManager.swift */,
+				AC1540EF9CFF4C8BAFE4020A /* NetworkPrinterManager.swift */,
 				9F4A7C2D8B84C1582A06B6D /* NativeNotificationSound.swift */,
 				ACB1313C6C90492FAAEB667E /* pos.html */,
 				AA9100000000000000000002 /* network-printer.js */,
@@ -155,8 +180,11 @@
 			buildActionMask = 2147483647;
 			files = (
 				8A3609BED8B84C1582A06B6C /* PrilavokPOSApp.swift in Sources */,
+				D16100000000000000000001 /* WarehouseWorkbook.swift in Sources */,
+				D16200000000000000000002 /* PurchaseOrderPDF.swift in Sources */,
+				D16200000000000000000001 /* WarehouseReportPDF.swift in Sources */,
 				A92700000000000000000001 /* SceneDelegate.swift in Sources */,
-				027D13269429464C93FEC487 /* BluetoothPrinterManager.swift in Sources */,
+				027D13269429464C93FEC487 /* NetworkPrinterManager.swift in Sources */,
 				9F4A7C2D8B84C1582A06B6C /* NativeNotificationSound.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

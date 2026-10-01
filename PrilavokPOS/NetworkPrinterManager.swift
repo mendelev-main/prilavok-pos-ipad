@@ -2,7 +2,7 @@ import Foundation
 import Network
 import UIKit
 
-final class BluetoothPrinterManager: NSObject {
+final class NetworkPrinterManager: NSObject {
     var onEvent: (([String: Any]) -> Void)?
     private var networkConnections: [UUID: NWConnection] = [:]
 

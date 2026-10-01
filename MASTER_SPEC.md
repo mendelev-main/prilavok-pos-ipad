@@ -321,7 +321,7 @@ CSV-импорт:
 pos.html / network-printer.js
  → WKWebView message handler "printer"
  → PrilavokPOSApp.swift
- → BluetoothPrinterManager.swift (историческое имя)
+ → NetworkPrinterManager.swift
  → Network.framework / NWConnection
  → TCP/9100
  → ESC/POS
@@ -378,7 +378,9 @@ Print Bridge, desktop helper, Windows/Mac-драйвер в штатном пу�
 - работает с фото;
 - поддерживает нативные функции, которые невозможно/нежелательно выполнять только в HTML.
 
-`BluetoothPrinterManager.swift` — историческое имя LAN printer manager; фактическая передача выполняется через `NWConnection`.
+`NetworkPrinterManager.swift` — LAN printer manager; фактическая передача выполняется через `NWConnection`. Разрешение Bluetooth удалено; доступ к локальной сети сохранён.
+
+01.10.2026: удалены неподключённые альтернативы `Web/js/storage.js`, `Web/js/sync.js` и `Web/js/sync/sync-manager.js`. Runtime продолжает использовать `Web/js/core/storage.js` через существующий фасад; ключи, JSON и сетевые триггеры не менялись.
 
 ## 18. Проверки
 
@@ -396,6 +398,8 @@ Print Bridge, desktop helper, Windows/Mac-драйвер в штатном пу�
 - локальную навигацию/папки;
 - backup/restart compatibility;
 - сетевые сценарии, где они изолируются синтетическими данными.
+
+01.10.2026: Node regression suite — 134/134. Проверка operational channel соответствует массиву результатов диагностики, проверяет непустой результат, успешность каждого пункта и восстановление исходных outbox/revision.
 
 Автоматический тест не заменяет физическую проверку iPad для UI, жестов, печати и native share.
 
@@ -420,3 +424,30 @@ iPad-проверка, если она нужна
 ```
 
 MASTER никогда не является wishlist. DELTA никогда не является историей уже выполненных работ.
+
+
+## 20. Карта кода и очистка 01.10.2026
+
+- `SceneDelegate.swift` создаёт окно; `PrilavokPOSApp.swift` содержит app delegate, POSViewController, WKWebView bridges и показ экспорта отчётов.
+- `NetworkPrinterManager.swift` отправляет TCP-печать и содержит ReceiptEncoder. Имя класса и Xcode references обновлены без изменения кодирования чека и сетевого транспорта.
+- `NativeNotificationSound.swift` воспроизводит уведомления; `network-printer.js` и `notification-native.js` связывают web UI с native bridges.
+- `pos.html` содержит UI и бизнес-логику. Удалены 51 раннее повторное объявление функций: тела каждой пары были побайтно одинаковыми. Сохранены последние действовавшие объявления. Сравнение AST подтвердило неизменность остальных инструкций.
+- `Web/js/core/storage.js` — подключённый storage adapter. Удалены неподключённые constants/state и пять пустых domain-заготовок; новые модули добавляются при реальном переносе логики, а не заранее.
+- Bundle identifier, имена storage-ключей, техническое имя Xcode target и JSON-контракты сохранены.
+- Backend сохраняет готовые web-заказы примерно сутки и удаляет их по существующему расписанию; это подтверждённая политика пользователя. Долговременная история чеков хранится локально на iPad.
+
+Проверка этого этапа: 134 Node-теста, разбор JavaScript, эквивалентность AST после удаления перекрытых объявлений и Debug simulator build. Физическая LAN-печать ещё требует проверки на iPad.
+
+
+### Первый самостоятельный модуль отчётов
+
+`PrilavokPOS/Reports/Spreadsheet/WarehouseWorkbook.swift` содержит генератор XLSX, извлечённый буквально из PrilavokPOSApp.swift. Зависимость только Foundation; вход — прежний report dictionary, выход — Data. UIKit, показ share sheet и вызов WarehouseWorkbook.data(report) остаются в POSViewController. Файл включён в Sources и группу Reports/Spreadsheet в Xcode; build settings и версия не менялись.
+
+Проверки: три набора отчётов (пустой, кириллица/спецсимволы/числа/null, несколько разделов и граничные значения) дали побайтно одинаковые XLSX до и после переноса; проверены ZIP CRC и XML. Node suite 134/134, Debug simulator build и git diff --check успешны. Физическая проверка share/open остаётся в D16.
+
+
+### Генераторы PDF
+
+`Reports/PDF/WarehouseReportPDF.swift` формирует складской отчёт. Его используют ручной экспорт и отправка ежемесячного отчёта в Telegram. `Reports/PDF/PurchaseOrderPDF.swift` формирует PDF заказа поставщику и содержит свой форматтер даты. Методы перенесены из POSViewController буквально, кроме модификаторов static; входные словари, форматирование, размеры страниц, разбиение таблиц, запись файла и обработка ошибок сохранены. Выбор места показа share sheet и Telegram-запросы остаются в контроллере.
+
+Проверено: идентичность тел перенесённых методов, все три места вызова, Xcode Sources, 134/134 Node tests, Debug simulator build, plist и git diff --check. Рендеринг PDF на устройстве и отправка документов ещё не проверены.

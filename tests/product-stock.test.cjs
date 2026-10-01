@@ -700,6 +700,7 @@ test('operational deterministic suite restores outbox and revision',()=>{
  const f=fixture();f.state.operationalRevision=41;f.state.operationalOutbox=[{id:'existing',type:'snapshot',payload:{revision:41},attempts:2,nextAttemptAt:9999}];
  const before=plain({revision:f.state.operationalRevision,outbox:f.state.operationalOutbox});
  const result=f.c.__runOperationalChannelTests();
- assert.equal(result.ok,true,JSON.stringify(result.checks.filter(x=>!x.ok)));
+ assert.ok(Array.isArray(result)&&result.length>0,'operational checks must be a non-empty array');
+ assert.deepEqual(plain(result.filter(x=>!x.ok)),[],'all operational checks must pass');
  assert.deepEqual(plain({revision:f.state.operationalRevision,outbox:f.state.operationalOutbox}),before);
 });
