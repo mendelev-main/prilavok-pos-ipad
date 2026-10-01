@@ -6450,23 +6450,30 @@ function toggleShiftAdminPassword(){
   if(!isAdmin && password) password.value='';
   if(isAdmin) setTimeout(()=>password?.focus(),50);
 }
-function submitOpenShift(){
+async function submitOpenShift(){
+  if(criticalOperationBusy){flash('Сохранение операции ещё не завершено');return false;}
+  if(currentShift()){flash('Смена уже открыта');return false;}
   const employeeId=document.getElementById('sf-employee')?.value||'';
   const employee=state.employees.find(e=>e.id===employeeId);
-  if(!employee){ flash('Выберите сотрудника'); return; }
+  if(!employee){flash('Выберите сотрудника');return false;}
   if(employee.role==='admin'){
     const password=document.getElementById('sf-admin-password')?.value||'';
-    if(password!=='Rom23061998'){ flash('Для открытия смены администратором введите верный пароль'); return; }
+    if(password!=='Rom23061998'){flash('Для открытия смены администратором введите верный пароль');return false;}
   }
   const previousClosed = state.shifts.filter(s=>s.status==='closed').slice().sort((a,b)=>(b.closedAt||0)-(a.closedAt||0))[0] || null;
   const openingCash = previousClosed ? Number(previousClosed.countedCash||0) : 0;
   const newShift={id:uid(), status:'open', openedAt:Date.now(), openingCash, employeeId:employee.id, employeeName:employee.name, employeePhone:employee.phone||'', openingSourceShiftId:previousClosed?.id||''};
-  state.shifts.push(newShift);
-  saveKey('shifts', state.shifts);
+  const nextShifts=storageSnapshot(state.shifts);nextShifts.push(newShift);
+  criticalOperationBusy=true;
+  try{await commitCriticalStorage('open-shift',{shifts:nextShifts})}
+  catch(e){flash('Смена не открыта: '+(e?.message||e));return false}
+  finally{criticalOperationBusy=false}
+  state.shifts=nextShifts;
   closeModal();
   render();
-  sendTelegramShiftOpened(newShift);
-  maybeSendMonthlyWarehouseReport();
+  try{sendTelegramShiftOpened(newShift);maybeSendMonthlyWarehouseReport()}
+  catch(e){console.error('Смена открыта, но внешний отчёт не отправлен:',e)}
+  return true;
 }
 
 function openCashMovementModal(type){
@@ -6481,21 +6488,29 @@ function openCashMovementModal(type){
   `);
   setTimeout(()=>document.getElementById('cash-movement-amount')?.focus(),50);
 }
-function submitCashMovement(type){
+async function submitCashMovement(type){
+  if(!['deposit','withdrawal'].includes(type)){flash('Некорректная операция с наличными');return false;}
+  if(criticalOperationBusy){flash('Сохранение операции ещё не завершено');return false;}
   const shift=currentShift();
-  if(!shift){flash('Смена не открыта');closeModal();return;}
-  const amount=parseFloat((document.getElementById('cash-movement-amount')?.value||'').replace(',','.'))||0;
-  if(amount<=0){flash('Введите сумму');return;}
+  if(!shift){flash('Смена не открыта');closeModal();return false;}
+  const amount=Number(String(document.getElementById('cash-movement-amount')?.value||'').replace(',','.'));
+  if(!Number.isFinite(amount)||amount<=0){flash('Введите корректную сумму');return false;}
   if(type==='withdrawal'){
     const t=shiftTotals(shift.id);
     const available=Number(shift.openingCash||0)+t.cash+t.netMovements;
-    if(amount>available+0.0001){flash('Недостаточно наличных в кассе');return;}
+    if(amount>available+0.0001){flash('Недостаточно наличных в кассе');return false;}
   }
-  if(!Array.isArray(shift.cashMovements)) shift.cashMovements=[];
-  shift.cashMovements.push({id:uid(),type,amount,timestamp:Date.now(),note:(document.getElementById('cash-movement-note')?.value||'').trim()});
-  saveKey('shifts',state.shifts);
+  const nextShifts=storageSnapshot(state.shifts),nextShift=nextShifts.find(item=>item.id===shift.id);
+  if(!Array.isArray(nextShift.cashMovements))nextShift.cashMovements=[];
+  nextShift.cashMovements.push({id:uid(),type,amount,timestamp:Date.now(),note:(document.getElementById('cash-movement-note')?.value||'').trim()});
+  criticalOperationBusy=true;
+  try{await commitCriticalStorage('cash-movement',{shifts:nextShifts})}
+  catch(e){flash('Операция с наличными не сохранена: '+(e?.message||e));return false}
+  finally{criticalOperationBusy=false}
+  state.shifts=nextShifts;
   closeModal();render();
   flash(type==='deposit'?'Наличные внесены в кассу':'Наличные изъяты из кассы');
+  return true;
 }
 
 function openCloseShiftModal(){
@@ -6508,7 +6523,7 @@ function openCloseShiftModal(){
       <div style="font-size:20px;font-weight:800;">${fullMoney(expected)}</div>
     </div>
     <div class="field"><label>Фактически пересчитано</label>
-      <input type="number" id="sf-counted" inputmode="decimal" value="${expected}">
+      <input type="number" id="sf-counted" inputmode="decimal" min="0" step="0.01" value="${expected}">
     </div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal()">Отмена</button>
@@ -6517,19 +6532,29 @@ function openCloseShiftModal(){
   `);
 }
 async function submitCloseShift(){
+  if(criticalOperationBusy){flash('Сохранение операции ещё не завершено');return false;}
   const shift = currentShift();
-  if(!shift){flash('Смена не открыта');closeModal();return;}
-  const countedCash = parseFloat(document.getElementById('sf-counted').value) || 0;
-  shift.status = 'closed';
-  shift.closedAt = Date.now();
-  shift.countedCash = countedCash;
-  await saveKey('shifts', state.shifts);
-  sendTelegramShiftClosed(shift);
+  if(!shift){flash('Смена не открыта');closeModal();return false;}
+  const raw=String(document.getElementById('sf-counted')?.value||'').trim();
+  const countedCash=raw===''?NaN:Number(raw.replace(',','.'));
+  if(!Number.isFinite(countedCash)||countedCash<0){flash('Введите корректную сумму в кассе');return false;}
+  const nextShifts=storageSnapshot(state.shifts),closedShift=nextShifts.find(item=>item.id===shift.id);
+  closedShift.status='closed';closedShift.closedAt=Date.now();closedShift.countedCash=countedCash;
+  criticalOperationBusy=true;
+  try{await commitCriticalStorage('close-shift',{shifts:nextShifts})}
+  catch(e){flash('Смена не закрыта: '+(e?.message||e));return false}
+  finally{criticalOperationBusy=false}
+  state.shifts=nextShifts;
   closeModal();
   render();
+  try{sendTelegramShiftClosed(closedShift)}catch(e){console.error('Смена закрыта, но Telegram-отчёт не отправлен:',e)}
   // После успешного сохранения закрытой смены отправляем итоговый отчёт прямо на настроенный чековый принтер.
-  if(typeof window.printShiftCloseReceipt==='function') window.printShiftCloseReceipt(buildShiftReportPayload(shift));
+  if(typeof window.printShiftCloseReceipt==='function'){
+    try{window.printShiftCloseReceipt(buildShiftReportPayload(closedShift))}
+    catch(e){flash('Смена закрыта, но не удалось отправить отчёт на чековый принтер')}
+  }
   else flash('Не удалось отправить отчёт смены на чековый принтер');
+  return true;
 }
 
 function openEmployeeModal(id=''){

@@ -137,6 +137,57 @@ test('double parking action commits once',async()=>{
  assert.equal(second,false);assert.equal(calls,1);release();assert.equal(await first,true);assert.equal(f.state.parked.length,1);
 });
 
+test('opening shift failure keeps state closed and sends no report',async()=>{
+ const f=fixture();f.state.shifts=[];f.state.employees=[{id:'employee',name:'Иванов Иван',role:'employee'}];f.fields['sf-employee']={value:'employee'};let telegram=0,monthly=0;
+ f.c.sendTelegramShiftOpened=()=>telegram++;f.c.maybeSendMonthlyWarehouseReport=()=>monthly++;const originalSet=f.c.localStorage.setItem;
+ f.c.localStorage.setItem=(key,value)=>{if(key==='prilavok_criticalStorageJournal')throw Error('injected journal failure');originalSet(key,value)};
+ assert.equal(await f.c.submitOpenShift(),false);assert.equal(f.state.shifts.length,0);assert.equal(telegram,0);assert.equal(monthly,0);assert.match(f.messages.at(-1),/Смена не открыта/);
+});
+
+test('opening shift persists before Telegram and applies state once',async()=>{
+ const f=fixture();f.state.shifts=[];f.state.employees=[{id:'employee',name:'Иванов Иван',phone:'+375290000000',role:'employee'}];f.fields['sf-employee']={value:'employee'};let storedAtTelegram;
+ f.c.sendTelegramShiftOpened=()=>{storedAtTelegram=JSON.parse(f.data.get('prilavok_shifts'))[0].status};f.c.maybeSendMonthlyWarehouseReport=()=>{};
+ assert.equal(await f.c.submitOpenShift(),true);assert.equal(f.state.shifts.length,1);assert.equal(storedAtTelegram,'open');assert.equal(JSON.parse(f.data.get('prilavok_shifts')).length,1);
+ assert.equal(await f.c.submitOpenShift(),false);assert.equal(f.state.shifts.length,1);
+});
+
+test('cash movement failure leaves shift and stored cash unchanged',async()=>{
+ const f=fixture();f.data.set('prilavok_shifts',JSON.stringify(plain(f.state.shifts)));f.fields['cash-movement-amount']={value:'25,50'};f.fields['cash-movement-note']={value:'Размен'};const before=JSON.stringify(f.state.shifts),originalSet=f.c.localStorage.setItem;
+ f.c.localStorage.setItem=(key,value)=>{if(key==='prilavok_criticalStorageJournal')throw Error('injected journal failure');originalSet(key,value)};
+ assert.equal(await f.c.submitCashMovement('deposit'),false);assert.equal(JSON.stringify(f.state.shifts),before);assert.equal(JSON.parse(f.data.get('prilavok_shifts'))[0].cashMovements,undefined);assert.match(f.messages.at(-1),/не сохранена/);
+});
+
+test('cash movement validates numbers and persists exact amount',async()=>{
+ const f=fixture();f.fields['cash-movement-note']={value:'Размен'};
+ for(const value of ['', '-1', 'Infinity', 'abc']){f.fields['cash-movement-amount']={value};assert.equal(await f.c.submitCashMovement('deposit'),false)}
+ f.fields['cash-movement-amount']={value:'25,50'};assert.equal(await f.c.submitCashMovement('deposit'),true);
+ assert.equal(f.state.shifts[0].cashMovements[0].amount,25.5);assert.equal(JSON.parse(f.data.get('prilavok_shifts'))[0].cashMovements[0].note,'Размен');
+});
+
+test('closing shift rejects negative and non-finite counted cash',async()=>{
+ const f=fixture();for(const value of ['', '-1', 'Infinity', 'abc']){f.fields['sf-counted']={value};assert.equal(await f.c.submitCloseShift(),false);assert.equal(f.state.shifts[0].status,'open')}
+ assert.equal(f.data.has('prilavok_shifts'),false);
+});
+
+test('closing shift failure keeps shift open and sends no external report',async()=>{
+ const f=fixture();f.data.set('prilavok_shifts',JSON.stringify(plain(f.state.shifts)));f.fields['sf-counted']={value:'100'};let telegram=0,prints=0;f.c.sendTelegramShiftClosed=()=>telegram++;f.c.printShiftCloseReceipt=()=>prints++;const originalSet=f.c.localStorage.setItem;
+ f.c.localStorage.setItem=(key,value)=>{if(key==='prilavok_criticalStorageJournal')throw Error('injected journal failure');originalSet(key,value)};
+ assert.equal(await f.c.submitCloseShift(),false);assert.equal(f.state.shifts[0].status,'open');assert.equal(JSON.parse(f.data.get('prilavok_shifts'))[0].status,'open');assert.equal(telegram,0);assert.equal(prints,0);
+});
+
+test('closing shift persists before Telegram and printing',async()=>{
+ const f=fixture();f.fields['sf-counted']={value:'100,25'};const observed=[];
+ const status=()=>JSON.parse(f.data.get('prilavok_shifts'))[0].status;f.c.sendTelegramShiftClosed=()=>observed.push(['telegram',status()]);f.c.printShiftCloseReceipt=()=>observed.push(['print',status()]);
+ assert.equal(await f.c.submitCloseShift(),true);assert.equal(f.state.shifts[0].status,'closed');assert.equal(f.state.shifts[0].countedCash,100.25);assert.deepEqual(observed,[['telegram','closed'],['print','closed']]);
+});
+
+test('interrupted shift close recovers durable closed state after restart',async()=>{
+ const f=fixture();f.data.set('prilavok_shifts',JSON.stringify(plain(f.state.shifts)));f.fields['sf-counted']={value:'100'};const originalSet=f.c.localStorage.setItem;let failed=false;
+ f.c.localStorage.setItem=(key,value)=>{if(key==='prilavok_shifts'&&!failed){failed=true;throw Error('injected shift failure')}originalSet(key,value)};
+ assert.equal(await f.c.submitCloseShift(),false);assert.equal(f.state.shifts[0].status,'open');assert.ok(JSON.parse(f.data.get('prilavok_criticalStorageJournal')));
+ const restarted=fixture();for(const [key,value] of f.data)restarted.data.set(key,value);await restarted.c.loadAll();assert.equal(restarted.state.shifts[0].status,'closed');assert.equal(restarted.state.shifts[0].countedCash,100);
+});
+
 test('loyalty job is durable, and overlapping programs cannot reuse one item',async()=>{
  const f=fixture();f.cart();f.state.customer={id:'customer',name:'Клиент',phone:'+375290000000'};
  f.state.loyaltyPrograms=['a','b'].map(id=>({id,loyalty_reward_products:[{product_id:'pizza'}]}));f.state.loyaltyRedemptions={a:1,b:1};
