@@ -34,6 +34,17 @@ test('startup first paint does not wait for WEB acceptance recovery',async()=>{
  assert.equal(rendered,true);assert.equal(recoveryStarted,true);
  release();
 });
+test('startup survives valid JSON with invalid root storage shapes without overwriting it',async()=>{
+ const f=fixture(),raw={products:'{}',shifts:'{}',orders:'"broken"',receivings:'7',layout:'[]',network:'[]',hallTables:'{}',inventoryDraft:'[]',currentOrderSession:'[]'};
+ for(const [key,value] of Object.entries(raw))f.data.set('prilavok_'+key,value);
+ await assert.doesNotReject(f.c.loadAll());assert.equal(f.state.loaded,true);assert.deepEqual(plain(f.state.products),[]);assert.deepEqual(plain(f.state.shifts),[]);assert.deepEqual(plain(f.state.orders),[]);assert.deepEqual(plain(f.state.receivings),[]);assert.equal(f.state.inventoryDraft,null);
+ for(const [key,value] of Object.entries(raw))assert.equal(f.data.get('prilavok_'+key),value,'invalid '+key+' must remain available for recovery');
+ assert.equal(vm.runInContext('storageBroken',f.c),true);
+});
+test('startup filters invalid product rows but preserves original catalogue bytes',async()=>{
+ const f=fixture(),raw=JSON.stringify([null,{id:'safe',name:'Безопасный',type:'simple',stock:1,cost:1,price:2}]);f.data.set('prilavok_products',raw);
+ await assert.doesNotReject(f.c.loadAll());assert.equal(f.state.products.length,1);assert.equal(f.state.products[0].id,'safe');assert.equal(f.data.get('prilavok_products'),raw);assert.equal(vm.runInContext('storageBroken',f.c),true);
+});
 test('nested recipe multiplies quantities and aggregates repeated ingredients',()=>{
  const f=fixture();f.c.getProduct('pizza').components=[{productId:'dough',qty:2},{productId:'flour',qty:0.1}];
  const quantities=f.c.productIngredients(f.c.getProduct('pizza'),3);

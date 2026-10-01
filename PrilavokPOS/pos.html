@@ -1093,6 +1093,17 @@ async function saveKey(key, value){
   }
   catch(e){ markStorageBroken(e); }
 }
+function storageRecordArray(value,key){
+  if(!Array.isArray(value)){markStorageBroken('Некорректный формат '+key);return []}
+  const records=value.filter(item=>item&&typeof item==='object'&&!Array.isArray(item));
+  if(records.length!==value.length)markStorageBroken('Некорректные записи '+key);
+  return records;
+}
+function storageRecord(value,key,fallback={}){
+  if(value&&typeof value==='object'&&!Array.isArray(value))return value;
+  if(value!==null&&value!==undefined)markStorageBroken('Некорректный формат '+key);
+  return storageSnapshot(fallback);
+}
 function storageSnapshot(value){
   return JSON.parse(JSON.stringify(value));
 }
@@ -1166,66 +1177,71 @@ async function loadAll(){
     loadKey('inventoryHistory', []),
     loadKey('inventoryDraft', null)
   ]);
-  state.products = products === null ? seedProducts() : products;
-  state.shifts = shifts;
-  state.employees = Array.isArray(employees) ? employees : [];
+  const productRowsValid=products===null||(Array.isArray(products)&&products.every(item=>item&&typeof item==='object'&&!Array.isArray(item)));
+  if(!productRowsValid)markStorageBroken('Некорректный формат products');
+  state.products = products===null ? seedProducts() : (Array.isArray(products)?products.filter(item=>item&&typeof item==='object'&&!Array.isArray(item)):[]);
+  state.shifts = storageRecordArray(shifts,'shifts');
+  state.employees = storageRecordArray(employees,'employees');
   state.employees.forEach(e=>{ e.role = e.role==='admin' ? 'admin' : 'employee'; });
-  state.orders = orders;
-  state.parked = Array.isArray(parked) ? parked : [];
+  state.orders = storageRecordArray(orders,'orders');
+  state.parked = storageRecordArray(parked,'parked');
   state.demandOverload = demandOverload === true;
   state.operationalOutbox = Array.isArray(operationalOutbox) ? operationalOutbox.slice(-2) : [];
   state.operationalRevision = Math.max(0,Number(operationalRevision)||0);
-  state.receivings = receivings;
-  state.suppliers = Array.isArray(suppliers) ? suppliers : [];
-  state.purchaseOrders = Array.isArray(purchaseOrders) ? purchaseOrders : [];
+  state.receivings = storageRecordArray(receivings,'receivings');
+  state.suppliers = storageRecordArray(suppliers,'suppliers');
+  state.purchaseOrders = storageRecordArray(purchaseOrders,'purchaseOrders');
   state.purchaseOrderSupplierId = '';
   state.purchaseOrderCart = [];
-  state.discounts = Array.isArray(discounts) ? discounts : [];
+  state.discounts = storageRecordArray(discounts,'discounts');
   state.receivingCart = [];
-  state.categoryOrder = (layout && layout.categoryOrder) || [];
-  state.categoryColors = (layout && layout.categoryColors) || {};
-  state.categorySymbols = (layout && layout.categorySymbols) || {};
-  state.categoryOnline = (layout && layout.categoryOnline) || {};
+  const layoutShapeValid=!!layout&&typeof layout==='object'&&!Array.isArray(layout);
+  const safeLayout=storageRecord(layout,'layout',{categoryOrder:[],categoryColors:{},categorySymbols:{},categoryOnline:{}});
+  state.categoryOrder = Array.isArray(safeLayout.categoryOrder)?safeLayout.categoryOrder:[];
+  state.categoryColors = storageRecord(safeLayout.categoryColors,'layout.categoryColors',{});
+  state.categorySymbols = storageRecord(safeLayout.categorySymbols,'layout.categorySymbols',{});
+  state.categoryOnline = storageRecord(safeLayout.categoryOnline,'layout.categoryOnline',{});
   state.categoryOrder.forEach(c=>{ if(typeof state.categoryOnline[c] !== 'boolean') state.categoryOnline[c]=true; });
-  state.layoutTiles = Array.isArray(layout?.tiles) ? layout.tiles : [];
+  state.layoutTiles = Array.isArray(safeLayout.tiles) ? safeLayout.tiles.filter(item=>item&&typeof item==='object'&&!Array.isArray(item)) : [];
   state.posNavigation=normalizePosNavigation(posNavigation);
   state.posFolder='';
   state.posPath = null;
-  state.printer = Object.assign({enabled:false, autoPrint:false, ip:'', port:9100 }, printer || {});
-  state.company = Object.assign({establishmentName:'', legalName:'', address:'', deliveryAddress:''}, company || {});
-  state.deliveryRates = Array.isArray(deliveryRates) ? deliveryRates : [];
-  state.telegram = Object.assign({enabled:false, botToken:'', chatId:'', threadId:'', notifyShiftOpened:true, notifyShiftClosed:true, notifyMonthlyWarehouse:false, lastMonthlyWarehouseSent:''}, telegram || {});
-  state.network = Object.assign({backendUrl:'https://project-dubrovno.up.railway.app', deviceKey:'', deviceName:'M POS iPad', lastSyncAt:null, lastSyncStatus:''}, network || {});
+  state.printer = Object.assign({enabled:false, autoPrint:false, ip:'', port:9100 }, storageRecord(printer,'printer',{}));
+  state.company = Object.assign({establishmentName:'', legalName:'', address:'', deliveryAddress:''}, storageRecord(company,'company',{}));
+  state.deliveryRates = storageRecordArray(deliveryRates,'deliveryRates');
+  state.telegram = Object.assign({enabled:false, botToken:'', chatId:'', threadId:'', notifyShiftOpened:true, notifyShiftClosed:true, notifyMonthlyWarehouse:false, lastMonthlyWarehouseSent:''}, storageRecord(telegram,'telegram',{}));
+  const networkShapeValid=!!network&&typeof network==='object'&&!Array.isArray(network);
+  state.network = Object.assign({backendUrl:'https://project-dubrovno.up.railway.app', deviceKey:'', deviceName:'M POS iPad', lastSyncAt:null, lastSyncStatus:''}, storageRecord(network,'network',{}));
   if(!state.network.deviceKey){
     state.network.deviceKey = (crypto?.randomUUID ? crypto.randomUUID() : ('dev_'+uid()+'_'+uid()));
-    saveKey('network', state.network);
+    if(networkShapeValid)saveKey('network', state.network);
   }
-  state.hallTables = Array.isArray(hallTables) ? hallTables : [];
-  state.bookings = Array.isArray(bookings) ? bookings : [];
-  state.webEvents = Array.isArray(webEvents) ? webEvents : [];
-  state.inventoryConfig = Object.assign({enabled:false,frequency:'monthly',productIds:[],lastCompletedAt:null}, inventoryConfig || {});
+  state.hallTables = storageRecordArray(hallTables,'hallTables');
+  state.bookings = storageRecordArray(bookings,'bookings');
+  state.webEvents = storageRecordArray(webEvents,'webEvents');
+  state.inventoryConfig = Object.assign({enabled:false,frequency:'monthly',productIds:[],lastCompletedAt:null}, storageRecord(inventoryConfig,'inventoryConfig',{}));
   state.inventoryConfig.productIds = Array.isArray(state.inventoryConfig.productIds) ? state.inventoryConfig.productIds : [];
   state.inventoryConfig.customDates = Array.isArray(state.inventoryConfig.customDates) ? state.inventoryConfig.customDates : [];
-  state.inventoryHistory = Array.isArray(inventoryHistory) ? inventoryHistory : [];
-  state.inventoryDraft = inventoryDraft && typeof inventoryDraft==='object' ? inventoryDraft : null;
+  state.inventoryHistory = storageRecordArray(inventoryHistory,'inventoryHistory');
+  state.inventoryDraft = inventoryDraft===null ? null : storageRecord(inventoryDraft,'inventoryDraft',null);
   if(!state.bookingDate) state.bookingDate = localDateString(new Date());
-  if(!state.hallTables.length) saveKey('hallTables', state.hallTables);
 
   // Восстанавливаем незавершённый текущий заказ после перезапуска приложения.
   // Сохраняются позиции, количество, комментарии/скидки и параметры заказа.
-  if(currentOrderSession && Array.isArray(currentOrderSession.items)){
-    state.cart = currentOrderSession.items;
-    state.orderLabel = currentOrderSession.orderLabel || '';
-    state.orderType = currentOrderSession.orderType || 'На месте';
-    state.customer = Object.assign({name:'',phone:'',address:''}, currentOrderSession.customer || {});
-    state.deliveryFee = Number(currentOrderSession.deliveryFee || 0);
-    state.deliveryTariffSelected = currentOrderSession.deliveryTariffSelected===true;
-    state.orderComment = currentOrderSession.orderComment || '';
-    state.currentOrderSource = currentOrderSession.source || '';
-    state.currentWebOrderId = currentOrderSession.webOrderId || '';
-    state.currentWebOrderStatus = currentOrderSession.webOrderStatus || '';
-    window.__currentOrderKitchenPrinted = !!currentOrderSession.kitchenPrinted;
-    window.__currentOrderPrintedItems = Array.isArray(currentOrderSession.printedItems) ? JSON.parse(JSON.stringify(currentOrderSession.printedItems)) : [];
+  const safeCurrentOrder=currentOrderSession===null?null:storageRecord(currentOrderSession,'currentOrderSession',null);
+  if(safeCurrentOrder && Array.isArray(safeCurrentOrder.items)){
+    state.cart = safeCurrentOrder.items.filter(item=>item&&typeof item==='object'&&!Array.isArray(item));
+    state.orderLabel = safeCurrentOrder.orderLabel || '';
+    state.orderType = safeCurrentOrder.orderType || 'На месте';
+    state.customer = Object.assign({name:'',phone:'',address:''}, storageRecord(safeCurrentOrder.customer,'currentOrderSession.customer',{}));
+    state.deliveryFee = Number(safeCurrentOrder.deliveryFee || 0);
+    state.deliveryTariffSelected = safeCurrentOrder.deliveryTariffSelected===true;
+    state.orderComment = safeCurrentOrder.orderComment || '';
+    state.currentOrderSource = safeCurrentOrder.source || '';
+    state.currentWebOrderId = safeCurrentOrder.webOrderId || '';
+    state.currentWebOrderStatus = safeCurrentOrder.webOrderStatus || '';
+    window.__currentOrderKitchenPrinted = !!safeCurrentOrder.kitchenPrinted;
+    window.__currentOrderPrintedItems = Array.isArray(safeCurrentOrder.printedItems) ? JSON.parse(JSON.stringify(safeCurrentOrder.printedItems)) : [];
   }
   state.deliveryFee = Number(state.deliveryFee || 0);
   state.theme = theme === 'dark' ? 'dark' : 'light';
@@ -1238,15 +1254,15 @@ async function loadAll(){
   let needSave = (products === null);
   let maxOrder = Math.max(0, ...state.products.map(p=>p.sortOrder||0));
   for(const p of state.products){
-    if(typeof p.sortOrder !== 'number'){ maxOrder += 1; p.sortOrder = maxOrder; needSave = true; }
-    if(typeof p.availableOnline !== 'boolean'){ p.availableOnline = true; needSave = true; }
-    if(typeof p.imageUrl !== 'string'){ p.imageUrl = ''; needSave = true; }
+    if(typeof p.sortOrder !== 'number'){ maxOrder += 1; p.sortOrder = maxOrder; if(productRowsValid)needSave = true; }
+    if(typeof p.availableOnline !== 'boolean'){ p.availableOnline = true; if(productRowsValid)needSave = true; }
+    if(typeof p.imageUrl !== 'string'){ p.imageUrl = ''; if(productRowsValid)needSave = true; }
   }
   if(needSave) saveKey('products', state.products);
   syncCategoryOrder();
   if(!state.layoutTiles.length){
     state.layoutTiles = state.products.map(p=>({type:'product', id:p.id}));
-    saveKey('layout', {categoryOrder: state.categoryOrder, categoryColors: state.categoryColors, categorySymbols: state.categorySymbols, categoryOnline: state.categoryOnline, tiles: state.layoutTiles});
+    if(layoutShapeValid)saveKey('layout', {categoryOrder: state.categoryOrder, categoryColors: state.categoryColors, categorySymbols: state.categorySymbols, categoryOnline: state.categoryOnline, tiles: state.layoutTiles});
   } else {
     // Удаляем из раскладки ссылки на уже удалённые товары/категории.
     const validProducts = new Set(state.products.map(p=>p.id));
