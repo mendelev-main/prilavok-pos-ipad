@@ -122,7 +122,7 @@ POS с безопасными значениями в памяти и сохра
 
 ### A003-F08 — LAN-печать не имеет deadline и изменяет общий словарь из разных очередей
 
-**Статус**: Code-confirmed; зависание/гонку нужно подтвердить устройством и Thread Sanitizer.  
+**Статус**: Code-confirmed на baseline `6975821`; исправлено в spec 009, device-проверка отложена.
 **Код**: `PrilavokPOS/NetworkPrinterManager.swift:7`, `PrilavokPOS/NetworkPrinterManager.swift:9`.
 
 `NWConnection` хранится до `.ready`, `.failed` или `.cancelled`; состояние `.waiting` не
@@ -133,6 +133,9 @@ POS с безопасными значениями в памяти и сохра
 печати.  
 **Закрытие**: выделенная serial queue/actor, deadline с cancel, ровно одно terminal event; тесты
 недоступного IP, отключения Wi‑Fi и серии параллельных печатей.
+
+**Решение**: [spec 009](../009-network-printer-lifecycle/spec.md) изолирует соединения на одной
+serial queue, добавляет десятисекундный deadline и единое terminal-событие.
 
 ### A003-F10 — пароль администратора встроен в поставляемый HTML
 

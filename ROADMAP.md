@@ -6,7 +6,7 @@
 
 | ID | Направление | Цель и граница | Зависит от | Статус | Sub-spec |
 |---|---|---|---|---|---|
-| R1 | Production acceptance 130.52 | Пройти полный code-аудит и физическую матрицу iPad, LAN-печать, WEB/Telegram, PDF/XLSX, backup и loyalty; закрыть подтверждённые риски отдельными fixes | — | in-progress | [003 audit](specs/003-ipad-production-audit/spec.md) · [004 parked](specs/004-parked-order-atomicity/spec.md) · [005 shifts](specs/005-shift-storage-safety/spec.md) · [006 inventory](specs/006-inventory-atomicity/spec.md) · [007 startup](specs/007-storage-shape-recovery/spec.md) · [008 loyalty timeout](specs/008-loyalty-request-timeout/spec.md) |
+| R1 | Production acceptance 130.52 | Пройти полный code-аудит и физическую матрицу iPad, LAN-печать, WEB/Telegram, PDF/XLSX, backup и loyalty; закрыть подтверждённые риски отдельными fixes | — | in-progress | [003 audit](specs/003-ipad-production-audit/spec.md) · [004 parked](specs/004-parked-order-atomicity/spec.md) · [005 shifts](specs/005-shift-storage-safety/spec.md) · [006 inventory](specs/006-inventory-atomicity/spec.md) · [007 startup](specs/007-storage-shape-recovery/spec.md) · [008 loyalty timeout](specs/008-loyalty-request-timeout/spec.md) · [009 printer lifecycle](specs/009-network-printer-lifecycle/spec.md) |
 | R2 | Единая техническая версия | Убрать ручное дублирование Debug/Release/UI и оставить один build-time source | R1 | planned | — |
 | R3 | Local-first фото товара | Сохранять карточку и фото локально; upload делать отдельной явной сетевой операцией | R1 | planned | — |
 | R4 | Граница входящих WEB-заказов | Изолировать EventSource/ACK от manual POS→backend sync и закрепить границу тестами | R1 | planned | — |

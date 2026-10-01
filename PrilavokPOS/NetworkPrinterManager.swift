@@ -4,6 +4,8 @@ import UIKit
 
 final class NetworkPrinterManager: NSObject {
     var onEvent: (([String: Any]) -> Void)?
+    private let networkQueue = DispatchQueue(label: "com.mpos.network-printer", qos: .userInitiated)
+    private let connectionTimeout: TimeInterval = 10
     private var networkConnections: [UUID: NWConnection] = [:]
 
     func print(order: [String: Any]) {
@@ -12,26 +14,40 @@ final class NetworkPrinterManager: NSObject {
         let portValue=(order["__networkPrinterPort"] as? NSNumber)?.intValue ?? 9100
         guard validIPv4(ip), let port=NWEndpoint.Port(rawValue: UInt16(clamping:portValue)) else { event("printError","network_error","Неверный IP-адрес принтера"); return }
         let test=(order["__networkTest"] as? Bool)==true
+        networkQueue.async { [weak self] in self?.startPrint(order: order, ip: ip, port: port, test: test) }
+    }
+
+    private func startPrint(order: [String: Any], ip: String, port: NWEndpoint.Port, test: Bool) {
         let id=UUID(), connection=NWConnection(host:NWEndpoint.Host(ip),port:port,using:.tcp)
         networkConnections[id]=connection
         var finished=false
-        func finish(){ guard !finished else{return}; finished=true; connection.cancel(); self.networkConnections.removeValue(forKey:id) }
+        func finish(_ result: (String, String, String)? = nil){
+            guard !finished else{return}
+            finished=true
+            connection.stateUpdateHandler=nil
+            connection.cancel()
+            networkConnections.removeValue(forKey:id)
+            if let result { event(result.0,result.1,result.2) }
+        }
         connection.stateUpdateHandler={ [weak self] state in
             guard let self=self,!finished else{return}
             switch state {
             case .ready:
                 let data=test ? Self.testData() : ReceiptEncoder.encode(order:order)
                 connection.send(content:data,completion:.contentProcessed{ error in
-                    if let error=error { self.event("printError","network_error","Ошибка печати: \(error.localizedDescription)") }
-                    else { self.event("printed","network_printed",test ? "Пробная печать отправлена" : "Чек отправлен на принтер") }
-                    finish()
+                    if let error=error { finish(("printError","network_error","Ошибка печати: \(error.localizedDescription)")) }
+                    else { finish(("printed","network_printed",test ? "Пробная печать отправлена" : "Чек отправлен на принтер")) }
                 })
-            case .failed(let error): self.event("printError","network_error","Не удалось подключиться к принтеру: \(error.localizedDescription)"); finish()
+            case .waiting: break
+            case .failed(let error): finish(("printError","network_error","Не удалось подключиться к принтеру: \(error.localizedDescription)"))
             case .cancelled: finish()
             default: break
             }
         }
-        connection.start(queue:.global(qos:.userInitiated))
+        connection.start(queue:networkQueue)
+        networkQueue.asyncAfter(deadline:.now()+connectionTimeout) {
+            finish(("printError","network_error","Принтер не ответил за 10 секунд"))
+        }
     }
     private func event(_ type:String,_ status:String,_ message:String){ onEvent?(["type":type,"status":status,"message":message]) }
     private func validIPv4(_ ip:String)->Bool { let p=ip.split(separator:"."); return p.count==4 && p.allSatisfy{ Int($0).map{(0...255).contains($0)} ?? false } }
