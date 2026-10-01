@@ -1441,8 +1441,21 @@ function clearCurrentOrderSession(){
   saveKey('currentOrderSession',emptyCurrentOrderSession());
 }
 
-function loyaltyApi(path,options={}){
- const n=networkConfigFromState();return fetch(n.backendUrl+path,{...options,headers:{'Content-Type':'application/json','X-Device-Key':n.deviceKey,...(options.headers||{})},cache:'no-store'}).then(async r=>{const d=await r.json().catch(()=>null);if(!r.ok)throw new Error(d?.error||('HTTP '+r.status));return d});
+const LOYALTY_API_TIMEOUT_MS=5000;
+async function loyaltyApi(path,options={}){
+ const n=networkConfigFromState(),controller=new AbortController(),externalSignal=options.signal;
+ const relayAbort=()=>controller.abort();
+ if(externalSignal){if(externalSignal.aborted)controller.abort();else externalSignal.addEventListener('abort',relayAbort,{once:true})}
+ const timeout=setTimeout(()=>controller.abort(),LOYALTY_API_TIMEOUT_MS);
+ try{
+  const r=await fetch(n.backendUrl+path,{...options,signal:controller.signal,headers:{'Content-Type':'application/json','X-Device-Key':n.deviceKey,...(options.headers||{})},cache:'no-store'});
+  const d=await r.json().catch(()=>null);if(!r.ok)throw new Error(d?.error||('HTTP '+r.status));return d;
+ }catch(e){
+  if(e?.name==='AbortError'&&!externalSignal?.aborted)throw new Error('Сервер не ответил вовремя');
+  throw e;
+ }finally{
+  clearTimeout(timeout);externalSignal?.removeEventListener?.('abort',relayAbort);
+ }
 }
 async function searchCustomers(q){
  const term=String(q||'').trim();if(term.length<2)return [];

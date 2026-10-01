@@ -250,6 +250,15 @@ test('loyalty job is durable, and overlapping programs cannot reuse one item',as
  release({events:[]});
 });
 
+test('loyalty API aborts a stalled request and payment can continue without a gift',async()=>{
+ const f=fixture();let expire,modal='',paid=false,cleared=false;
+ f.c.setTimeout=fn=>{expire=fn;return 17};f.c.clearTimeout=id=>{if(id===17)cleared=true};
+ f.c.fetch=(_url,options)=>new Promise((_resolve,reject)=>options.signal.addEventListener('abort',()=>{const error=new Error('aborted');error.name='AbortError';reject(error)},{once:true}));
+ f.c.showModal=html=>{modal=html};f.state.customer={id:'customer',name:'Клиент',phone:'+375290000000'};f.state.loyaltyRedemptions={program:1};
+ const payment=f.c.beginPaymentWithLoyaltyGuard(()=>{paid=true});assert.equal(typeof expire,'function');expire();await payment;
+ assert.equal(paid,false);assert.equal(cleared,true);assert.match(modal,/Продолжить без подарка/);assert.match(modal,/без интернета/);
+});
+
 test('returned loyalty sale is always posted before its reversal',async()=>{
  const f=fixture(),calls=[];const order={id:'paid',customer:{id:'customer'},items:[{productId:'pizza',qty:1}],loyaltySync:{status:'pending'},loyaltyReversal:{status:'pending'},returnedAt:Date.now()};f.state.orders=[order];
  f.c.loyaltyApi=async path=>{calls.push(path);return path.endsWith('/sales')?{events:[]}:{};};
