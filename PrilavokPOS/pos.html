@@ -3184,12 +3184,18 @@ function startAdhocInventory(){
  if(!startInventory('adhoc'))return;state.tab='inventoryWork';render();
 }
 function updateInventoryActual(id,v){const x=state.inventoryDraft?.items.find(i=>i.productId===id);if(!x||x.fixedAt)return;const n=Number(String(v).replace(',','.'));x.actual=Number.isFinite(n)&&n>=0?roundStockQty(n):null;saveKey('inventoryDraft',state.inventoryDraft);}
-function fixInventoryItem(id){
- const d=state.inventoryDraft,x=d?.items.find(i=>i.productId===id);if(!x||x.fixedAt)return;
- if(x.actual===null||!Number.isFinite(Number(x.actual))){flash('Введите остаток товара');return;}
- const p=getProduct(x.productId);if(!productTracksStock(p)){flash('Для товара недоступен учёт остатков');return;}
- x.expected=roundStockQty(Number(p.stock)||0);x.actual=roundStockQty(Number(x.actual));x.difference=roundStockQty(x.actual-x.expected);x.fixedAt=Date.now();p.stock=x.actual;
- saveKey('products',state.products);saveKey('inventoryDraft',d);render();flash('Остаток зафиксирован');
+async function fixInventoryItem(id){
+ if(criticalOperationBusy){flash('Сохранение операции ещё не завершено');return false;}
+ const d=state.inventoryDraft,x=d?.items.find(i=>i.productId===id);if(!x||x.fixedAt)return false;
+ const actual=Number(x.actual);if(x.actual===null||!Number.isFinite(actual)||actual<0){flash('Введите корректный остаток товара');return false;}
+ const p=getProduct(x.productId);if(!productTracksStock(p)){flash('Для товара недоступен учёт остатков');return false;}
+ const nextProducts=storageSnapshot(state.products),nextDraft=storageSnapshot(d),nextProduct=nextProducts.find(item=>item.id===p.id),nextItem=nextDraft.items.find(item=>item.productId===id);
+ nextItem.expected=roundStockQty(Number(nextProduct.stock)||0);nextItem.actual=roundStockQty(actual);nextItem.difference=roundStockQty(nextItem.actual-nextItem.expected);nextItem.fixedAt=Date.now();nextProduct.stock=nextItem.actual;
+ criticalOperationBusy=true;
+ try{await commitCriticalStorage('inventory-fix',{products:nextProducts,inventoryDraft:nextDraft})}
+ catch(e){flash('Остаток не зафиксирован: '+(e?.message||e));return false}
+ finally{criticalOperationBusy=false}
+ state.products=nextProducts;state.inventoryDraft=nextDraft;render();flash('Остаток зафиксирован');return true;
 }
 function requestCancelInventory(){
  if(!state.inventoryDraft)return;
@@ -3234,10 +3240,17 @@ function showInventorySummary(){
    </div>
    <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Вернуться</button><button class="btn btn-primary" onclick="confirmCompleteInventory()">Завершить инвентаризацию</button></div>`,true);
 }
-function confirmCompleteInventory(){
- const d=state.inventoryDraft;if(!d)return;const completedAt=Date.now(),summary=inventorySummaryData();
- state.inventoryHistory.unshift({...d,completedAt,estimatedLoss:summary.loss,items:d.items.map(x=>({...x}))});if(d.type!=='adhoc')state.inventoryConfig.lastCompletedAt=completedAt;
- state.inventoryDraft=null;state.tab='pos';saveKey('products',state.products);saveKey('inventoryHistory',state.inventoryHistory);saveKey('inventoryConfig',state.inventoryConfig);saveKey('inventoryDraft',null);closeModal();render();flash('Инвентаризация завершена');
+async function confirmCompleteInventory(){
+ if(criticalOperationBusy){flash('Сохранение операции ещё не завершено');return false;}
+ const d=state.inventoryDraft;if(!d)return false;
+ if(!Array.isArray(d.items)||!d.items.length||d.items.some(x=>!x.fixedAt)){flash('Сначала зафиксируйте остаток каждого товара');return false;}
+ const completedAt=Date.now(),summary=inventorySummaryData(),nextProducts=storageSnapshot(state.products),nextHistory=storageSnapshot(state.inventoryHistory),nextConfig=storageSnapshot(state.inventoryConfig);
+ nextHistory.unshift({...storageSnapshot(d),completedAt,estimatedLoss:summary.loss,items:storageSnapshot(d.items)});if(d.type!=='adhoc')nextConfig.lastCompletedAt=completedAt;
+ criticalOperationBusy=true;
+ try{await commitCriticalStorage('inventory-complete',{products:nextProducts,inventoryHistory:nextHistory,inventoryConfig:nextConfig,inventoryDraft:null})}
+ catch(e){flash('Инвентаризация не завершена: '+(e?.message||e));return false}
+ finally{criticalOperationBusy=false}
+ state.products=nextProducts;state.inventoryHistory=nextHistory;state.inventoryConfig=nextConfig;state.inventoryDraft=null;state.tab='pos';closeModal();render();flash('Инвентаризация завершена');return true;
 }
 function renderInventoryScreen(){
  const c=state.inventoryConfig||{};if(!['weekly','monthly','quarterly'].includes(c.frequency))c.frequency='monthly';

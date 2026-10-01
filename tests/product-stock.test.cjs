@@ -188,6 +188,45 @@ test('interrupted shift close recovers durable closed state after restart',async
  const restarted=fixture();for(const [key,value] of f.data)restarted.data.set(key,value);await restarted.c.loadAll();assert.equal(restarted.state.shifts[0].status,'closed');assert.equal(restarted.state.shifts[0].countedCash,100);
 });
 
+test('inventory fix failure leaves product and draft unchanged',async()=>{
+ const f=fixture();f.state.inventoryDraft={id:'inventory',type:'scheduled',items:[{productId:'flour',name:'Мука',unit:'kg',expected:10,actual:3}]};const before=JSON.stringify({products:f.state.products,draft:f.state.inventoryDraft}),originalSet=f.c.localStorage.setItem;
+ f.c.localStorage.setItem=(key,value)=>{if(key==='prilavok_criticalStorageJournal')throw Error('injected journal failure');originalSet(key,value)};
+ assert.equal(await f.c.fixInventoryItem('flour'),false);assert.equal(JSON.stringify({products:f.state.products,draft:f.state.inventoryDraft}),before);assert.match(f.messages.at(-1),/не зафиксирован/);
+});
+
+test('inventory fix persists product and draft together',async()=>{
+ const f=fixture();f.state.inventoryDraft={id:'inventory',type:'scheduled',items:[{productId:'flour',name:'Мука',unit:'kg',expected:10,actual:3}]};
+ assert.equal(await f.c.fixInventoryItem('flour'),true);assert.equal(f.c.getProduct('flour').stock,3);assert.equal(f.state.inventoryDraft.items[0].difference,-7);assert.ok(f.state.inventoryDraft.items[0].fixedAt);
+ assert.equal(JSON.parse(f.data.get('prilavok_products')).find(x=>x.id==='flour').stock,3);assert.equal(JSON.parse(f.data.get('prilavok_inventoryDraft')).items[0].difference,-7);
+});
+
+test('interrupted inventory fix recovers stock and fixed draft together',async()=>{
+ const f=fixture();f.state.inventoryDraft={id:'inventory',type:'scheduled',items:[{productId:'flour',name:'Мука',unit:'kg',expected:10,actual:3}]};f.data.set('prilavok_products',JSON.stringify(plain(f.state.products)));f.data.set('prilavok_inventoryDraft',JSON.stringify(plain(f.state.inventoryDraft)));const originalSet=f.c.localStorage.setItem;let failed=false;
+ f.c.localStorage.setItem=(key,value)=>{if(key==='prilavok_inventoryDraft'&&!failed){failed=true;throw Error('injected draft failure')}originalSet(key,value)};
+ assert.equal(await f.c.fixInventoryItem('flour'),false);assert.equal(f.c.getProduct('flour').stock,10);
+ const restarted=fixture();for(const [key,value] of f.data)restarted.data.set(key,value);await restarted.c.loadAll();assert.equal(restarted.c.getProduct('flour').stock,3);assert.equal(restarted.state.inventoryDraft.items[0].difference,-7);assert.ok(restarted.state.inventoryDraft.items[0].fixedAt);
+});
+
+test('inventory completion failure keeps history, config and draft unchanged',async()=>{
+ const f=fixture();f.c.getProduct('flour').stock=3;f.state.inventoryHistory=[];f.state.inventoryConfig={enabled:true,frequency:'monthly',productIds:['flour'],lastCompletedAt:null};f.state.inventoryDraft={id:'inventory',type:'scheduled',items:[{productId:'flour',name:'Мука',unit:'kg',expected:10,actual:3,difference:-7,fixedAt:1}]};const before=JSON.stringify({history:f.state.inventoryHistory,config:f.state.inventoryConfig,draft:f.state.inventoryDraft,tab:f.state.tab}),originalSet=f.c.localStorage.setItem;
+ f.c.localStorage.setItem=(key,value)=>{if(key==='prilavok_criticalStorageJournal')throw Error('injected journal failure');originalSet(key,value)};
+ assert.equal(await f.c.confirmCompleteInventory(),false);assert.equal(JSON.stringify({history:f.state.inventoryHistory,config:f.state.inventoryConfig,draft:f.state.inventoryDraft,tab:f.state.tab}),before);assert.match(f.messages.at(-1),/не завершена/);
+});
+
+test('inventory completion commits stock, history, config and draft together',async()=>{
+ const f=fixture();f.c.getProduct('flour').stock=3;f.state.inventoryHistory=[];f.state.inventoryConfig={enabled:true,frequency:'monthly',productIds:['flour'],lastCompletedAt:null};f.state.inventoryDraft={id:'inventory',type:'scheduled',items:[{productId:'flour',name:'Мука',unit:'kg',expected:10,actual:3,difference:-7,fixedAt:1}]};
+ assert.equal(await f.c.confirmCompleteInventory(),true);assert.equal(f.state.inventoryDraft,null);assert.equal(f.state.inventoryHistory.length,1);assert.ok(f.state.inventoryConfig.lastCompletedAt);assert.equal(f.state.tab,'pos');
+ assert.equal(JSON.parse(f.data.get('prilavok_inventoryHistory')).length,1);assert.equal(JSON.parse(f.data.get('prilavok_inventoryDraft')),null);assert.equal(JSON.parse(f.data.get('prilavok_products')).find(x=>x.id==='flour').stock,3);
+});
+
+test('interrupted inventory completion recovers every related key',async()=>{
+ const f=fixture();f.c.getProduct('flour').stock=3;f.state.inventoryHistory=[];f.state.inventoryConfig={enabled:true,frequency:'monthly',productIds:['flour'],lastCompletedAt:null};f.state.inventoryDraft={id:'inventory',type:'scheduled',items:[{productId:'flour',name:'Мука',unit:'kg',expected:10,actual:3,difference:-7,fixedAt:1}]};
+ for(const [key,value] of [['prilavok_products',f.state.products],['prilavok_inventoryHistory',[]],['prilavok_inventoryConfig',f.state.inventoryConfig],['prilavok_inventoryDraft',f.state.inventoryDraft]])f.data.set(key,JSON.stringify(plain(value)));
+ const originalSet=f.c.localStorage.setItem;let failed=false;f.c.localStorage.setItem=(key,value)=>{if(key==='prilavok_inventoryHistory'&&!failed){failed=true;throw Error('injected history failure')}originalSet(key,value)};
+ assert.equal(await f.c.confirmCompleteInventory(),false);assert.notEqual(f.state.inventoryDraft,null);assert.ok(JSON.parse(f.data.get('prilavok_criticalStorageJournal')));
+ const restarted=fixture();for(const [key,value] of f.data)restarted.data.set(key,value);await restarted.c.loadAll();assert.equal(restarted.c.getProduct('flour').stock,3);assert.equal(restarted.state.inventoryHistory.length,1);assert.ok(restarted.state.inventoryConfig.lastCompletedAt);assert.equal(restarted.state.inventoryDraft,null);
+});
+
 test('loyalty job is durable, and overlapping programs cannot reuse one item',async()=>{
  const f=fixture();f.cart();f.state.customer={id:'customer',name:'Клиент',phone:'+375290000000'};
  f.state.loyaltyPrograms=['a','b'].map(id=>({id,loyalty_reward_products:[{product_id:'pizza'}]}));f.state.loyaltyRedemptions={a:1,b:1};
