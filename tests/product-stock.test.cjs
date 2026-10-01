@@ -540,6 +540,38 @@ test('supplier requests preserve packages independently from expected warehouse 
  const known=f.c.makePurchaseLine(p,4,'pack',2.5);near(known.expectedQty,10);near(known.requestedQty,4);
  near(f.c.makePurchaseLine(p,20000,'g','').expectedQty,20);assert.throws(()=>f.c.makePurchaseLine(p,2,'l',''));assert.throws(()=>f.c.makePurchaseLine(p,2,'box',-1));
 });
+function purchaseOrderFixture(){
+ const f=fixture();f.c.getProduct('flour').stockUnit='kg';f.state.suppliers=[{id:'supplier',name:'Поставщик',productIds:['flour']}];f.state.purchaseOrderSupplierId='supplier';f.state.purchaseOrderCart=[{productId:'flour',requestedQty:4,requestedUnit:'pack',packSize:2,contentUnit:'kg'}];f.c.render=()=>{};f.c.viewPurchaseOrder=()=>{};return f;
+}
+test('purchase order journal failure leaves products, orders and draft unchanged',async()=>{
+ const f=purchaseOrderFixture(),before=JSON.stringify({products:f.state.products,orders:f.state.purchaseOrders,cart:f.state.purchaseOrderCart}),originalSet=f.c.localStorage.setItem;
+ f.c.localStorage.setItem=(key,value)=>{if(key==='prilavok_criticalStorageJournal')throw Error('injected journal failure');originalSet(key,value)};
+ assert.equal(await f.c.finalizePurchaseOrder(),false);assert.equal(JSON.stringify({products:f.state.products,orders:f.state.purchaseOrders,cart:f.state.purchaseOrderCart}),before);assert.match(f.messages.at(-1),/Заказ не сформирован/);
+});
+test('purchase order publishes saved products and order then clears its draft',async()=>{
+ const f=purchaseOrderFixture();assert.equal(await f.c.finalizePurchaseOrder(),true);assert.equal(f.state.purchaseOrders.length,1);assert.equal(f.state.purchaseOrderCart.length,0);assert.equal(f.c.getProduct('flour').purchaseUnit,'pack');assert.equal(JSON.parse(f.data.get('prilavok_purchaseOrders')).length,1);
+});
+test('interrupted purchase order creation recovers product settings and order together',async()=>{
+ const f=purchaseOrderFixture(),originalSet=f.c.localStorage.setItem;let failed=false;f.c.localStorage.setItem=(key,value)=>{if(key==='prilavok_purchaseOrders'&&!failed){failed=true;throw Error('injected order failure')}originalSet(key,value)};
+ assert.equal(await f.c.finalizePurchaseOrder(),false);assert.equal(f.state.purchaseOrders.length,0);assert.equal(f.c.getProduct('flour').purchaseUnit,undefined);
+ const restarted=fixture();for(const [key,value] of f.data)restarted.data.set(key,value);await restarted.c.loadAll();assert.equal(restarted.state.purchaseOrders.length,1);assert.equal(restarted.c.getProduct('flour').purchaseUnit,'pack');assert.equal(restarted.c.getProduct('flour').purchasePackSize,2);
+});
+function deletablePurchaseOrderFixture(){
+ const f=fixture();f.state.employees=[{id:'admin',name:'Администратор',role:'admin'}];f.state.shifts=[{id:'shift',status:'open',openingCash:100,employeeId:'admin',employeeName:'Администратор'}];f.state.purchaseOrders=[{id:'purchase',supplierId:'supplier',supplierName:'Поставщик',items:[{productId:'flour',productName:'Мука',qty:4}],status:'pending',timestamp:1}];f.state.receivings=[];f.c.render=()=>{};f.c.closeModal=()=>{};return f;
+}
+test('purchase order deletion failure leaves order and receiving history unchanged',async()=>{
+ const f=deletablePurchaseOrderFixture(),before=JSON.stringify({orders:f.state.purchaseOrders,receivings:f.state.receivings}),originalSet=f.c.localStorage.setItem;
+ f.c.localStorage.setItem=(key,value)=>{if(key==='prilavok_criticalStorageJournal')throw Error('injected journal failure');originalSet(key,value)};
+ assert.equal(await f.c.deletePurchaseOrderAsAdmin('purchase'),false);assert.equal(JSON.stringify({orders:f.state.purchaseOrders,receivings:f.state.receivings}),before);assert.match(f.messages.at(-1),/не удалена/);
+});
+test('purchase order deletion publishes deleted status and one audit row',async()=>{
+ const f=deletablePurchaseOrderFixture();assert.equal(await f.c.deletePurchaseOrderAsAdmin('purchase'),true);assert.equal(f.state.purchaseOrders[0].status,'deleted');assert.equal(f.state.receivings.length,1);assert.equal(JSON.parse(f.data.get('prilavok_receivings')).length,1);
+});
+test('interrupted purchase order deletion recovers deleted status and audit row together',async()=>{
+ const f=deletablePurchaseOrderFixture(),originalSet=f.c.localStorage.setItem;let failed=false;f.c.localStorage.setItem=(key,value)=>{if(key==='prilavok_receivings'&&!failed){failed=true;throw Error('injected receiving failure')}originalSet(key,value)};
+ assert.equal(await f.c.deletePurchaseOrderAsAdmin('purchase'),false);assert.equal(f.state.purchaseOrders[0].status,'pending');assert.equal(f.state.receivings.length,0);
+ const restarted=fixture();for(const [key,value] of f.data)restarted.data.set(key,value);await restarted.c.loadAll();assert.equal(restarted.state.purchaseOrders[0].status,'deleted');assert.equal(restarted.state.receivings.length,1);assert.equal(restarted.state.receivings[0].adminDeleted,true);
+});
 test('invoice normalizes grams and uses invoice total as acquisition cost',()=>{
  const f=fixture();f.c.getProduct('flour').stockUnit='kg';
  const [item]=f.c.invoiceReceivingItems({lines:[{productId:'flour',qtyInput:'1500',unit:'g',totalInput:'30'}]});near(item.qty,1.5);near(item.unitCost,20);near(item.invoiceUnitPrice,0.02);

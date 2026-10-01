@@ -29,8 +29,8 @@ final class NetworkPrinterManager: NSObject {
             networkConnections.removeValue(forKey:id)
             if let result { event(result.0,result.1,result.2) }
         }
-        connection.stateUpdateHandler={ [weak self] state in
-            guard let self=self,!finished else{return}
+        connection.stateUpdateHandler={ state in
+            guard !finished else{return}
             switch state {
             case .ready:
                 let data=test ? Self.testData() : ReceiptEncoder.encode(order:order)

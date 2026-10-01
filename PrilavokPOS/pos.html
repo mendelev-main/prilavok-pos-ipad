@@ -5862,39 +5862,41 @@ function openDeletePurchaseOrderModal(orderId){
       <button class="btn btn-danger" onclick="deletePurchaseOrderAsAdmin('${escapeAttr(order.id)}')">Удалить приёмку</button>
     </div>`, false);
 }
-function deletePurchaseOrderAsAdmin(orderId){
+async function deletePurchaseOrderAsAdmin(orderId){
+  if(criticalOperationBusy){flash('Сохранение операции ещё не завершено');return false;}
   if(!canAdminDeletePurchaseOrder()){
     closeModal();
     flash('Удалять приёмки может только администратор при открытой им смене');
-    return;
+    return false;
   }
   const order=state.purchaseOrders.find(o=>o.id===orderId);
-  if(!order || order.deletedAt) return;
+  if(!order || order.deletedAt) return false;
   if(order.status==='received'){
     closeModal();
     flash('Принятую приёмку удалить нельзя');
-    return;
+    return false;
   }
   const shift=currentShift();
   const employee=state.employees.find(e=>e.id===shift.employeeId);
-  order.deletedAt=Date.now();
-  order.deletedByEmployeeId=employee?.id||'';
-  order.deletedByEmployeeName=employee?.name||shift.employeeName||'Администратор';
-  order.status='deleted';
-  order.receivingIncomplete=false;
-  delete order.receivingDraft;
-  order.deletedAt=Date.now();
+  const nextPurchaseOrders=storageSnapshot(state.purchaseOrders),nextReceivings=storageSnapshot(state.receivings),nextOrder=nextPurchaseOrders.find(o=>o.id===orderId),deletedAt=Date.now();
+  nextOrder.deletedAt=deletedAt;
+  nextOrder.deletedByEmployeeId=employee?.id||'';
+  nextOrder.deletedByEmployeeName=employee?.name||shift.employeeName||'Администратор';
+  nextOrder.status='deleted';
+  nextOrder.receivingIncomplete=false;
+  delete nextOrder.receivingDraft;
+  delete nextOrder.receivingDraftV2;
   // Удалённая администратором приёмка переносится в Историю приёмок
   // и остаётся там как отдельная аудиторская запись.
-  const alreadyInHistory=state.receivings.some(r=>r.purchaseOrderId===order.id && r.adminDeleted);
+  const alreadyInHistory=nextReceivings.some(r=>r.purchaseOrderId===nextOrder.id && r.adminDeleted);
   if(!alreadyInHistory){
-    state.receivings.push({
+    nextReceivings.push({
       id:uid(),
       type:'purchaseOrder',
-      purchaseOrderId:order.id,
-      supplierId:order.supplierId||'',
-      supplierName:order.supplierName||'',
-      items:Array.isArray(order.items)?order.items.map(i=>({
+      purchaseOrderId:nextOrder.id,
+      supplierId:nextOrder.supplierId||'',
+      supplierName:nextOrder.supplierName||'',
+      items:Array.isArray(nextOrder.items)?nextOrder.items.map(i=>({
         productId:i.productId,
         productName:i.productName,
         qty:Number(i.qty)||0,
@@ -5905,15 +5907,20 @@ function deletePurchaseOrderAsAdmin(orderId){
       totalCost:0,
       shortage:false,
       adminDeleted:true,
-      deletedByEmployeeName:order.deletedByEmployeeName||'Администратор',
-      timestamp:order.deletedAt
+      deletedByEmployeeName:nextOrder.deletedByEmployeeName||'Администратор',
+      timestamp:deletedAt
     });
   }
-  saveKey('purchaseOrders',state.purchaseOrders);
-  saveKey('receivings',state.receivings);
+  criticalOperationBusy=true;
+  try{await commitCriticalStorage('delete-purchase-order',{purchaseOrders:nextPurchaseOrders,receivings:nextReceivings})}
+  catch(e){flash('Приёмка не удалена: '+(e?.message||e));return false}
+  finally{criticalOperationBusy=false}
+  state.purchaseOrders=nextPurchaseOrders;
+  state.receivings=nextReceivings;
   closeModal();
   render();
   flash('Приёмка удалена администратором и перемещена в историю');
+  return true;
 }
 
 function addReceivingLine(){
@@ -5997,18 +6004,25 @@ function updatePurchaseRequest(productId){
   try{const line=makePurchaseLine(getProduct(productId),qty,unit,size,contentUnit);note.textContent=line.expectedQty===null?'Количество внутри уточняется при приёмке':`На склад поступит: ${line.expectedQty} ${unitLabel(line.stockUnit)}`;}catch(e){note.textContent=qty===''?'Укажите количество':e.message;}
   const button=document.getElementById('po-create');if(button)button.disabled=!state.purchaseOrderCart.length;
 }
-function finalizePurchaseOrder(){
+async function finalizePurchaseOrder(){
+  if(criticalOperationBusy){flash('Сохранение операции ещё не завершено');return false;}
   const supplier=getPurchaseOrderSupplier();if(!supplier){flash('Выберите поставщика');return;}
   try{
+    const nextProducts=storageSnapshot(state.products);
     const items=state.purchaseOrderCart.map(x=>{
       const p=getProduct(x.productId);if(!p||p.type!=='simple')throw new Error('Товар недоступен: '+(p?.name||x.productId));
       const supplierProductIds=(supplier.productIds||[]).map(String);if(supplierProductIds.length && !supplierProductIds.includes(String(p.id)))throw new Error('Товар «'+p.name+'» больше не привязан к выбранному поставщику');
-      const line=makePurchaseLine(p,x.requestedQty??x.qty,x.requestedUnit??stockUnit(p),x.packSize??'',x.contentUnit??p.purchaseContentUnit??stockUnit(p)); p.purchaseUnit=line.requestedUnit; p.purchasePackSize=line.packSize??undefined; p.purchaseContentUnit=line.contentUnit; return line;
+      const line=makePurchaseLine(p,x.requestedQty??x.qty,x.requestedUnit??stockUnit(p),x.packSize??'',x.contentUnit??p.purchaseContentUnit??stockUnit(p)),nextProduct=nextProducts.find(item=>item.id===p.id);
+      nextProduct.purchaseUnit=line.requestedUnit;nextProduct.purchasePackSize=line.packSize??undefined;nextProduct.purchaseContentUnit=line.contentUnit;return line;
     });
     if(!items.length)throw new Error('Добавьте хотя бы один товар');
     const order={id:uid(),requestVersion:1,supplierId:supplier.id,supplierName:supplier.name,items,status:'pending',timestamp:Date.now()};
-    state.purchaseOrders.push(order);saveKey('products',state.products);saveKey('purchaseOrders',state.purchaseOrders);state.purchaseOrderCart=[];render();viewPurchaseOrder(order.id);
-  }catch(e){flash(e.message);}
+    const nextPurchaseOrders=storageSnapshot(state.purchaseOrders);nextPurchaseOrders.push(order);
+    criticalOperationBusy=true;
+    try{await commitCriticalStorage('create-purchase-order',{products:nextProducts,purchaseOrders:nextPurchaseOrders})}
+    finally{criticalOperationBusy=false}
+    state.products=nextProducts;state.purchaseOrders=nextPurchaseOrders;state.purchaseOrderCart=[];render();viewPurchaseOrder(order.id);return true;
+  }catch(e){flash('Заказ не сформирован: '+(e?.message||e));return false;}
 }
 function openSupplyHistory(kind){
   if(kind==='orders'){
