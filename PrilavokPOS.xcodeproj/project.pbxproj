@@ -170,7 +170,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "HTML_FILE=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/pos.html\"\nif [ -f \"$HTML_FILE\" ]; then\n  /usr/bin/perl -0pi -e 's#<div style=\"font-size:15px;font-weight:800;margin-bottom:10px;\">Быстрые настройки</div>#<div style=\"display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;\"><div style=\"font-size:15px;font-weight:800;\">Быстрые настройки</div><div style=\"font-size:12px;font-weight:700;color:var(--muted);white-space:nowrap;\">Версия $ENV{MARKETING_VERSION}</div></div>#' \"$HTML_FILE\"\n  if ! /usr/bin/grep -q 'network-printer.js' \"$HTML_FILE\"; then\n    /usr/bin/perl -0pi -e 's#</body>#<script src=\"network-printer.js\"></script></body>#' \"$HTML_FILE\"\n  fi\n  if ! /usr/bin/grep -q 'notification-native.js' \"$HTML_FILE\"; then\n    /usr/bin/perl -0pi -e 's#</body>#<script src=\"notification-native.js\"></script></body>#' \"$HTML_FILE\"\n  fi\nfi\n";
+			shellScript = "HTML_FILE=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/pos.html\"\nif [ -f \"$HTML_FILE\" ]; then\n  /usr/bin/perl -0pi -e 's#__MPOS_VERSION__#$ENV{MARKETING_VERSION}#g' \"$HTML_FILE\"\n  if ! /usr/bin/grep -q 'network-printer.js' \"$HTML_FILE\"; then\n    /usr/bin/perl -0pi -e 's#</body>#<script src=\"network-printer.js\"></script></body>#' \"$HTML_FILE\"\n  fi\n  if ! /usr/bin/grep -q 'notification-native.js' \"$HTML_FILE\"; then\n    /usr/bin/perl -0pi -e 's#</body>#<script src=\"notification-native.js\"></script></body>#' \"$HTML_FILE\"\n  fi\nfi\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -203,7 +203,7 @@
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = PrilavokPOS/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 130.51;
+				MARKETING_VERSION = 130.52;
 				PRODUCT_BUNDLE_IDENTIFIER = com.prilavok.pos;
 				PRODUCT_MODULE_NAME = PrilavokPOS;
 				PRODUCT_NAME = PrilavokPOS;
@@ -230,7 +230,7 @@
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = PrilavokPOS/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 130.51;
+				MARKETING_VERSION = 130.52;
 				PRODUCT_BUNDLE_IDENTIFIER = com.prilavok.pos;
 				PRODUCT_MODULE_NAME = PrilavokPOS;
 				PRODUCT_NAME = PrilavokPOS;

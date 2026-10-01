@@ -1,0 +1,105 @@
+[
+  {
+    "id": "F01",
+    "defect": true,
+    "observed": {
+      "receiptShown": true,
+      "receiptStored": false,
+      "cartItems": 0,
+      "stockStored": true
+    }
+  },
+  {
+    "id": "F02",
+    "defect": true,
+    "observed": {
+      "persistedSync": null,
+      "retried": 0
+    }
+  },
+  {
+    "id": "F03",
+    "defect": true,
+    "observed": {
+      "payable": 0,
+      "displayed": "10,00 Br"
+    }
+  },
+  {
+    "id": "F04",
+    "defect": true,
+    "observed": {
+      "subtotal": 15,
+      "discount": 20,
+      "payable": 0
+    }
+  },
+  {
+    "id": "F01-return-products",
+    "defect": true,
+    "observed": {
+      "localReturned": true,
+      "persistedReturned": true,
+      "persistedFlour": 9.8,
+      "persistedCashMovements": 1
+    }
+  },
+  {
+    "id": "F01-return-orders",
+    "defect": true,
+    "observed": {
+      "localReturned": true,
+      "persistedReturned": false,
+      "persistedFlour": 10,
+      "persistedCashMovements": 1
+    }
+  },
+  {
+    "id": "F01-return-shifts",
+    "defect": true,
+    "observed": {
+      "localReturned": true,
+      "persistedReturned": true,
+      "persistedFlour": 10,
+      "persistedCashMovements": 0
+    }
+  },
+  {
+    "id": "F01-receiving-products",
+    "defect": true,
+    "observed": {
+      "success": true,
+      "storedDocuments": 1,
+      "storedStatus": "received",
+      "storedStock": 10
+    }
+  },
+  {
+    "id": "F01-receiving-purchaseOrders",
+    "defect": true,
+    "observed": {
+      "success": true,
+      "storedDocuments": 1,
+      "storedStatus": "pending",
+      "storedStock": 13
+    }
+  },
+  {
+    "id": "F01-receiving-receivings",
+    "defect": true,
+    "observed": {
+      "success": true,
+      "storedDocuments": 0,
+      "storedStatus": "received",
+      "storedStock": 13
+    }
+  },
+  {
+    "id": "F08",
+    "defect": true,
+    "observed": {
+      "ordersAfter": 0,
+      "success": true
+    }
+  }
+]

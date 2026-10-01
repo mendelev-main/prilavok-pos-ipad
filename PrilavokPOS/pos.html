@@ -911,6 +911,61 @@
   @media(max-width:900px){.shift-summary-grid{grid-template-columns:1fr;}.shift-summary-section.cash{grid-row:auto;}}
   @media(max-width:620px){.shift-summary-card{padding:16px;}.shift-summary-header{padding:14px;}.shift-summary-grid{gap:10px;}.shift-summary-section{padding:14px;}.shift-summary-row{gap:10px;}}
 
+
+  .modal.loyalty-editor{width:min(960px,100%);max-width:960px;padding:0;display:flex;flex-direction:column;overflow:hidden}
+  .lp-heading{padding:22px 24px 16px;border-bottom:1px solid var(--border)}
+  .lp-heading .modal-title{margin-bottom:4px}.lp-body{padding:20px 24px;overflow:auto;min-height:0;display:grid;gap:16px}
+  .lp-panel{padding:16px;border:1px solid var(--border);border-radius:16px;min-width:0;background:var(--surface)}
+  .lp-panel .field{margin-bottom:0}.lp-panel input:not([type=checkbox]){width:100%;min-width:0;min-height:46px;box-sizing:border-box}
+  .lp-rules,.lp-columns{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}.lp-rules{margin-top:14px}
+  .lp-panel-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px}.lp-count{font-size:12px;color:var(--muted);white-space:nowrap}
+  .lp-search{border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--ink);padding:10px 12px;font:inherit}
+  .lp-products{height:250px;overflow:auto;margin-top:10px;overscroll-behavior:contain}
+  .lp-product{display:flex;align-items:center;gap:12px;padding:12px 10px;border:1px solid transparent;border-radius:10px;min-height:52px;cursor:pointer}
+  .lp-product[hidden],.lp-empty[hidden]{display:none}.lp-product:has(input:checked){background:var(--accent-soft);border-color:var(--accent)}
+  .lp-product input{width:22px;height:22px;flex-shrink:0;accent-color:var(--accent)}.lp-product span{min-width:0}.lp-product b{display:block;font-size:14px;overflow-wrap:anywhere}.lp-product small{display:block;color:var(--muted);font-size:12px;margin-top:3px}
+  .lp-actions{display:flex;gap:12px;padding:16px 24px;border-top:1px solid var(--border);background:var(--surface)}.lp-actions .btn{min-height:48px}.lp-actions .btn-secondary{flex:0 0 140px}.lp-actions .btn-primary{flex:1}
+  @media(max-width:650px){.lp-columns{grid-template-columns:1fr}.lp-body{padding:16px}.lp-heading,.lp-actions{padding:16px}.lp-products{height:220px}.lp-panel-head{flex-wrap:wrap}}
+
+
+  .loyalty-page-inner{width:100%;max-width:1120px;margin:0 auto;min-width:0}
+  .loyalty-page-header{display:flex;align-items:center;gap:18px;margin-bottom:22px}.loyalty-page-header h1{font-size:23px;margin:0;font-weight:850}.loyalty-page-header .btn{width:auto;min-height:44px;padding:10px 16px;flex-shrink:0}
+  .loyalty-sections{display:grid;grid-template-columns:1fr 1fr;gap:5px;padding:5px;border:1px solid var(--border);border-radius:16px;background:var(--surface);margin-bottom:22px}
+  .loyalty-sections button{border:0;border-radius:11px;min-height:48px;background:transparent;color:var(--muted);font:inherit;font-weight:750;cursor:pointer}.loyalty-sections button.selected{background:var(--ink);color:var(--surface)}
+  .loyalty-section-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px;color:var(--muted);font-size:14px}.loyalty-section-toolbar .btn{width:auto;min-height:46px;padding:12px 20px}
+  .loyalty-program-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.loyalty-program-card{display:flex;flex-direction:column;min-width:0;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:22px}
+  .loyalty-program-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.loyalty-program-heading h2{font-size:18px;line-height:1.35;margin:0;overflow-wrap:anywhere}.loyalty-status{font-size:11px;font-weight:750;border:1px solid var(--border);border-radius:20px;padding:6px 9px;color:var(--muted);white-space:nowrap}.loyalty-status.is-active{color:var(--ink);background:var(--bg)}
+  .loyalty-rule{display:flex;align-items:center;gap:18px;background:var(--bg);border-radius:14px;padding:16px;margin-top:20px}.loyalty-rule>div{flex:1;min-width:0}.loyalty-rule strong{display:block;font-size:28px;line-height:1.2}.loyalty-rule span{font-size:12px;color:var(--muted)}.loyalty-rule .loyalty-rule-arrow{font-size:20px}
+  .loyalty-card-meta{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--muted);padding:14px 0 20px}.loyalty-card-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:auto}.loyalty-card-actions .btn{min-width:0;min-height:44px;padding:10px}.loyalty-card-actions .loyalty-delete{grid-column:1/-1;background:transparent;color:var(--muted);font-size:12px}
+  .loyalty-clients-panel{border:1px solid var(--border);border-radius:20px;background:var(--surface);padding:22px}.loyalty-client-search label{display:block;font-size:13px;font-weight:750;margin-bottom:8px}.loyalty-client-search input{width:100%;box-sizing:border-box;min-height:48px;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--bg);color:var(--ink);font:inherit}
+  .loyalty-client-columns{display:flex;justify-content:space-between;color:var(--muted);font-size:12px;padding:22px 12px 10px;border-bottom:1px solid var(--border)}.loyalty-clients-panel .list-row{background:transparent;color:var(--ink);font:inherit;border:0;border-bottom:1px solid var(--border);min-height:74px;padding:16px 12px;border-radius:0;gap:12px}.loyalty-clients-panel .list-row>div{min-width:0}.loyalty-clients-panel .list-row-name{overflow-wrap:anywhere}.loyalty-clients-panel .list-row:after{content:'Открыть →';font-size:12px;color:var(--muted);margin-left:auto;white-space:nowrap}.loyalty-clients-panel .list-row:last-child{border-bottom:0}
+  .loyalty-empty{grid-column:1/-1;display:flex;flex-direction:column;gap:8px;text-align:center;padding:48px 20px;border:1px dashed var(--border);border-radius:20px;color:var(--muted)}.loyalty-empty strong{color:var(--ink)}
+  @media(max-width:760px){.loyalty-program-grid{grid-template-columns:1fr}.loyalty-page-header{gap:12px}.loyalty-page-header h1{font-size:20px}.loyalty-program-card,.loyalty-clients-panel{padding:16px}}
+
+
+  .cart-head .cart-order-title{min-width:0;line-height:1.4;font-size:17px;font-weight:800;color:inherit}.cart-position-count{font-size:13px;font-weight:500;color:var(--muted);white-space:nowrap}
+  .cart-head-actions{display:flex;align-items:center;gap:8px;flex-shrink:0;position:relative}.cart-head-actions .cart-add-feedback{position:absolute;right:44px;pointer-events:none;background:var(--surface)}
+  .cart-customer-button{width:36px;height:36px;display:flex;align-items:center;justify-content:center;padding:0;border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--ink);cursor:pointer}.cart-customer-button.selected{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+  .customer-phone-field{display:flex;align-items:center;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--bg)}.customer-phone-field>span{padding:0 14px;font-weight:750;border-right:1px solid var(--border)}.customer-phone-field input{border:0!important;background:transparent!important;min-width:0;flex:1;min-height:50px;font-size:18px!important}
+  .customer-picker-results{min-height:100px;max-height:300px;overflow:auto;display:grid;gap:10px}.customer-result-card{display:flex;flex-direction:column;align-items:flex-start;gap:6px;width:100%;padding:16px;border:1px solid var(--border);border-radius:14px;background:var(--surface);color:var(--ink);font:inherit;text-align:left;cursor:pointer}.customer-result-card strong{overflow-wrap:anywhere}.customer-result-card span{font-size:14px;color:var(--muted)}
+
+  .web-customer-comment{color:#c62828;font-weight:600;white-space:pre-wrap;overflow-wrap:anywhere;padding:10px 0;}
+
+  .modal.web-order-modal{max-width:940px;width:100%;padding:0;display:flex;flex-direction:column;overflow:hidden}
+  .web-order-heading{padding:22px 24px 18px;border-bottom:1px solid var(--border);flex-shrink:0}.web-order-eyebrow{font-size:12px;color:var(--muted);margin-bottom:6px}.web-order-heading .modal-title{font-size:20px;margin:0 0 12px;overflow-wrap:anywhere}.web-order-customer{display:flex;align-items:center;flex-wrap:wrap;gap:6px 16px;font-size:14px}.web-order-customer strong{overflow-wrap:anywhere}.web-order-customer span{color:var(--muted)}
+  .web-order-body{padding:18px 24px;overflow-y:auto;min-height:0;display:flex;flex-direction:column;gap:14px;overscroll-behavior:contain}.web-order-section{border:1px solid var(--border);border-radius:16px;padding:16px;flex-shrink:0;min-width:0}.web-order-section h3{font-size:14px;font-weight:800;margin:0 0 12px}.web-order-section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}.web-order-section-head h3{margin:0}.web-order-type{font-size:12px;background:var(--bg);color:var(--muted);border-radius:8px;padding:6px 9px}
+  .web-order-item{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:12px 0;border-bottom:1px solid var(--border);font-size:14px}.web-order-item>div{min-width:0}.web-order-item strong{display:block;overflow-wrap:anywhere;line-height:1.4}.web-order-item span{display:block;font-size:12px;color:var(--muted);margin-top:4px}.web-order-item>b{white-space:nowrap;font-size:14px;flex-shrink:0}.web-order-delivery,.web-order-total{display:flex;justify-content:space-between;gap:12px;padding-top:14px}.web-order-delivery{font-size:13px;color:var(--muted)}.web-order-total{font-size:18px;font-weight:800}.web-order-address{font-size:14px;line-height:1.5;overflow-wrap:anywhere}.web-order-comment h3{color:#c62828}.web-order-comment .web-customer-comment{padding:0;font-size:14px;line-height:1.5}
+  .web-ready-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.web-ready-grid .btn{width:100%;min-width:0;min-height:48px;padding:10px 6px;font-size:13px;line-height:1.3;white-space:normal}.web-ready-custom{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;align-items:start;min-width:0;max-width:100%;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}.web-ready-custom label{font-size:14px;font-weight:700}.web-ready-custom label span{display:block;font-size:12px;font-weight:400;color:var(--muted);margin-top:4px}.web-ready-custom input{display:block;appearance:none;-webkit-appearance:none;box-sizing:border-box;min-width:0;max-width:100%;width:100%;min-height:48px;border:1px solid var(--border);border-radius:12px;padding:10px;color:var(--ink);background:var(--bg);font:inherit}
+  .web-order-actions{display:grid;grid-template-columns:minmax(90px,1fr) minmax(0,2fr);gap:12px;padding:16px 24px;border-top:1px solid var(--border);background:var(--surface);flex-shrink:0}.web-order-actions .btn{min-height:48px;min-width:0}
+  @media(max-width:480px){.web-order-heading,.web-order-body,.web-order-actions{padding:16px}.web-ready-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.web-order-item>b{font-size:12px}.web-order-section{padding:12px}}
+
+
+  .web-order-body{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);align-items:start;gap:16px;padding:16px 20px}
+  .web-order-details{display:flex;flex-direction:column;gap:12px;min-width:0}.web-order-section{padding:14px}.web-order-heading{padding:16px 20px 14px}.web-order-heading .modal-title{font-size:18px;margin-bottom:8px}.web-order-item{padding:9px 0}.web-order-actions{padding:14px 20px}
+  .web-ready-custom input::-webkit-date-and-time-value{min-width:0;text-align:left}.web-ready-custom input::-webkit-datetime-edit{min-width:0;padding:0;}
+  @media(max-width:720px){.web-order-body{grid-template-columns:minmax(0,1fr)}.web-ready-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+  @media(max-width:400px){.web-ready-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
 </style>
 </head>
 <body>
@@ -968,6 +1023,7 @@ let state = {
   company: {establishmentName:'', legalName:'', address:'', deliveryAddress:''},
   deliveryRates: [],
   deliveryFee: 0,
+  deliveryTariffSelected: false,
   analyticsFrom: '',
   analyticsTo: '',
   analyticsSensitiveUnlocked: false,
@@ -986,7 +1042,7 @@ let state = {
   selectedHallTableId: null,
   hallEditMode: false,
   telegram: {enabled:false, botToken:'', chatId:'', threadId:'', notifyShiftOpened:true, notifyShiftClosed:true, notifyMonthlyWarehouse:false, lastMonthlyWarehouseSent:''},
-  network: {backendUrl:'https://prilavok-backend-production.up.railway.app', deviceKey:'', deviceName:'M POS iPad', lastSyncAt:null, lastSyncStatus:''}
+  network: {backendUrl:'https://project-dubrovno.up.railway.app', deviceKey:'', deviceName:'M POS iPad', lastSyncAt:null, lastSyncStatus:''}
 };
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,8);
@@ -1002,6 +1058,10 @@ const hasCloudStorage = (typeof window.storage !== 'undefined');
 const LS_PREFIX = 'prilavok_';
 let storageBroken = false;
 let storageCheckedOnce = false;
+const CRITICAL_STORAGE_JOURNAL_KEY = 'criticalStorageJournal';
+const CRITICAL_STORAGE_KEYS = new Set(['products','orders','shifts','employees','parked','purchaseOrders','receivings','receivingDraft','suppliers','discounts','layout','posNavigation','company','deliveryRates','hallTables','bookings','inventoryConfig','inventoryHistory','inventoryDraft','currentOrderSession']);
+let criticalStorageRecoveryPending = false;
+let criticalOperationBusy = false;
 
 function markStorageBroken(reason){
   storageBroken = true;
@@ -1033,11 +1093,50 @@ async function saveKey(key, value){
   }
   catch(e){ markStorageBroken(e); }
 }
+function storageSnapshot(value){
+  return JSON.parse(JSON.stringify(value));
+}
+function criticalStorageWrites(writes){
+  if(!writes || typeof writes!=='object' || Array.isArray(writes)) throw new Error('Некорректная локальная транзакция');
+  const entries=Object.entries(writes);
+  if(!entries.length || entries.some(([key])=>!CRITICAL_STORAGE_KEYS.has(key))) throw new Error('Некорректные ключи локальной транзакции');
+  return entries.map(([key,value])=>({key,value:storageSnapshot(value)}));
+}
+async function recoverCriticalStorageJournal(){
+  let journal;
+  try{journal=await window.PrilavokCore.Storage.get(CRITICAL_STORAGE_JOURNAL_KEY,null,markStorageBroken)}
+  catch(e){markStorageBroken(e);criticalStorageRecoveryPending=true;return false}
+  if(!journal)return true;
+  criticalStorageRecoveryPending=true;
+  try{
+    if(journal.version!==1 || !Array.isArray(journal.writes) || !journal.writes.length)throw new Error('Повреждён журнал критической операции');
+    for(const entry of journal.writes){
+      if(!entry || !CRITICAL_STORAGE_KEYS.has(entry.key))throw new Error('Недопустимый ключ в журнале критической операции');
+      await window.PrilavokCore.Storage.set(entry.key,entry.value);
+    }
+    await window.PrilavokCore.Storage.set(CRITICAL_STORAGE_JOURNAL_KEY,null);
+    criticalStorageRecoveryPending=false;
+    return true;
+  }catch(e){markStorageBroken(e);return false}
+}
+async function commitCriticalStorage(type,writes){
+  if(criticalStorageRecoveryPending)throw new Error('Незавершённая операция хранения. Перезапустите M POS для восстановления данных');
+  const journal={version:1,id:uid(),type:String(type||'critical'),createdAt:Date.now(),writes:criticalStorageWrites(writes)};
+  try{await window.PrilavokCore.Storage.set(CRITICAL_STORAGE_JOURNAL_KEY,journal)}
+  catch(e){markStorageBroken(e);throw new Error('Не удалось начать безопасное сохранение: '+(e?.message||e))}
+  criticalStorageRecoveryPending=true;
+  try{
+    for(const entry of journal.writes)await window.PrilavokCore.Storage.set(entry.key,entry.value);
+    await window.PrilavokCore.Storage.set(CRITICAL_STORAGE_JOURNAL_KEY,null);
+    criticalStorageRecoveryPending=false;
+  }catch(e){markStorageBroken(e);throw new Error('Операция сохранена для восстановления. Перезапустите M POS: '+(e?.message||e))}
+}
 async function loadAll(){
   if(!hasCloudStorage && !testLocalStorage()){
     markStorageBroken('localStorage test write failed');
   }
   storageCheckedOnce = true;
+  await recoverCriticalStorageJournal();
   const [products, shifts, employees, orders, parked, demandOverload, operationalOutbox, operationalRevision, receivings, suppliers, purchaseOrders, discounts, layout, printer, theme, company, deliveryRates, telegram, network, currentOrderSession, hallTables, bookings, webEvents, posNavigation, inventoryConfig, inventoryHistory, inventoryDraft] = await Promise.all([
     loadKey('products', null),
     loadKey('shifts', []),
@@ -1057,7 +1156,7 @@ async function loadAll(){
     loadKey('company', {establishmentName:'', legalName:'', address:'', deliveryAddress:''}),
     loadKey('deliveryRates', []),
     loadKey('telegram', {enabled:false, botToken:'', chatId:'', threadId:'', notifyShiftOpened:true, notifyShiftClosed:true, notifyMonthlyWarehouse:false, lastMonthlyWarehouseSent:''}),
-    loadKey('network', {backendUrl:'https://prilavok-backend-production.up.railway.app', deviceKey:'', deviceName:'M POS iPad', lastSyncAt:null, lastSyncStatus:''}),
+    loadKey('network', {backendUrl:'https://project-dubrovno.up.railway.app', deviceKey:'', deviceName:'M POS iPad', lastSyncAt:null, lastSyncStatus:''}),
     loadKey('currentOrderSession', null),
     loadKey('hallTables', []),
     loadKey('bookings', []),
@@ -1096,7 +1195,7 @@ async function loadAll(){
   state.company = Object.assign({establishmentName:'', legalName:'', address:'', deliveryAddress:''}, company || {});
   state.deliveryRates = Array.isArray(deliveryRates) ? deliveryRates : [];
   state.telegram = Object.assign({enabled:false, botToken:'', chatId:'', threadId:'', notifyShiftOpened:true, notifyShiftClosed:true, notifyMonthlyWarehouse:false, lastMonthlyWarehouseSent:''}, telegram || {});
-  state.network = Object.assign({backendUrl:'https://prilavok-backend-production.up.railway.app', deviceKey:'', deviceName:'M POS iPad', lastSyncAt:null, lastSyncStatus:''}, network || {});
+  state.network = Object.assign({backendUrl:'https://project-dubrovno.up.railway.app', deviceKey:'', deviceName:'M POS iPad', lastSyncAt:null, lastSyncStatus:''}, network || {});
   if(!state.network.deviceKey){
     state.network.deviceKey = (crypto?.randomUUID ? crypto.randomUUID() : ('dev_'+uid()+'_'+uid()));
     saveKey('network', state.network);
@@ -1120,6 +1219,7 @@ async function loadAll(){
     state.orderType = currentOrderSession.orderType || 'На месте';
     state.customer = Object.assign({name:'',phone:'',address:''}, currentOrderSession.customer || {});
     state.deliveryFee = Number(currentOrderSession.deliveryFee || 0);
+    state.deliveryTariffSelected = currentOrderSession.deliveryTariffSelected===true;
     state.orderComment = currentOrderSession.orderComment || '';
     state.currentOrderSource = currentOrderSession.source || '';
     state.currentWebOrderId = currentOrderSession.webOrderId || '';
@@ -1304,6 +1404,7 @@ function saveCurrentOrderSession(){
     orderType: state.orderType || 'На месте',
     customer: JSON.parse(JSON.stringify(state.customer || {name:'',phone:'',address:''})),
     deliveryFee: Number(state.deliveryFee || 0),
+    deliveryTariffSelected: !!state.deliveryTariffSelected,
     orderComment: state.orderComment || '',
     source: state.currentOrderSource || '',
     webOrderId: state.currentWebOrderId || '',
@@ -1317,8 +1418,11 @@ function saveCurrentOrderSession(){
   saveKey('currentOrderSession', session);
 }
 
+function emptyCurrentOrderSession(){
+  return {items:[],orderLabel:'',orderType:'На месте',customer:{name:'',phone:'',address:''},deliveryFee:0,deliveryTariffSelected:false,orderComment:'',source:'',webOrderId:'',webOrderStatus:'',kitchenPrinted:false,printedItems:[],updatedAt:Date.now()};
+}
 function clearCurrentOrderSession(){
-  saveKey('currentOrderSession', {items:[],orderLabel:'',orderType:'На месте',customer:{name:'',phone:'',address:''},deliveryFee:0,orderComment:'',source:'',webOrderId:'',webOrderStatus:'',kitchenPrinted:false,printedItems:[],updatedAt:Date.now()});
+  saveKey('currentOrderSession',emptyCurrentOrderSession());
 }
 
 function loyaltyApi(path,options={}){
@@ -1330,35 +1434,91 @@ async function searchCustomers(q){
 }
 async function loadCustomerLoyalty(customerId){
  if(!customerId){state.loyaltyPrograms=[];state.loyaltyRedemptions={};return}
+ const selectedCustomer=state.customer;
  const data=await loyaltyApi('/api/customers/'+encodeURIComponent(customerId)+'/loyalty');
+ if(state.customer!==selectedCustomer||String(state.customer?.id)!==String(customerId))return;
  state.customer={...state.customer,id:data.customer.id,name:data.customer.name,phone:data.customer.normalized_phone};
  state.loyaltyPrograms=data.programs||[];state.loyaltyRedemptions={};render();
+}
+function openOrderCustomer(){
+ if(!state.customer?.id)return openCustomerPicker();
+ showModal(`<div class="modal-title">${escapeHtml(state.customer.name||'Клиент')}</div><div class="settings-note">${escapeHtml(state.customer.phone||'')}</div><div style="margin-top:16px">${loyaltySummaryHtml()}</div><div class="modal-actions"><button class="btn btn-secondary" onclick="openCustomerPicker()">Сменить клиента</button><button class="btn btn-primary" onclick="closeModal();render()">Готово</button></div><button class="btn btn-secondary" style="margin-top:10px" onclick="removeOrderCustomer()">Убрать клиента из заказа</button>`,false);
 }
 function loyaltySummaryHtml(){
  if(!state.customer?.id)return '<div class="setting-sub">Выберите клиента, чтобы использовать программу лояльности.</div>';
  if(!state.loyaltyPrograms.length)return '<div class="setting-sub">Для клиента пока нет активных программ.</div>';
- return state.loyaltyPrograms.map(p=>`<div class="list-row"><div style="flex:1"><div class="list-row-name">${escapeHtml(p.name)}</div><div class="list-row-sub">Прогресс: ${Number(p.progress)||0} / ${Number(p.required_quantity)||0} · Подарков: ${Number(p.rewards)||0}</div></div>${Number(p.rewards)>0?`<select onchange="state.loyaltyRedemptions['${escapeAttr(p.id)}']=Number(this.value)||0"><option value="0">Не использовать</option>${Array.from({length:Number(p.rewards)},(_,i)=>`<option value="${i+1}">Использовать ${i+1}</option>`).join('')}</select>`:''}</div>`).join('');
+ return state.loyaltyPrograms.map(p=>`<div class="list-row"><div style="flex:1"><div class="list-row-name">${escapeHtml(p.name)}</div><div class="list-row-sub">Прогресс: ${Number(p.progress)||0} / ${Number(p.required_quantity)||0} · Подарков: ${Number(p.rewards)||0}</div></div>${Number(p.rewards)>0?`<select onchange="state.loyaltyRedemptions['${escapeAttr(p.id)}']=Number(this.value)||0;render()"><option value="0" ${!Number(state.loyaltyRedemptions?.[p.id])?'selected':''}>Не использовать</option>${Array.from({length:Number(p.rewards)},(_,i)=>`<option value="${i+1}" ${Number(state.loyaltyRedemptions?.[p.id])===i+1?'selected':''}>Использовать ${i+1}</option>`).join('')}</select>`:''}</div>`).join('');
 }
 async function openCustomerPicker(){
- showModal(`<div class="modal-title">Клиент</div><div class="field"><label>Имя или телефон</label><input id="customer-search" autocomplete="off" oninput="window.customerSearchChanged(this.value)"></div><div id="customer-search-results" class="settings-note">Введите минимум 2 символа</div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Закрыть</button><button class="btn btn-primary" onclick="openCreateCustomer()">Новый клиент</button></div>`,true);
+ ++customerSearchSeq;
+ showModal(`<div class="modal-title">Клиент заказа</div><div class="field"><label for="customer-search">Номер телефона</label><div class="customer-phone-field"><span>+375</span><input id="customer-search" type="tel" inputmode="numeric" autocomplete="off" placeholder="29 123 45 67" aria-label="Номер телефона после +375" oninput="customerSearchChanged(this.value)"></div></div><div id="customer-search-results" class="customer-picker-results"><div class="center-note">Введите минимум 4 цифры номера</div></div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Закрыть</button><button class="btn btn-primary" onclick="openCreateCustomer()">Новый клиент</button></div>`,false);
 }
 let customerSearchSeq=0;
-async function customerSearchChanged(value){const seq=++customerSearchSeq,el=document.getElementById('customer-search-results');try{const rows=await searchCustomers(value);if(seq!==customerSearchSeq||!el)return;el.innerHTML=rows.length?rows.map(x=>`<button class="list-row" style="width:100%;text-align:left" onclick="selectCustomer('${escapeAttr(x.id)}','${escapeAttr(x.name)}','${escapeAttr(x.normalized_phone)}')"><div><div class="list-row-name">${escapeHtml(x.name)}</div><div class="list-row-sub">${escapeHtml(x.normalized_phone)}</div></div></button>`).join(''):'Клиент не найден';}catch(e){if(el)el.textContent='Не удалось загрузить клиентов'}}
-async function selectCustomer(id,name,phone){state.customer={...state.customer,id,name,phone};closeModal();try{await loadCustomerLoyalty(id)}catch(e){flash('Клиент выбран, но loyalty недоступна');render()}}
+function customerPhoneDigits(value){
+ const raw=String(value||''),digits=raw.replace(/\D/g,'');
+ return ((raw.trim().startsWith('+375')||digits.length===12&&digits.startsWith('375'))?digits.slice(3):digits).slice(0,9);
+}
+async function customerSearchChanged(value){
+ const seq=++customerSearchSeq,el=document.getElementById('customer-search-results'),input=document.getElementById('customer-search');
+ const digits=customerPhoneDigits(value);if(input)input.value=digits;if(!el)return;
+ if(digits.length<4){el.innerHTML='<div class="center-note">Введите минимум 4 цифры номера</div>';return}
+ const phone='+375'+digits;el.innerHTML='<div class="center-note">Поиск…</div>';
+ try{
+  const rows=(await searchCustomers(phone)).filter(x=>String(x.normalized_phone||'').replace(/\D/g,'').startsWith('375'+digits));
+  if(seq!==customerSearchSeq||document.getElementById('customer-search-results')!==el)return;
+  el.innerHTML=rows.length?rows.map(x=>`<button class="customer-result-card" data-customer-id="${escapeAttr(x.id)}"><strong>${escapeHtml(x.name)}</strong><span>${escapeHtml(x.normalized_phone)}</span></button>`).join(''):'<div class="center-note">Клиент не найден. Можно создать нового.</div>';
+  el.querySelectorAll('[data-customer-id]').forEach(button=>{button.onclick=()=>{const x=rows.find(x=>String(x.id)===button.dataset.customerId);if(x)selectCustomer(x.id,x.name,x.normalized_phone)}});
+ }catch(e){if(seq===customerSearchSeq&&document.getElementById('customer-search-results')===el)el.innerHTML='<div class="center-note">Нет связи с сервером. Повторите поиск.</div>'}
+}
+function removeOrderCustomer(){
+ ++customerSearchSeq;
+ state.customer={name:'',phone:'',address:state.customer?.address||''};
+ state.loyaltyPrograms=[];state.loyaltyRedemptions={};
+ saveCurrentOrderSession();closeModal();render();
+}
+async function selectCustomer(id,name,phone){
+ state.customer={...state.customer,id,name,phone};
+ state.loyaltyPrograms=[];state.loyaltyRedemptions={};
+ const selectedCustomer=state.customer;
+ saveCurrentOrderSession();closeModal();render();
+ try{await loadCustomerLoyalty(id)}catch(e){if(state.customer===selectedCustomer){flash('Клиент выбран, но loyalty недоступна');render()}}
+}
 function openCreateCustomer(){showModal(`<div class="modal-title">Новый клиент</div><div class="field"><label>Имя</label><input id="new-customer-name"></div><div class="field"><label>Телефон</label><input id="new-customer-phone" inputmode="tel"></div><div class="modal-actions"><button class="btn btn-secondary" onclick="openCustomerPicker()">Назад</button><button class="btn btn-primary" onclick="createCustomerFromPos()">Создать</button></div>`,true)}
 async function createCustomerFromPos(){try{const data=await loyaltyApi('/api/customers',{method:'POST',body:JSON.stringify({name:document.getElementById('new-customer-name')?.value,phone:document.getElementById('new-customer-phone')?.value})});await selectCustomer(data.customer.id,data.customer.name,data.customer.normalized_phone)}catch(e){flash(e.message||'Не удалось создать клиента')}}
 async function publishPaidOrderLoyalty(order){
- if(!order?.customer?.id)return;
- try{const data=await loyaltyApi('/api/loyalty/sales',{method:'POST',body:JSON.stringify({orderId:order.id,customerId:order.customer.id,items:(order.items||[]).map(x=>({productId:x.productId,quantity:x.qty})),redemptions:order.loyaltyRedemptions||{}})});order.loyaltySync={status:'synced',at:Date.now(),events:data.events||[]};saveKey('orders',state.orders)}
+ if(!order?.customer?.id||order.loyaltySync?.status==='sending')return;
+ order.loyaltySync={...(order.loyaltySync||{}),status:'sending',attemptedAt:Date.now()};
+ try{const data=await loyaltyApi('/api/loyalty/sales',{method:'POST',body:JSON.stringify({orderId:order.id,customerId:order.customer.id,items:(order.items||[]).map(x=>({productId:x.productId,quantity:x.qty})),redemptions:order.loyaltyRedemptions||{},rewardAllocations:order.loyaltyRewardAllocations||{}})});order.loyaltySync={status:'synced',at:Date.now(),events:data.events||[]};saveKey('orders',state.orders);if(order.returnedAt&&order.loyaltyReversal?.status==='pending')await reverseOrderLoyalty(order)}
  catch(e){order.loyaltySync={status:'pending',error:String(e?.message||e),at:Date.now()};saveKey('orders',state.orders)}
 }
 async function reverseOrderLoyalty(order){
- if(!order?.customer?.id)return;try{await loyaltyApi('/api/loyalty/reversal',{method:'POST',body:JSON.stringify({orderId:order.id,customerId:order.customer.id})});order.loyaltyReversal={status:'synced',at:Date.now()};saveKey('orders',state.orders)}catch(e){order.loyaltyReversal={status:'pending',error:String(e?.message||e),at:Date.now()};saveKey('orders',state.orders)}
+ if(!order?.customer?.id||order.loyaltyReversal?.status==='sending'||order.loyaltyReversal?.status==='synced')return;
+ order.loyaltyReversal={...(order.loyaltyReversal||{}),status:'sending',attemptedAt:Date.now()};
+ try{await loyaltyApi('/api/loyalty/reversal',{method:'POST',body:JSON.stringify({orderId:order.id,customerId:order.customer.id})});order.loyaltyReversal={status:'synced',at:Date.now()};saveKey('orders',state.orders)}catch(e){order.loyaltyReversal={status:'pending',error:String(e?.message||e),at:Date.now()};saveKey('orders',state.orders)}
+}
+async function settleReturnedOrderLoyalty(order){
+ if(!order?.customer?.id||!order.returnedAt)return;
+ if(order.loyaltySync?.status==='pending'){await publishPaidOrderLoyalty(order);return}
+ if(order.loyaltySync?.status==='sending')return;
+ if(order.loyaltySync?.status==='synced'&&order.loyaltyReversal?.status!=='synced')await reverseOrderLoyalty(order);
 }
 
+function loyaltyRewardAllocation(){
+  const units=[];
+  for(const [lineIndex,item] of (state.cart||[]).entries())for(let unitIndex=0;unitIndex<Math.max(0,Math.trunc(Number(item.qty)||0));unitIndex++)units.push({id:lineIndex+':'+unitIndex,productId:String(item.productId),price:Math.max(0,Number(item.price)||0)});
+  const used=new Set(),allocations={};let discount=0;
+  for(const program of state.loyaltyPrograms||[]){
+    const requested=Math.max(0,Math.trunc(Number(state.loyaltyRedemptions?.[program.id])||0));if(!requested)continue;
+    const allowed=new Set((program.loyalty_reward_products||[]).map(x=>String(x.product_id)));
+    const selected=units.filter(unit=>!used.has(unit.id)&&allowed.has(unit.productId)).sort((a,b)=>a.price-b.price).slice(0,requested);
+    if(selected.length!==requested)continue;
+    allocations[program.id]=[];
+    for(const unit of selected){used.add(unit.id);discount+=unit.price;const row=allocations[program.id].find(x=>x.productId===unit.productId);if(row)row.quantity++;else allocations[program.id].push({productId:unit.productId,quantity:1})}
+  }
+  return {discount:Math.round(discount*100)/100,allocations};
+}
 function loyaltyRewardDiscount(){
-  let discount=0;
-  for(const p of state.loyaltyPrograms||[]){const count=Math.max(0,Math.trunc(Number(state.loyaltyRedemptions?.[p.id])||0));if(!count)continue;const allowed=new Set((p.loyalty_reward_products||[]).map(x=>String(x.product_id)));const prices=[];for(const i of state.cart||[]){if(!allowed.has(String(i.productId)))continue;for(let n=0;n<Math.max(0,Math.trunc(Number(i.qty)||0));n++)prices.push(Math.max(0,Number(i.price)||0));}prices.sort((a,b)=>a-b);discount+=prices.slice(0,count).reduce((s,x)=>s+x,0);}return Math.round(discount*100)/100;
+  return loyaltyRewardAllocation().discount;
 }
 function cartTotal(){
   return Math.max(0,cartSubtotal() + (state.orderType==='Доставка' ? Number(state.deliveryFee||0) : 0) - loyaltyRewardDiscount());
@@ -2128,14 +2288,31 @@ function renderBookingsScreen(){
 }
 
 
-function normalizeWebOrder(raw){return {id:raw.id,external_id:raw.external_id,status:raw.status||'new',order_type:raw.order_type||'На месте',customer_name:raw.customer_name||'',phone:raw.phone||'',address:raw.address||'',comment:raw.comment||'',total:Number(raw.total||0),delivery_fee:Number(raw.delivery_fee||0),created_at:raw.created_at||new Date().toISOString(),order_items:Array.isArray(raw.order_items)?raw.order_items:[]};}
-function startWebOrderEvents(){const n=networkConfigFromState();if(!n.deviceKey||!n.backendUrl||!window.EventSource)return;try{state.webEventsSource?.close();}catch(e){}const source=new EventSource(n.backendUrl.replace(/\/+$/,'')+'/api/orders/events?deviceKey='+encodeURIComponent(n.deviceKey));state.webEventsSource=source;source.onmessage=(ev)=>{try{const d=JSON.parse(ev.data||'{}');if(d.type!=='orders')return;const oldList=state.webEvents.slice();const oldIds=new Set(oldList.map(x=>x.id));const incoming=(d.orders||[]).map(normalizeWebOrder);const merged=[...incoming];oldList.forEach(x=>{if(!merged.some(y=>y.id===x.id))merged.push(x);});const next=merged.filter(x=>x.status==='new').sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));const changed=next.length!==oldList.length || next.some((x,i)=>{const y=oldList[i];return !y || y.id!==x.id || y.status!==x.status || x.total!==y.total || x.updated_at!==y.updated_at;});state.webEvents=next;if(changed)saveKey('webEvents',state.webEvents);if(incoming.some(x=>!oldIds.has(x.id))){flash('🔔 Новый заказ с сайта');render();}}catch(e){}};source.onerror=()=>{};}
+function normalizeWebOrder(raw){return {id:raw.id,external_id:raw.external_id,status:raw.status||'new',order_type:raw.order_type||'На месте',customer_id:raw.customer_id||'',customer_name:raw.customer_name||'',phone:raw.phone||'',address:raw.address||'',comment:raw.comment||'',total:Number(raw.total||0),delivery_fee:Number(raw.delivery_fee||0),created_at:raw.created_at||new Date().toISOString(),order_items:Array.isArray(raw.order_items)?raw.order_items:[]};}
+function startWebOrderEvents(){const n=networkConfigFromState();if(!n.deviceKey||!n.backendUrl||!window.EventSource)return;try{state.webEventsSource?.close();}catch(e){}const source=new EventSource(n.backendUrl.replace(/\/+$/,'')+'/api/orders/events?deviceKey='+encodeURIComponent(n.deviceKey));state.webEventsSource=source;source.onmessage=(ev)=>{try{const d=JSON.parse(ev.data||'{}');if(d.type!=='orders')return;const oldList=state.webEvents.slice();const oldIds=new Set(oldList.map(x=>x.id));const incoming=(d.orders||[]).map(normalizeWebOrder);const merged=[...incoming];oldList.forEach(x=>{if(!merged.some(y=>y.id===x.id))merged.push(x);});const next=merged.filter(x=>x.status==='new').sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));const changed=next.length!==oldList.length || next.some((x,i)=>{const y=oldList[i];return !y || y.id!==x.id || y.status!==x.status || x.total!==y.total || x.updated_at!==y.updated_at || x.customer_id!==y.customer_id;});state.webEvents=next;if(changed)saveKey('webEvents',state.webEvents);if(incoming.some(x=>!oldIds.has(x.id))){flash('🔔 Новый заказ с сайта');render();}}catch(e){}};source.onerror=()=>{};}
 function webOrderDate(o){return fmtDate(new Date(o.created_at).getTime());}
 function openWebEventsModal(){const list=state.webEvents.slice().sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));showModal(`<div class="modal-title">События</div>${list.length?list.map(o=>`<div class="list-row" style="cursor:pointer;" onclick="openWebOrder('${escapeAttr(o.id)}')"><div style="flex:1;min-width:0;"><div class="list-row-name">Заказ с сайта ${escapeHtml(o.external_id||'')}</div><div class="list-row-sub">${escapeHtml(o.customer_name||'Клиент')} · ${fullMoney(o.total)} · ${webOrderDate(o)}</div></div><div style="font-size:22px;">›</div></div>`).join(''):`<div class="center-note">Новых событий нет</div>`}<div class="modal-actions"><button class="btn btn-secondary" style="width:100%;" onclick="closeModal()">Закрыть</button></div>`);}
 const WEB_READY_ESTIMATES=[['5m','5 мин'],['15m','15 мин'],['30m','30 мин'],['40m','40 мин'],['60plus','Больше часа']];
-let selectedWebReadyEstimate='';
+let selectedWebReadyEstimate='',selectedWebReadyOrderId='';
+function validWebReadyEstimate(value){return WEB_READY_ESTIMATES.some(([v])=>v===value)||/^at:([01]\d|2[0-3]):[0-5]\d$/.test(value)}
+function editWebReadyTime(value){
+ const estimate='at:'+value;
+ selectedWebReadyEstimate=validWebReadyEstimate(estimate)?estimate:'custom';
+ const accept=document.getElementById('web-order-accept');
+ if(accept)accept.disabled=!validWebReadyEstimate(selectedWebReadyEstimate);
+}
+
 function selectWebReadyEstimate(value,id){if(!WEB_READY_ESTIMATES.some(([v])=>v===value))return;selectedWebReadyEstimate=value;openWebOrder(id);}
-function openWebOrder(id){const o=state.webEvents.find(x=>x.id===id);if(!o)return;const estimates=WEB_READY_ESTIMATES.map(([value,label])=>`<button class="btn ${selectedWebReadyEstimate===value?'btn-primary':'btn-secondary'}" style="width:auto;min-width:0;padding:8px 11px;" onclick="selectWebReadyEstimate('${value}','${escapeAttr(o.id)}')">${label}</button>`).join('');showModal(`<div class="modal-title">Заказ с сайта ${escapeHtml(o.external_id||'')}</div><div class="setting-sub" style="margin-bottom:14px;">${escapeHtml(o.customer_name||'Клиент')}${o.phone?' · '+escapeHtml(o.phone):''}</div>${(o.order_items||[]).map(i=>`<div class="receipt-line"><span>${escapeHtml(i.product_name)} × ${Number(i.quantity||0)}</span><span>${fullMoney(Number(i.price||0)*Number(i.quantity||0))}</span></div>`).join('')}${o.delivery_fee?`<div class="receipt-line"><span>Доставка</span><span>${fullMoney(o.delivery_fee)}</span></div>`:''}<div class="receipt-total"><span>Итого</span><span>${fullMoney(o.total)}</span></div><div style="margin-top:14px;font-size:13px;line-height:1.55;color:var(--muted);">${o.address?`<div><b>Адрес:</b> ${escapeHtml(o.address)}</div>`:''}${o.comment?`<div><b>Комментарий:</b> ${escapeHtml(o.comment)}</div>`:''}<div><b>Тип:</b> ${escapeHtml(o.order_type||'На месте')}</div></div><div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);"><div style="font-size:13px;color:var(--muted);margin-bottom:9px;">Примерное время готовности</div><div style="display:flex;gap:7px;flex-wrap:wrap;">${estimates}</div></div><div class="modal-actions"><button class="btn btn-secondary" onclick="selectedWebReadyEstimate='';openWebEventsModal()">Назад</button><button class="btn btn-primary" ${selectedWebReadyEstimate?'':'disabled'} onclick="acceptWebOrder('${escapeAttr(o.id)}',selectedWebReadyEstimate)">Взять в работу</button></div>`);}
+function openWebOrder(id){
+  const scrollTop=selectedWebReadyOrderId===id?(document.querySelector('.web-order-body')?.scrollTop||0):0;
+  if(selectedWebReadyOrderId!==id){selectedWebReadyEstimate='';selectedWebReadyOrderId=id;}
+  const o=state.webEvents.find(x=>x.id===id);if(!o)return;
+  const custom=selectedWebReadyEstimate==='custom'||selectedWebReadyEstimate.startsWith('at:');
+  const estimates=WEB_READY_ESTIMATES.map(([value,label])=>`<button class="btn ${selectedWebReadyEstimate===value?'btn-primary':'btn-secondary'}" aria-pressed="${selectedWebReadyEstimate===value}" onclick="selectWebReadyEstimate('${value}','${escapeAttr(o.id)}')">${label}</button>`).join('');
+  showModal(`<header class="web-order-heading"><div class="web-order-eyebrow">Заказ с сайта</div><div class="modal-title">${escapeHtml(o.external_id||'Новый заказ')}</div><div class="web-order-customer"><strong>${escapeHtml(o.customer_name||'Клиент')}</strong>${o.phone?`<span>${escapeHtml(o.phone)}</span>`:''}</div></header><div class="web-order-body"><section class="web-order-section web-order-products"><div class="web-order-section-head"><h3>Состав заказа</h3><span class="web-order-type">${escapeHtml(o.order_type||'На месте')}</span></div><div class="web-order-items">${(o.order_items||[]).map(i=>`<div class="web-order-item"><div><strong>${escapeHtml(i.product_name)}</strong><span>${Number(i.quantity||0)} × ${fullMoney(Number(i.price||0))}</span></div><b>${fullMoney(Number(i.price||0)*Number(i.quantity||0))}</b></div>`).join('')}</div>${o.delivery_fee?`<div class="web-order-delivery"><span>Доставка</span><strong>${fullMoney(o.delivery_fee)}</strong></div>`:''}<div class="web-order-total"><span>Итого</span><strong>${fullMoney(o.total)}</strong></div></section><div class="web-order-details">${o.address?`<section class="web-order-section"><h3>Адрес доставки</h3><div class="web-order-address">${escapeHtml(o.address)}</div></section>`:''}${o.comment?`<section class="web-order-section web-order-comment"><h3>Комментарий клиента</h3><div class="web-customer-comment">${escapeHtml(o.comment)}</div></section>`:''}<section class="web-order-section"><h3>Время готовности</h3><div class="web-ready-grid">${estimates}<button class="btn ${custom?'btn-primary':'btn-secondary'}" aria-pressed="${custom}" onclick="selectedWebReadyEstimate='custom';openWebOrder('${escapeAttr(o.id)}')">Будет готово к</button></div>${custom?`<div class="web-ready-custom"><label for="web-ready-time">Укажите время<span>По времени заведения</span></label><input id="web-ready-time" type="time" value="${selectedWebReadyEstimate.startsWith('at:')?selectedWebReadyEstimate.slice(3):''}" oninput="editWebReadyTime(this.value)" onchange="editWebReadyTime(this.value)"></div>`:''}</section></div></div><footer class="web-order-actions"><button class="btn btn-secondary" onclick="selectedWebReadyEstimate='';openWebEventsModal()">Назад</button><button id="web-order-accept" class="btn btn-primary" ${validWebReadyEstimate(selectedWebReadyEstimate)?'':'disabled'} onclick="acceptWebOrder('${escapeAttr(o.id)}',selectedWebReadyEstimate)">Взять в работу</button></footer>`,true);
+  document.querySelector('#modal-root .modal')?.classList.add('web-order-modal');
+  const body=document.querySelector('.web-order-body');if(body)body.scrollTop=scrollTop;
+}
 let webAcceptBusy=false,webAcceptanceRecoveryBusy=false;
 function webOrderCartItems(o){
   if(!Array.isArray(o.order_items)||!o.order_items.length)throw new Error('В заказе нет товаров');
@@ -2153,7 +2330,7 @@ async function confirmWebAcceptance(id,record,journal){
   const n=networkConfigFromState();if(!n.backendUrl||!n.deviceKey)return false;
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),5000);
   try{
-    const r=await fetch(n.backendUrl.replace(/\/+$/,'')+'/api/orders/'+encodeURIComponent(id)+'/accept',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Key':n.deviceKey},body:'{}',cache:'no-store',signal:controller.signal});
+    const r=await fetch(n.backendUrl.replace(/\/+$/,'')+'/api/orders/'+encodeURIComponent(id)+'/accept',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Key':n.deviceKey},body:JSON.stringify({readyEstimate:record.readyEstimate||''}),cache:'no-store',signal:controller.signal});
     const d=await r.json().catch(()=>null);if(!r.ok)throw new Error(d?.error||('HTTP '+r.status));
     record.stage='confirmed';record.confirmedAt=Date.now();await window.PrilavokCore.Storage.set('webOrderAcceptances',journal);return true;
   }catch(e){return false;}finally{clearTimeout(timeout);}
@@ -2189,7 +2366,7 @@ async function recoverWebAcceptanceJournal(){
 async function acceptWebOrder(id,readyEstimate=''){
   if(webAcceptBusy)return;
   const o=state.webEvents.find(x=>x.id===id);if(!o)return;
-  if(!WEB_READY_ESTIMATES.some(([value])=>value===readyEstimate)){flash('Выберите примерное время готовности');return;}
+  if(!validWebReadyEstimate(readyEstimate)){flash('Выберите примерное время готовности');return;}
   webAcceptBusy=true;
   try{
     const n=networkConfigFromState();
@@ -2203,10 +2380,11 @@ async function acceptWebOrder(id,readyEstimate=''){
       const rawType=String(o.order_type||'').trim().toLocaleLowerCase('ru');
       const orderType=(rawType==='delivery'||rawType==='доставка')?'Доставка':((rawType==='pickup'||rawType==='самовывоз'||rawType==='с собой')?'С собой':(o.order_type||'На месте'));
       const acceptedAt=Date.now();
-      journal[id]={stage:existing?'local':'prepared',parked:existing||{id:uid(),receiptDisplayNumber:'#'+String(o.external_id||o.id||'—'),items:cartItems,total:Number(o.total||0),subtotal:Number(o.total||0)-Number(o.delivery_fee||0),deliveryFee:Number(o.delivery_fee||0),orderLabel:'Веб '+(o.external_id||''),orderType,customer:{name:o.customer_name||'',phone:o.phone||'',address:o.address||''},comment:o.comment||'',source:'web',webOrderId:o.id,webOrderStatus:'accepted',timestamp:acceptedAt,createdAt:acceptedAt,kitchenPrinted:false,printedItems:[]}};
+      journal[id]={readyEstimate,stage:existing?'local':'prepared',parked:existing||{id:uid(),receiptDisplayNumber:'#'+String(o.external_id||o.id||'—'),items:cartItems,total:Number(o.total||0),subtotal:Number(o.total||0)-Number(o.delivery_fee||0),deliveryFee:Number(o.delivery_fee||0),deliveryTariffSelected:false,orderLabel:'Веб '+(o.external_id||''),orderType,customer:{id:o.customer_id||'',name:o.customer_name||'',phone:o.phone||'',address:o.address||''},comment:o.comment||'',source:'web',webOrderId:o.id,webOrderStatus:'accepted',timestamp:acceptedAt,createdAt:acceptedAt,kitchenPrinted:false,printedItems:[]}};
       await window.PrilavokCore.Storage.set('webOrderAcceptances',journal);
     }
     const record=journal[id];
+    if(record.stage!=='confirmed'){record.readyEstimate=readyEstimate;await window.PrilavokCore.Storage.set('webOrderAcceptances',journal);}
     if(record.stage==='prepared'){
       checkedStockConsumption(record.parked.items);
       const parked=state.parked.some(p=>p.webOrderId===id)?state.parked.slice():[...state.parked,record.parked];
@@ -2316,7 +2494,7 @@ async function flushOperationalOutbox(){
     return sentAny;
   }finally{operationalBusy=false;}
 }
-function retryPendingLoyalty(){for(const order of state.orders||[]){if(!order?.customer?.id)continue;if(order.returnedAt){if(order?.loyaltyReversal?.status==='pending'||order?.loyaltySync?.status==='synced'&&!order.loyaltyReversal)void reverseOrderLoyalty(order)}else if(order?.loyaltySync?.status==='pending')void publishPaidOrderLoyalty(order)}}
+function retryPendingLoyalty(){for(const order of state.orders||[]){if(!order?.customer?.id)continue;if(order.returnedAt)void settleReturnedOrderLoyalty(order);else if(order?.loyaltySync?.status==='pending')void publishPaidOrderLoyalty(order)}}
 function operationalReconnect(){
   if(!state.loaded||document.hidden||window._availabilityAppActive===false)return;
   operationalFailures=0;void recoverWebAcceptanceJournal();void retryPendingLoyalty();
@@ -2344,7 +2522,7 @@ function runOperationalChannelTests(){
 window.__runOperationalChannelTests=runOperationalChannelTests;
 
 function networkConfigFromState(){
-  return state.network || {backendUrl:'https://prilavok-backend-production.up.railway.app',deviceKey:'',deviceName:'M POS iPad',lastSyncAt:null,lastSyncStatus:''};
+  return state.network || {backendUrl:'https://project-dubrovno.up.railway.app',deviceKey:'',deviceName:'M POS iPad',lastSyncAt:null,lastSyncStatus:''};
 }
 function saveNetworkSettings(){
   if(!currentShiftEmployeeIsAdmin()){ flash('Сетевые конфигурации доступны только администратору'); return false; }
@@ -2464,10 +2642,43 @@ async function saveLoyaltyAdjustment(customerId,programId){if(!currentShiftEmplo
 async function openLoyaltyAdmin(){return openLoyaltyAdminScreen()}
 async function openLoyaltyAdminModalLegacy(){
  try{const d=await loyaltyApi('/api/loyalty/programs');window.__loyaltyAdminPrograms=d.programs||[];showModal(`<div class="modal-title">Программа лояльности</div>${window.__loyaltyAdminPrograms.map(p=>`<div class="list-row"><div><div class="list-row-name">${escapeHtml(p.name)}</div><div class="list-row-sub">Купить ${p.required_quantity} → подарок ×${p.reward_quantity} · ${p.is_active?'активна':'выключена'}</div></div><div style="display:flex;gap:8px"><button class="btn btn-secondary" onclick="openLoyaltyProgramEdit('${escapeAttr(p.id)}')">Изменить</button><button class="btn btn-secondary" onclick="toggleLoyaltyProgram('${escapeAttr(p.id)}',${!p.is_active})">${p.is_active?'Выключить':'Включить'}</button><button class="btn btn-danger" onclick="confirmDeleteLoyaltyProgram(\'${escapeAttr(p.id)}\',\'${escapeAttr(p.name)}\')">Удалить</button></div></div>`).join('')||'<div class="center-note">Программ пока нет</div>'}<div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Закрыть</button><button class="btn btn-primary" onclick="openLoyaltyProgramCreate()">+ Программа</button></div>`,true)}catch(e){flash('Не удалось загрузить программы')}}
-function loyaltyProgramForm(p=null){const products=state.products||[],earning=new Set((p?.loyalty_earning_products||[]).map(x=>String(x.product_id))),rewards=new Set((p?.loyalty_reward_products||[]).map(x=>String(x.product_id))),opts=(cls,selected)=>products.map(x=>`<label style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" class="${cls}" value="${escapeAttr(x.id)}" ${selected.has(String(x.id))?'checked':''}> ${escapeHtml(x.name)}</label>`).join('');showModal(`<div class="modal-title">${p?'Изменить программу':'Новая программа'}</div><div class="field"><label>Название</label><input id="lp-name" value="${escapeAttr(p?.name||'')}" placeholder="Кофе"></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div class="field"><label>Купить</label><input id="lp-required" type="number" min="1" value="${p?.required_quantity||5}"></div><div class="field"><label>Подарков</label><input id="lp-reward" type="number" min="1" value="${p?.reward_quantity||1}"></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:14px"><div class="field"><label>Начисляют прогресс</label><div style="max-height:260px;overflow:auto">${opts('loyalty-earning-product',earning)}</div></div><div class="field"><label>Можно получить в подарок</label><div style="max-height:260px;overflow:auto">${opts('loyalty-reward-product',rewards)}</div></div></div><div class="settings-note">Изменение правил действует только на будущие продажи. Исторический ledger не переписывается.</div><div class="modal-actions"><button class="btn btn-secondary" onclick="openLoyaltyAdmin()">Назад</button><button class="btn btn-primary" onclick="saveLoyaltyProgram('${escapeAttr(p?.id||'')}')">${p?'Сохранить':'Создать'}</button></div>`,true)}
+function loyaltyProgramForm(p=null){
+  const earning=new Set((p?.loyalty_earning_products||[]).map(x=>String(x.product_id)));
+  const rewards=new Set((p?.loyalty_reward_products||[]).map(x=>String(x.product_id)));
+  const products=(state.products||[]).map(x=>({...x,id:String(x.id)}));
+  for(const id of new Set([...earning,...rewards]))if(!products.some(x=>x.id===id))products.push({id,name:'Товар отсутствует в локальном каталоге',category:'ID: '+id});
+  products.sort((a,b)=>String(a.name).localeCompare(String(b.name),'ru'));
+  const panel=(kind,title,selected)=>`<section class="lp-panel"><div class="lp-panel-head"><strong>${title}</strong><span id="lp-${kind}-count" class="lp-count">Выбрано: ${selected.size}</span></div><input class="lp-search" aria-label="Поиск: ${title}" placeholder="Название или категория" oninput="filterLoyaltyProducts('${kind}',this.value)"><div class="lp-products" id="lp-${kind}-list">${products.map(x=>`<label class="lp-product"><input type="checkbox" class="loyalty-${kind}-product" value="${escapeAttr(x.id)}" ${selected.has(x.id)?'checked':''} onchange="updateLoyaltyProductCount('${kind}')"><span><b>${escapeHtml(x.name)}</b><small>${escapeHtml(x.category||'Без категории')}</small></span></label>`).join('')}<div class="center-note lp-empty" ${products.length?'hidden':''}>Товары не найдены</div></div></section>`;
+  showModal(`<div class="lp-heading"><div><div class="modal-title">${p?'Изменить программу':'Новая программа'}</div><div class="settings-note">Условия накопления и товары для подарка</div></div></div><div class="lp-body"><section class="lp-panel"><div class="field"><label for="lp-name">Название программы</label><input id="lp-name" value="${escapeAttr(p?.name||'')}" placeholder="Например, каждый шестой кофе в подарок"></div><div class="lp-rules"><div class="field"><label for="lp-required">Купить товаров</label><input id="lp-required" type="number" inputmode="numeric" min="1" step="1" value="${Number(p?.required_quantity)||5}"></div><div class="field"><label for="lp-reward">Получить подарков</label><input id="lp-reward" type="number" inputmode="numeric" min="1" step="1" value="${Number(p?.reward_quantity)||1}"></div></div></section><div class="lp-columns">${panel('earning','Товары для накопления',earning)}${panel('reward','Товары в подарок',rewards)}</div><div class="settings-note">Изменения применяются к будущим продажам. История начислений сохраняется.</div></div><div class="lp-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button id="lp-save" data-active="${p?.is_active!==false}" class="btn btn-primary" onclick="saveLoyaltyProgram('${escapeAttr(p?.id||'')}')">${p?'Сохранить изменения':'Создать программу'}</button></div>`,true);
+  document.querySelector('#modal-root .modal')?.classList.add('loyalty-editor');
+}
+function filterLoyaltyProducts(kind,value){
+  const list=document.getElementById('lp-'+kind+'-list');if(!list)return;
+  const query=String(value||'').trim().toLocaleLowerCase('ru');let visible=0;
+  list.querySelectorAll('.lp-product').forEach(row=>{row.hidden=!row.textContent.toLocaleLowerCase('ru').includes(query);if(!row.hidden)visible++});
+  list.querySelector('.lp-empty').hidden=visible>0;
+}
+function updateLoyaltyProductCount(kind){
+  const el=document.getElementById('lp-'+kind+'-count');if(el)el.textContent='Выбрано: '+document.querySelectorAll('.loyalty-'+kind+'-product:checked').length;
+}
 function openLoyaltyProgramCreate(){loyaltyProgramForm()}
 function openLoyaltyProgramEdit(id){const p=(window.__loyaltyAdminPrograms||[]).find(x=>String(x.id)===String(id));if(p)loyaltyProgramForm(p)}
-async function saveLoyaltyProgram(id=''){const earningProductIds=[...document.querySelectorAll('.loyalty-earning-product:checked')].map(x=>x.value),rewardProductIds=[...document.querySelectorAll('.loyalty-reward-product:checked')].map(x=>x.value);if(!earningProductIds.length||!rewardProductIds.length)return flash('Выберите товары для начисления и подарка');const body={name:document.getElementById('lp-name')?.value,requiredQuantity:Number(document.getElementById('lp-required')?.value),rewardQuantity:Number(document.getElementById('lp-reward')?.value),earningProductIds,rewardProductIds};try{await loyaltyApi(id?'/api/loyalty/programs/'+encodeURIComponent(id):'/api/loyalty/programs',{method:id?'PUT':'POST',body:JSON.stringify(body)});flash(id?'Программа сохранена':'Программа создана');openLoyaltyAdminScreen()}catch(e){flash(e.message||'Не удалось сохранить программу')}}
+async function saveLoyaltyProgram(id=''){
+  const button=document.getElementById('lp-save');if(!button||button.disabled)return;
+  const earningProductIds=[...document.querySelectorAll('.loyalty-earning-product:checked')].map(x=>x.value);
+  const rewardProductIds=[...document.querySelectorAll('.loyalty-reward-product:checked')].map(x=>x.value);
+  const body={isActive:button.dataset.active!=='false',name:String(document.getElementById('lp-name')?.value||'').trim(),requiredQuantity:Number(document.getElementById('lp-required')?.value),rewardQuantity:Number(document.getElementById('lp-reward')?.value),earningProductIds,rewardProductIds};
+  if(!body.name)return flash('Введите название программы');
+  if(!Number.isSafeInteger(body.requiredQuantity)||body.requiredQuantity<1||!Number.isSafeInteger(body.rewardQuantity)||body.rewardQuantity<1)return flash('Количество должно быть целым числом больше нуля');
+  if(!earningProductIds.length||!rewardProductIds.length)return flash('Выберите товары для начисления и подарка');
+  button.disabled=true;const label=button.textContent;button.textContent='Сохранение…';
+  try{
+    await loyaltyApi(id?'/api/loyalty/programs/'+encodeURIComponent(id):'/api/loyalty/programs',{method:id?'PUT':'POST',body:JSON.stringify(body)});
+    if(document.getElementById('lp-save')===button)closeModal();
+    flash(id?'Программа сохранена':'Программа создана');openLoyaltyAdminScreen();
+  }catch(e){flash(e.message||'Не удалось сохранить программу')}
+  finally{button.disabled=false;button.textContent=label}
+}
 async function createLoyaltyProgram(){return saveLoyaltyProgram()}
 function confirmDeleteLoyaltyProgram(id,name){showModal(`<div class="modal-title">Удалить программу?</div><div class="settings-note">Программа «${escapeHtml(name)}» будет удалена. Если по ней уже есть история начислений, удаление будет запрещено — такую программу можно только выключить.</div><div class="modal-actions"><button class="btn btn-secondary" onclick="openLoyaltyAdmin()">Отмена</button><button class="btn btn-danger" onclick="deleteLoyaltyProgram('${escapeAttr(id)}')">Удалить</button></div>`,true)}
 async function deleteLoyaltyProgram(id){try{await loyaltyApi('/api/loyalty/programs/'+encodeURIComponent(id),{method:'DELETE'});flash('Программа удалена');openLoyaltyAdminScreen()}catch(e){flash(e.message||'Не удалось удалить программу')}}
@@ -2478,7 +2689,11 @@ function openLoyaltyAdminScreen(){if(!state.settingsAdminPanel && !state.loyalty
 function closeLoyaltyAdminScreen(){state.loyaltyAdminScreen=false;state.settingsAdminPanel=true;render()}
 async function loadLoyaltyAdminScreen(){try{if(state.loyaltyAdminSection==='clients'){window.__loyaltyAdminCustomers=await searchCustomers('375')}else{const d=await loyaltyApi('/api/loyalty/programs');window.__loyaltyAdminPrograms=d.programs||[]}render()}catch(e){flash('Не удалось загрузить данные программы лояльности')}}
 function setLoyaltyAdminSection(section){state.loyaltyAdminSection=section;loadLoyaltyAdminScreen()}
-function renderLoyaltyAdminScreen(){const section=state.loyaltyAdminSection||'programs',programs=window.__loyaltyAdminPrograms||[],clients=window.__loyaltyAdminCustomers||[];return `<div class="screen content-screen ${state.tab==='settings'?'active':''}"><div class="content-head" style="align-items:center;"><div style="display:flex;align-items:center;gap:12px;"><button class="btn btn-secondary" style="width:auto;padding:10px 16px;" onclick="closeLoyaltyAdminScreen()">← Назад</button><div class="content-title">Программа лояльности</div></div></div><div style="display:flex;gap:8px;margin-bottom:16px;"><button class="btn ${section==='programs'?'btn-primary':'btn-secondary'}" style="width:auto" onclick="setLoyaltyAdminSection('programs')">Программы</button><button class="btn ${section==='clients'?'btn-primary':'btn-secondary'}" style="width:auto" onclick="setLoyaltyAdminSection('clients')">Клиенты</button></div>${section==='programs'?`<div class="card" style="overflow:auto;min-height:0;flex:1;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><div style="font-size:17px;font-weight:850;">Программы</div><button class="btn btn-primary" style="width:auto" onclick="openLoyaltyProgramCreate()">+ Программа</button></div>${programs.map(p=>`<div class="list-row"><div><div class="list-row-name">${escapeHtml(p.name)}</div><div class="list-row-sub">Купить ${p.required_quantity} → подарок ×${p.reward_quantity} · ${p.is_active?'активна':'выключена'}</div></div><div style="display:flex;gap:8px"><button class="btn btn-secondary" onclick="openLoyaltyProgramEdit('${escapeAttr(p.id)}')">Изменить</button><button class="btn btn-secondary" onclick="toggleLoyaltyProgram('${escapeAttr(p.id)}',${!p.is_active})">${p.is_active?'Выключить':'Включить'}</button><button class="btn btn-danger" onclick="confirmDeleteLoyaltyProgram('${escapeAttr(p.id)}','${escapeAttr(p.name)}')">Удалить</button></div></div>`).join('')||'<div class="center-note">Программ пока нет</div>'}</div>`:`<div class="card" style="overflow:auto;min-height:0;flex:1;"><div class="field"><label>Поиск клиента</label><input oninput="loyaltyAdminCustomerSearch(this.value)" placeholder="Имя или телефон"></div><div id="loyalty-admin-customers">${customerAdminRows(clients)}</div></div>`}</div>`}
+function renderLoyaltyAdminScreen(){
+  const section=state.loyaltyAdminSection||'programs',programs=window.__loyaltyAdminPrograms||[],clients=window.__loyaltyAdminCustomers||[];
+  const cards=programs.map(p=>`<article class="loyalty-program-card"><div class="loyalty-program-heading"><h2>${escapeHtml(p.name)}</h2><span class="loyalty-status ${p.is_active?'is-active':''}">${p.is_active?'Активна':'Выключена'}</span></div><div class="loyalty-rule"><div><strong>${Number(p.required_quantity)||0}</strong><span>купить товаров</span></div><span class="loyalty-rule-arrow" aria-hidden="true">→</span><div><strong>${Number(p.reward_quantity)||0}</strong><span>получить в подарок</span></div></div><div class="loyalty-card-meta"><span>Для накопления: ${(p.loyalty_earning_products||[]).length}</span><span>В подарок: ${(p.loyalty_reward_products||[]).length}</span></div><div class="loyalty-card-actions"><button class="btn btn-primary" onclick="openLoyaltyProgramEdit('${escapeAttr(p.id)}')">Изменить</button><button class="btn btn-secondary" onclick="toggleLoyaltyProgram('${escapeAttr(p.id)}',${!p.is_active})">${p.is_active?'Выключить':'Включить'}</button><button class="btn btn-secondary loyalty-delete" onclick="confirmDeleteLoyaltyProgram('${escapeAttr(p.id)}','${escapeAttr(p.name)}')">Удалить</button></div></article>`).join('');
+  return `<div class="screen content-screen loyalty-page ${state.tab==='settings'?'active':''}"><div class="loyalty-page-inner"><header class="loyalty-page-header"><button class="btn btn-secondary" onclick="closeLoyaltyAdminScreen()">← Назад</button><h1>Программа лояльности</h1></header><nav class="loyalty-sections" aria-label="Разделы лояльности"><button class="${section==='programs'?'selected':''}" aria-pressed="${section==='programs'}" onclick="setLoyaltyAdminSection('programs')">Программы</button><button class="${section==='clients'?'selected':''}" aria-pressed="${section==='clients'}" onclick="setLoyaltyAdminSection('clients')">Клиенты</button></nav>${section==='programs'?`<div class="loyalty-section-toolbar"><span>Всего программ: ${programs.length}</span><button class="btn btn-primary" onclick="openLoyaltyProgramCreate()">Новая программа</button></div><div class="loyalty-program-grid">${cards||'<div class="loyalty-empty"><strong>Пока нет программ</strong><span>Создайте первую программу для ваших гостей.</span></div>'}</div>`:`<section class="loyalty-clients-panel"><div class="loyalty-client-search"><label for="loyalty-client-query">Найти клиента</label><input id="loyalty-client-query" type="search" placeholder="Имя или телефон" oninput="loyaltyAdminCustomerSearch(this.value)"></div><div class="loyalty-client-columns"><span>Клиент</span><span>Профиль</span></div><div id="loyalty-admin-customers">${customerAdminRows(clients)}</div></section>`}</div></div>`;
+}
 async function loyaltyAdminCustomerSearch(q){const el=document.getElementById('loyalty-admin-customers');if(!el)return;try{el.innerHTML=customerAdminRows(await searchCustomers(q))}catch(e){el.textContent='Ошибка загрузки'}}
 
 function renderAdminPanel(){
@@ -2525,6 +2740,7 @@ function renderSettingsScreen(){
   <div class="screen content-screen ${state.tab==='settings'?'active':''}">
     <div class="content-head">
       <div class="content-title">Настройки</div>
+      <div style="font-size:12px;font-weight:700;color:var(--muted);white-space:nowrap;">Версия __MPOS_VERSION__</div>
       <div class="settings-theme-toggle" title="Светлая / тёмная тема">
         <span class="theme-icon sun" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42"></path></svg></span>
         <label class="theme-switch" aria-label="Переключить тему">
@@ -2691,7 +2907,7 @@ function renderNetworkScreen(){
         <div class="setting-sub">Передаёт текущее меню с iPad в M POS Backend. Повторная синхронизация обновляет существующие товары без создания дубликатов.</div>
         <div class="field" style="margin-top:18px;">
           <label>Адрес backend</label>
-          <input id="network-backend-url" value="${escapeAttr((state.network?.backendUrl||'https://prilavok-backend-production.up.railway.app').replace(/\/$/,''))}" placeholder="https://...railway.app" inputmode="url" autocomplete="off">
+          <input id="network-backend-url" value="${escapeAttr((state.network?.backendUrl||'https://project-dubrovno.up.railway.app').replace(/\/$/,''))}" placeholder="https://...railway.app" inputmode="url" autocomplete="off">
         </div>
         <div class="field">
           <label>Название устройства</label>
@@ -3521,20 +3737,18 @@ function renderCartPanel(shift){
 
   const subtotal = cartSubtotal();
   const deliveryFee = state.orderType==='Доставка' ? Number(state.deliveryFee||0) : 0;
-  const total = subtotal + deliveryFee;
+  const total = Math.max(0,subtotal + deliveryFee - loyaltyRewardDiscount());
   const hasItems = state.cart.length>0;
   return `
   <div class="cart-panel">
-    <div class="cart-head"><span style="font:inherit;color:inherit;">Текущий заказ</span><div style="display:flex;align-items:center;gap:8px;"><span id="cart-add-feedback" class="cart-add-feedback">Добавлено</span><span>${state.cart.reduce((s,i)=>s+i.qty,0)} поз.</span></div></div>
+    <div class="cart-head"><span class="cart-order-title">Текущий заказ <span class="cart-position-count">— ${state.cart.reduce((s,i)=>s+i.qty,0)} поз.</span></span><div class="cart-head-actions"><span id="cart-add-feedback" class="cart-add-feedback">Добавлено</span><button class="cart-customer-button ${state.customer?.id?'selected':''}" onclick="openOrderCustomer()" aria-label="${state.customer?.id?'Изменить клиента заказа':'Выбрать клиента'}" title="${escapeAttr(state.customer?.name||'Выбрать клиента')}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg></button></div></div>
     <div class="order-meta">
       <button class="order-type-btn" onclick="openOrderSettings()">${state.orderLabel?'<b>'+escapeHtml(state.orderLabel)+'</b> · ':''}${escapeHtml(state.orderType)}${state.customer.name||state.customer.phone?' · '+escapeHtml(state.customer.name||state.customer.phone):''}</button>
       ${state.orderComment?`<div class="cart-row-sub" style="color:var(--text);margin-top:6px;">💬 ${escapeHtml(state.orderComment)}</div>`:''}
-      <button class="btn btn-outline" style="width:100%;margin-top:8px;" onclick="openCustomerPicker()">${state.customer?.id?'Клиент: '+escapeHtml(state.customer.name||state.customer.phone):'Выбрать клиента'}</button>
-      ${state.customer?.id?`<div style="margin-top:8px;">${loyaltySummaryHtml()}</div>`:''}
     </div>
     <div class="cart-items">${rows}</div>
     <div class="cart-foot">
-      ${state.orderType==='Доставка' ? `<div class="total-row" style="font-size:14px;"><span class="label">🚗 Доставка</span><span class="value">${deliveryFee>0?fullMoney(deliveryFee):'Не выбрана'}</span></div>` : ''}
+      ${state.orderType==='Доставка' ? `<div class="total-row" style="font-size:14px;"><span class="label">🚗 Доставка</span><span class="value">${hasDeliveryTariff()?fullMoney(deliveryFee):'Выберите тариф'}</span></div>` : ''}
       ${loyaltyRewardDiscount()>0?`<div class="total-row" style="font-size:14px;"><span class="label">🎁 Программа лояльности</span><span class="value">−${fullMoney(loyaltyRewardDiscount())}</span></div>`:''}
       <div class="total-row"><span class="label">Итого</span><span class="value">${fullMoney(total)}</span></div>
       <div class="cart-actions">
@@ -3614,13 +3828,13 @@ function openOrderSettings(){
     <div class="field"><label>Телефон</label><input id="customer-phone" inputmode="tel" value="${escapeAttr(state.customer.phone)}" placeholder="Необязательно"></div>
     ${state.orderType==='Доставка'?`<div class="field delivery-address-field"><label>Адрес доставки</label><input id="customer-address" type="text" autocomplete="street-address" value="${escapeAttr(state.customer.address)}" placeholder="Введите адрес доставки"></div>
       <div class="field"><label>Стоимость доставки</label>
-        ${state.deliveryRates.length ? `<div class="radio-row">${state.deliveryRates.map(r=>`<button class="radio-opt ${Number(state.deliveryFee||0)===Number(r.amount)?'selected':''}" onclick="selectDeliveryFee(${Number(r.amount)||0})">${escapeHtml(r.name)} · ${money(r.amount)}</button>`).join('')}</div>` : `<div class="settings-note">Стоимость доставки пока не настроена. Добавьте варианты во вкладке Настройки.</div>`}
+        ${state.deliveryRates.length ? `<div class="radio-row">${state.deliveryRates.map(r=>`<button class="radio-opt ${state.deliveryTariffSelected&&Number(state.deliveryFee||0)===Number(r.amount)?'selected':''}" onclick="selectDeliveryFee(${Number(r.amount)||0})">${escapeHtml(r.name)} · ${money(r.amount)}</button>`).join('')}</div>` : `<div class="settings-note">Стоимость доставки пока не настроена. Добавьте варианты во вкладке Настройки.</div>`}
       </div>
       <div class="field" style="margin-top:12px;"><label>Итого заказа</label><div style="font-size:24px;font-weight:800;">${fullMoney(cartTotal())}</div></div>`:''}
     <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button class="btn btn-primary" onclick="saveOrderSettings()">Сохранить</button></div>`);
 }
-function setOrderType(t){ state.orderType=t; if(t!=='Доставка') state.deliveryFee=0; saveCurrentOrderSession(); render(); openOrderSettings(); }
-function selectDeliveryFee(amount){ state.deliveryFee=Number(amount)||0; saveCurrentOrderSession(); render(); openOrderSettings(); }
+function setOrderType(t){ if(state.orderType!==t)state.deliveryTariffSelected=false;state.orderType=t; if(t!=='Доставка') state.deliveryFee=0; saveCurrentOrderSession(); render(); openOrderSettings(); }
+function selectDeliveryFee(amount){ if(!state.deliveryRates.some(r=>Number(r.amount)===Number(amount)))return;state.deliveryTariffSelected=true;state.deliveryFee=Number(amount)||0; saveCurrentOrderSession(); render(); openOrderSettings(); }
 function saveOrderSettings(){
   state.orderLabel=(document.getElementById('order-label')?.value||'').trim();
   state.customer.name=(document.getElementById('customer-name')?.value||'').trim();
@@ -3705,7 +3919,7 @@ function resetCurrentOrderState(){
   state.cart=[];
   state.orderLabel='';
   state.orderType='На месте';
-  state.deliveryFee=0;
+  state.deliveryFee=0;state.deliveryTariffSelected=false;
   state.customer={name:'',phone:'',address:'',id:''};
   state.loyaltyPrograms=[];
   state.loyaltyRedemptions={};
@@ -3783,7 +3997,7 @@ function parkOrderNow(){
   const parked = {
     id:uid(), receiptDisplayNumber:'#'+(state.parked.length+1),
     items: state.cart.map(i=>{const product=getProduct(i.productId);return {...JSON.parse(JSON.stringify(i)),category:product?.category||i.category||''}}),
-    total:cartTotal(), subtotal:cartSubtotal(), deliveryFee:state.orderType==='Доставка'?Number(state.deliveryFee||0):0,
+    total:cartTotal(), subtotal:cartSubtotal(), deliveryTariffSelected:!!state.deliveryTariffSelected, deliveryFee:state.orderType==='Доставка'?Number(state.deliveryFee||0):0,
     orderLabel:state.orderLabel, orderType:state.orderType, customer:JSON.parse(JSON.stringify(state.customer)),
     comment:state.orderComment||'', source:state.currentOrderSource||'', webOrderId:state.currentWebOrderId||'', webOrderStatus:state.currentWebOrderStatus||'',
     employeeName:employee?.name||employee?.fullName||'Сотрудник',registerName:'POS 1',timestamp:Date.now(),createdAt:Date.now(),kitchenPrinted:!!window.__currentOrderKitchenPrinted,
@@ -3815,13 +4029,20 @@ function resumeParked(id){
   if(state.cart.length){flash('Сначала завершите текущий заказ');return;}
   const o=state.parked.find(x=>x.id===id); if(!o)return;
   state.cart=JSON.parse(JSON.stringify(o.items)); state.orderLabel=o.orderLabel||''; state.orderType=o.orderType||'На месте';
-  state.customer=Object.assign({name:'',phone:'',address:''},o.customer||{}); state.deliveryFee=Number(o.deliveryFee||0);
+  state.loyaltyPrograms=[];state.loyaltyRedemptions={};
+  state.customer=Object.assign({name:'',phone:'',address:''},o.customer||{}); state.deliveryFee=Number(o.deliveryFee||0);state.deliveryTariffSelected=o.deliveryTariffSelected===true;
   state.orderComment=o.comment||''; state.currentOrderSource=o.source||''; state.currentWebOrderId=o.webOrderId||''; state.currentWebOrderStatus=o.webOrderStatus||'';
   window.__currentOrderKitchenPrinted=!!o.kitchenPrinted;
   window.__currentOrderPrintedItems=Array.isArray(o.printedItems) ? JSON.parse(JSON.stringify(o.printedItems)) : (o.kitchenPrinted ? kitchenPrintedSnapshot(o.items) : []);
   saveCurrentOrderSession();
   state.parked=state.parked.filter(x=>x.id!==id); saveKey('parked',state.parked);
   closeModal(); render();
+  if(state.customer?.id){
+    const selectedCustomer=state.customer;
+    void loadCustomerLoyalty(selectedCustomer.id).catch(()=>{
+      if(state.customer===selectedCustomer)flash('Клиент привязан. Программа лояльности временно недоступна');
+    });
+  }
 }
 
 function deleteParked(id){
@@ -3850,7 +4071,15 @@ function cashQuickValues(total){
     .map(v=>Math.round(v*100)/100).filter(v=>v>=total && v>0);
   return [...new Set(vals)];
 }
+function hasDeliveryTariff(){
+ return state.orderType!=='Доставка'||(state.deliveryTariffSelected===true&&Number.isFinite(Number(state.deliveryFee))&&Number(state.deliveryFee)>=0&&state.deliveryRates.some(r=>Number(r.amount)===Number(state.deliveryFee)));
+}
+function requireDeliveryTariff(){
+ if(hasDeliveryTariff())return true;
+ flash('Выберите тариф доставки перед оплатой');openOrderSettings();return false;
+}
 function openPaymentModal(){
+  if(!requireDeliveryTariff())return;
   if(!state.cart.length){flash('Заказ пуст');return;}
   if(!currentShift()){flash('Смена не открыта');return;}
   if(!canFulfillCart()) return;
@@ -4226,6 +4455,7 @@ async function beginPaymentWithLoyaltyGuard(action){
  showModal(`<div class="modal-title">Нет связи с программой лояльности</div><div class="center-note" style="padding:10px 0 18px;">Продажу и оплату можно продолжить без интернета. Подарок сейчас подтвердить нельзя, поэтому он не будет списан и скидка по нему не применится.</div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Вернуться</button><button class="btn btn-primary" onclick="state.loyaltyRedemptions={};closeModal();render();window.__offlinePaymentAction&&window.__offlinePaymentAction()">Продолжить без подарка</button></div>`,true);window.__offlinePaymentAction=()=>{window.__offlinePaymentAction=null;action()};
 }
 function confirmPaymentScreen(method,loyaltyValidated=false){
+  if(!requireDeliveryTariff())return;
   if(!canFulfillCart()) return;
   if(hasSelectedLoyaltyReward()&&!loyaltyValidated){beginPaymentWithLoyaltyGuard(()=>confirmPaymentScreen(method,true));return;}
   const total=cartTotal();
@@ -4238,7 +4468,9 @@ function confirmPaymentScreen(method,loyaltyValidated=false){
     openCardPartConfirmation(total, ()=>finalizePayment([{method:'card',amount:total,cashGiven:null,change:null,paid:true}]));
   }
 }
-function finalizePayment(payments){
+async function finalizePayment(payments){
+  if(criticalOperationBusy){flash('Сохранение операции ещё не завершено');return;}
+  if(!requireDeliveryTariff())return;
   const shift=currentShift(); if(!shift){flash('Смена не открыта');return;}
   const total=cartTotal();
   const clean=payments.map(p=>({method:p.method,amount:Math.round(Number(p.amount||0)*100)/100,cashGiven:p.cashGiven!=null?Number(p.cashGiven):null,change:p.change!=null?Number(p.change):null}));
@@ -4255,17 +4487,28 @@ function finalizePayment(payments){
   const kitchenPrinted=!!window.__currentOrderKitchenPrinted;
   const receiptSequence=(state.orders.filter(o=>o.shiftId===shift.id).length+1);
   const shiftEmployee=state.employees.find(e=>e.id===shift.employeeId);
-  const order={id:uid(),loyaltyRedemptions:JSON.parse(JSON.stringify(state.loyaltyRedemptions||{})),shiftId:shift.id,receiptNumber:receiptSequence,receiptDisplayNumber:`#${receiptSequence}`,employeeId:shift.employeeId||'',employeeName:shiftEmployee?.name||shiftEmployee?.fullName||'Сотрудник',registerName:'POS 1',method,total,payments:clean,cashGiven:method==='cash'?clean[0].cashGiven:null,change:method==='cash'?clean[0].change:null,orderLabel:state.orderLabel||'',orderType:state.orderType,deliveryFee:deliveryFee,customer:JSON.parse(JSON.stringify(state.customer)),items:state.cart.map(i=>{const d=state.discounts.find(x=>x.id===i.discountId),product=getProduct(i.productId);return {...i,category:product?.category||i.category||'',discountName:d?.name||'',discountType:d?.type||'',discountValue:Number(d?.value)||0,cost:product?(product.type==='simple'?product.cost:compositeCost(product)):0};}),timestamp:Date.now(),kitchenPrinted,printedItems:JSON.parse(JSON.stringify(window.__currentOrderPrintedItems||[]))};
+  const rewardAllocation=loyaltyRewardAllocation();
+  for(const [programId,value] of Object.entries(state.loyaltyRedemptions||{})){
+    const requested=Math.max(0,Math.trunc(Number(value)||0)),allocated=(rewardAllocation.allocations[programId]||[]).reduce((sum,item)=>sum+Number(item.quantity||0),0);
+    if(requested!==allocated){flash('Недостаточно подходящих товаров для выбранного подарка');return}
+  }
+  const order={id:uid(),loyaltyRedemptions:storageSnapshot(state.loyaltyRedemptions||{}),loyaltyRewardAllocations:rewardAllocation.allocations,shiftId:shift.id,receiptNumber:receiptSequence,receiptDisplayNumber:`#${receiptSequence}`,employeeId:shift.employeeId||'',employeeName:shiftEmployee?.name||shiftEmployee?.fullName||'Сотрудник',registerName:'POS 1',method,total,payments:clean,cashGiven:method==='cash'?clean[0].cashGiven:null,change:method==='cash'?clean[0].change:null,orderLabel:state.orderLabel||'',orderType:state.orderType,deliveryFee:deliveryFee,customer:storageSnapshot(state.customer),items:state.cart.map(i=>{const d=state.discounts.find(x=>x.id===i.discountId),product=getProduct(i.productId);return {...i,category:product?.category||i.category||'',discountName:d?.name||'',discountType:d?.type||'',discountValue:Number(d?.value)||0,cost:product?(product.type==='simple'?product.cost:compositeCost(product)):0};}),timestamp:Date.now(),kitchenPrinted,printedItems:storageSnapshot(window.__currentOrderPrintedItems||[])};
   order.stockConsumption=stockConsumption;
+  if(order.customer?.id)order.loyaltySync={status:'pending',at:Date.now(),attempts:0};
+  const nextProducts=storageSnapshot(state.products),nextOrders=storageSnapshot(state.orders),nextShifts=storageSnapshot(state.shifts);
   for(const item of stockConsumption.items){
-    const p=getProduct(item.productId);
+    const p=nextProducts.find(product=>product.id===item.productId);
     p.stock=roundStockQty(Math.max(0,Number(p.stock)-item.qty));
   }
-  state.orders.push(order);
-  if(deliveryFee>0){if(!Array.isArray(shift.cashMovements))shift.cashMovements=[];shift.cashMovements.push({id:uid(),type:'withdrawal',subtype:'delivery',amount:deliveryFee,timestamp:Date.now(),note:'🚗 Доставка'});}
-  saveKey('products',state.products);saveKey('orders',state.orders);saveKey('shifts',state.shifts);
+  nextOrders.push(order);
+  const nextShift=nextShifts.find(item=>item.id===shift.id);
+  if(deliveryFee>0){if(!Array.isArray(nextShift.cashMovements))nextShift.cashMovements=[];nextShift.cashMovements.push({id:uid(),type:'withdrawal',subtype:'delivery',amount:deliveryFee,timestamp:Date.now(),note:'🚗 Доставка'});}
+  criticalOperationBusy=true;
+  try{await commitCriticalStorage('payment',{products:nextProducts,orders:nextOrders,shifts:nextShifts,currentOrderSession:emptyCurrentOrderSession()})}
+  catch(e){flash('Оплата не завершена: '+(e?.message||e));return}
+  finally{criticalOperationBusy=false}
+  state.products=nextProducts;state.orders=nextOrders;state.shifts=nextShifts;
   resetCurrentOrderState();state.paymentPage='receipt';state._splitPayments=[];state._splitCount=0;
-  clearCurrentOrderSession();
   closeModal();showPaymentReceipt(order);void publishPaidOrderLoyalty(order);setTimeout(()=>{if(typeof window.printCompletedOrder==='function')window.printCompletedOrder(order);else if(state.printer?.autoPrint)sendOrderToPrint(order);window.__currentOrderKitchenPrinted=false},250);
 }
 function openCashModal(){openPaymentModal();}
@@ -4354,7 +4597,8 @@ function viewReceiptModal(orderId){
     </div>
   `);
 }
-function restoreOrderStock(order){
+function restoreOrderStock(order,products=state.products){
+  const resolveProduct=id=>products.find(p=>p.id===id);
   if(Object.prototype.hasOwnProperty.call(order,'stockConsumption')){
     const saved=order.stockConsumption;
     if(!saved || saved.version!==1 || !Array.isArray(saved.items)) throw new Error('Некорректные данные списания чека');
@@ -4363,7 +4607,7 @@ function restoreOrderStock(order){
     const updates=saved.items.map(item=>{
       if(!item || seen.has(item.productId) || !Number.isFinite(item.qty) || item.qty<=0) throw new Error('Некорректные данные списания чека');
       seen.add(item.productId);
-      const p=getProduct(item.productId);
+      const p=resolveProduct(item.productId);
       if(!p || p.type!=='simple') throw new Error('Не найден исходный складской товар для возврата');
       const stock=Number(p.stock);
       if(!Number.isFinite(stock) || !Number.isFinite(stock+item.qty)) throw new Error('Некорректный остаток для возврата');
@@ -4375,13 +4619,13 @@ function restoreOrderStock(order){
   // Old receipts have no historical recipe. Preserve their legacy return path.
 
   for(const item of (order.items||[])){
-    const p=getProduct(item.productId);
+    const p=resolveProduct(item.productId);
     if(!p) continue;
     if(p.type==='simple'){
       p.stock = roundStockQty(Number(p.stock||0) + Number(item.qty||0));
     }else{
       for(const c of (p.components||[])){
-        const comp=getProduct(c.productId);
+        const comp=resolveProduct(c.productId);
         if(productTracksStock(comp)) comp.stock = roundStockQty(Number(comp.stock||0) + Number(c.qty||0)*Number(item.qty||0));
       }
     }
@@ -4404,7 +4648,8 @@ function openReturnConfirm(orderId){
       <button class="btn btn-danger" onclick="window.processFullReturn('${escapeAttr(order.id)}')">Вернуть ${fullMoney(total)}</button>
     </div>`);
 }
-function processFullReturn(orderId){
+async function processFullReturn(orderId){
+  if(criticalOperationBusy){flash('Сохранение операции ещё не завершено');return;}
   try{
     const order=state.orders.find(o=>String(o.id)===String(orderId));
     const shift=currentShift();
@@ -4419,26 +4664,32 @@ function processFullReturn(orderId){
       const available=Number(shift.openingCash||0)+Number(t.cash||0)+Number(t.netMovements||0);
       if(refundCash>available+0.0001){flash('Недостаточно наличных в кассе для возврата');return;}
     }
-    restoreOrderStock(order);
+    const nextProducts=storageSnapshot(state.products),nextOrders=storageSnapshot(state.orders),nextShifts=storageSnapshot(state.shifts);
+    const nextOrder=nextOrders.find(o=>String(o.id)===String(orderId));
+    const nextShift=nextShifts.find(s=>s.id===shift.id);
+    restoreOrderStock(nextOrder,nextProducts);
     const now=Date.now();
-    order.returnedAt=now;
-    order.returnedShiftId=shift.id;
-    order.returnAmount=total;
-    if(order.customer?.id)void reverseOrderLoyalty(order);
-    if(!Array.isArray(shift.cashMovements)) shift.cashMovements=[];
+    nextOrder.returnedAt=now;
+    nextOrder.returnedShiftId=shift.id;
+    nextOrder.returnAmount=total;
+    if(nextOrder.customer?.id)nextOrder.loyaltyReversal={status:'pending',at:now};
+    if(!Array.isArray(nextShift.cashMovements)) nextShift.cashMovements=[];
     if(refundCash>0){
-      shift.cashMovements.push({id:uid(),type:'withdrawal',subtype:'refund',amount:refundCash,timestamp:now,note:'Возврат чека'});
+      nextShift.cashMovements.push({id:uid(),type:'withdrawal',subtype:'refund',amount:refundCash,timestamp:now,note:'Возврат чека'});
     }
-    saveKey('products',state.products);
-    saveKey('orders',state.orders);
-    saveKey('shifts',state.shifts);
+    criticalOperationBusy=true;
+    try{await commitCriticalStorage('return',{products:nextProducts,orders:nextOrders,shifts:nextShifts})}
+    finally{criticalOperationBusy=false}
+    state.products=nextProducts;state.orders=nextOrders;state.shifts=nextShifts;
+    const committedOrder=state.orders.find(o=>String(o.id)===String(orderId));
+    if(committedOrder.customer?.id)void settleReturnedOrderLoyalty(committedOrder);
     closeModal();
     render();
     setTimeout(()=>showModal(`
       <div class="modal-title">Возврат выполнен</div>
       <div class="settings-note">Товары возвращены на остатки. ${refundCash>0?'Наличная часть списана из текущей кассовой смены как «Возврат чека».':''}${(order.method==='card'||order.method==='split')?' Карточная часть возвращается через банковский терминал.':''}</div>
       <div class="field"><label>Сумма возврата</label><div style="font-size:26px;font-weight:800;">${fullMoney(total)}</div></div>
-      <div class="modal-actions"><button type="button" class="btn btn-secondary" onclick="viewReceiptModal('${escapeAttr(order.id)}')">Открыть чек</button><button type="button" class="btn btn-primary" onclick="closeModal()">Готово</button></div>`),50);
+      <div class="modal-actions"><button type="button" class="btn btn-secondary" onclick="viewReceiptModal('${escapeAttr(committedOrder.id)}')">Открыть чек</button><button type="button" class="btn btn-primary" onclick="closeModal()">Готово</button></div>`),50);
   }catch(e){
     console.error('processFullReturn error',e);
     flash('Не удалось выполнить возврат: '+(e.message||'неизвестная ошибка'));
@@ -5914,7 +6165,7 @@ function confirmReceivingDocument(){
     const overlay=document.querySelector('#modal-root .modal-overlay');if(overlay)overlay.onclick=null;
   }catch(e){flash(e.message);}
 }
-function applyReceivingDocument(){
+async function applyReceivingDocument(){
   const pending=window._receivingPending;if(!pending||window._receivingSaving)return;
   const order=pending.orderId?state.purchaseOrders.find(o=>o.id===pending.orderId):null;
   if(pending.orderId&&(!order||['received','deleted'].includes(order.status))){flash('Заказ уже принят или удалён');return;}
@@ -5922,12 +6173,16 @@ function applyReceivingDocument(){
     // Recalculate against current stock, not the preview: POS may have sold items meanwhile.
     const items=invoiceReceivingItems(pending.draft),updates=receivingStockUpdates(items),now=Date.now(),shortage=receivingDiscrepancy(order,items);
     window._receivingSaving=true;
-    for(const u of updates){const p=getProduct(u.id);p.stock=roundStockQty(u.stock);p.cost=u.cost;}
+    const nextProducts=storageSnapshot(state.products),nextPurchaseOrders=storageSnapshot(state.purchaseOrders),nextReceivings=storageSnapshot(state.receivings);
+    for(const u of updates){const p=nextProducts.find(product=>product.id===u.id);p.stock=roundStockQty(u.stock);p.cost=u.cost;}
     const supplier=state.suppliers.find(s=>s.id===pending.draft.supplierId);
     const record={id:uid(),type:order?'purchaseOrder':'purchase',purchaseOrderId:order?.id||'',supplierId:order?.supplierId||supplier?.id||'',supplierName:order?.supplierName||supplier?.name||'',items,totalCost:Math.round(items.reduce((s,i)=>s+i.totalCost,0)*100)/100,shortage,invoiceNumber:pending.draft.invoiceNumber.trim(),invoiceDate:pending.draft.invoiceDate,timestamp:now};
-    if(order){order.status='received';order.receivedAt=now;order.receivedItems=items;order.shortage=shortage;order.receivingIncomplete=false;delete order.receivingDraft;delete order.receivingDraftV2;}
-    state.receivings.push(record);saveKey('products',state.products);saveKey('purchaseOrders',state.purchaseOrders);saveKey('receivings',state.receivings);
-    if(!order){state.receivingCart=[];saveKey('receivingDraft',null);}
+    if(order){const nextOrder=nextPurchaseOrders.find(item=>item.id===order.id);nextOrder.status='received';nextOrder.receivedAt=now;nextOrder.receivedItems=items;nextOrder.shortage=shortage;nextOrder.receivingIncomplete=false;delete nextOrder.receivingDraft;delete nextOrder.receivingDraftV2;}
+    nextReceivings.push(record);
+    const writes={products:nextProducts,purchaseOrders:nextPurchaseOrders,receivings:nextReceivings};if(!order)writes.receivingDraft=null;
+    await commitCriticalStorage('receiving',writes);
+    state.products=nextProducts;state.purchaseOrders=nextPurchaseOrders;state.receivings=nextReceivings;
+    if(!order)state.receivingCart=[];
     window._receivingPending=null;window._receivingDraft=null;window._receivingExpanded=false;finishReceivingPage();closeModal();render();flash('Приёмка подтверждена, себестоимость обновлена');
   }catch(e){flash('Приёмка не выполнена: '+e.message);}
   finally{window._receivingSaving=false;}
@@ -6462,15 +6717,40 @@ function closeModal(){ window._posFolderModal=null;document.getElementById('moda
 
 /* ============================= BACKUP ============================= */
 function exportBackup(){
-  const data={version:10,posNavigation:state.posNavigation,exportedAt:Date.now(),company:state.company,deliveryRates:state.deliveryRates,products:state.products,employees:state.employees,shifts:state.shifts,orders:state.orders,parked:state.parked,receivings:state.receivings,suppliers:state.suppliers,purchaseOrders:state.purchaseOrders,discounts:state.discounts,layout:{categoryOrder:state.categoryOrder,categoryColors:state.categoryColors,categorySymbols:state.categorySymbols,categoryOnline:state.categoryOnline,tiles:state.layoutTiles}};
+  const data={version:11,exportedAt:Date.now(),posNavigation:state.posNavigation,company:state.company,deliveryRates:state.deliveryRates,products:state.products,employees:state.employees,shifts:state.shifts,orders:state.orders,parked:state.parked,receivings:state.receivings,suppliers:state.suppliers,purchaseOrders:state.purchaseOrders,discounts:state.discounts,hallTables:state.hallTables,bookings:state.bookings,inventoryConfig:state.inventoryConfig,inventoryHistory:state.inventoryHistory,inventoryDraft:state.inventoryDraft,currentOrderSession:{items:storageSnapshot(state.cart||[]),orderLabel:state.orderLabel||'',orderType:state.orderType||'На месте',customer:storageSnapshot(state.customer||{}),deliveryFee:Number(state.deliveryFee||0),deliveryTariffSelected:!!state.deliveryTariffSelected,orderComment:state.orderComment||'',source:state.currentOrderSource||'',webOrderId:state.currentWebOrderId||'',webOrderStatus:state.currentWebOrderStatus||'',kitchenPrinted:!!window.__currentOrderKitchenPrinted,printedItems:storageSnapshot(window.__currentOrderPrintedItems||[]),updatedAt:Date.now()},layout:{categoryOrder:state.categoryOrder,categoryColors:state.categoryColors,categorySymbols:state.categorySymbols,categoryOnline:state.categoryOnline,tiles:state.layoutTiles}};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='prilavok-backup-'+new Date().toISOString().slice(0,10)+'.json'; a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),1000);
   flash('Резервная копия сохранена');
 }
+function backupArray(data,key,required=false){
+  if(Array.isArray(data?.[key]))return storageSnapshot(data[key]);
+  if(required)throw new Error('В резервной копии отсутствует раздел «'+key+'»');
+  return [];
+}
+function validateBackupData(data){
+  if(!data||typeof data!=='object'||Array.isArray(data))throw new Error('Некорректный файл резервной копии');
+  const version=data.version==null?1:Number(data.version);if(!Number.isInteger(version)||version<1||version>11)throw new Error('Версия резервной копии не поддерживается');
+  const products=backupArray(data,'products',true),employees=backupArray(data,'employees',true),shifts=backupArray(data,'shifts',true),orders=backupArray(data,'orders',true);
+  for(const [name,rows] of [['products',products],['employees',employees],['shifts',shifts],['orders',orders]]){
+    const ids=new Set();for(const row of rows){if(!row||typeof row!=='object'||!String(row.id||''))throw new Error('Некорректный раздел «'+name+'»');if(ids.has(String(row.id)))throw new Error('Повторяющийся ID в разделе «'+name+'»');ids.add(String(row.id))}
+  }
+  const layout=data.layout&&typeof data.layout==='object'?storageSnapshot(data.layout):{};
+  const categoryOrder=Array.isArray(layout.categoryOrder)?layout.categoryOrder:[];
+  const categoryOnline=layout.categoryOnline&&typeof layout.categoryOnline==='object'?layout.categoryOnline:{};
+  categoryOrder.forEach(category=>{if(typeof categoryOnline[category]!=='boolean')categoryOnline[category]=true});
+  return {products,employees,shifts,orders,parked:backupArray(data,'parked'),receivings:backupArray(data,'receivings'),suppliers:backupArray(data,'suppliers'),purchaseOrders:backupArray(data,'purchaseOrders'),discounts:backupArray(data,'discounts'),hallTables:backupArray(data,'hallTables'),bookings:backupArray(data,'bookings'),inventoryHistory:backupArray(data,'inventoryHistory'),inventoryConfig:data.inventoryConfig&&typeof data.inventoryConfig==='object'?storageSnapshot(data.inventoryConfig):{enabled:false,frequency:'monthly',productIds:[],lastCompletedAt:null},inventoryDraft:data.inventoryDraft&&typeof data.inventoryDraft==='object'?storageSnapshot(data.inventoryDraft):null,currentOrderSession:data.currentOrderSession&&typeof data.currentOrderSession==='object'?storageSnapshot(data.currentOrderSession):emptyCurrentOrderSession(),company:Object.assign({establishmentName:'',legalName:'',address:'',deliveryAddress:''},data.company||{}),deliveryRates:backupArray(data,'deliveryRates'),posNavigation:normalizePosNavigation(data.posNavigation),layout:{categoryOrder,categoryColors:layout.categoryColors&&typeof layout.categoryColors==='object'?layout.categoryColors:{},categorySymbols:layout.categorySymbols&&typeof layout.categorySymbols==='object'?layout.categorySymbols:{},categoryOnline,tiles:Array.isArray(layout.tiles)?layout.tiles:products.map(product=>({type:'product',id:product.id}))}};
+}
+async function applyBackupData(data){
+  const next=validateBackupData(data);
+  await commitCriticalStorage('backup-import',next);
+  state.products=next.products;state.employees=next.employees;state.shifts=next.shifts;state.orders=next.orders;state.parked=next.parked;state.receivings=next.receivings;state.suppliers=next.suppliers;state.purchaseOrders=next.purchaseOrders;state.discounts=next.discounts;state.hallTables=next.hallTables;state.bookings=next.bookings;state.inventoryConfig=next.inventoryConfig;state.inventoryHistory=next.inventoryHistory;state.inventoryDraft=next.inventoryDraft;state.company=next.company;state.deliveryRates=next.deliveryRates;state.posNavigation=next.posNavigation;state.posFolder='';state.posPath=null;state.categoryOrder=next.layout.categoryOrder;state.categoryColors=next.layout.categoryColors;state.categorySymbols=next.layout.categorySymbols;state.categoryOnline=next.layout.categoryOnline;state.layoutTiles=next.layout.tiles;
+  const session=next.currentOrderSession;state.cart=Array.isArray(session.items)?session.items:[];state.orderLabel=session.orderLabel||'';state.orderType=session.orderType||'На месте';state.customer=Object.assign({name:'',phone:'',address:''},session.customer||{});state.deliveryFee=Number(session.deliveryFee||0);state.deliveryTariffSelected=session.deliveryTariffSelected===true;state.orderComment=session.orderComment||'';state.currentOrderSource=session.source||'';state.currentWebOrderId=session.webOrderId||'';state.currentWebOrderStatus=session.webOrderStatus||'';window.__currentOrderKitchenPrinted=!!session.kitchenPrinted;window.__currentOrderPrintedItems=Array.isArray(session.printedItems)?session.printedItems:[];
+  render();flash('Данные восстановлены');
+}
 function importBackup(){
   const input=document.createElement('input'); input.type='file'; input.accept='.json,application/json';
-  input.onchange=()=>{ const file=input.files?.[0]; if(!file) return; const r=new FileReader(); r.onload=()=>{ try{ const d=JSON.parse(r.result); if(!d||!Array.isArray(d.products)) throw new Error(); state.products=d.products; state.employees=Array.isArray(d.employees)?d.employees:[]; state.shifts=d.shifts||[]; state.orders=d.orders||[]; state.parked=d.parked||[]; state.receivings=d.receivings||[]; state.suppliers=d.suppliers||[]; state.purchaseOrders=Array.isArray(d.purchaseOrders)?d.purchaseOrders:[]; state.company=Object.assign({establishmentName:'',legalName:'',address:'',deliveryAddress:''},d.company||{}); state.deliveryRates=Array.isArray(d.deliveryRates)?d.deliveryRates:[]; saveKey('deliveryRates',state.deliveryRates); state.discounts=Array.isArray(d.discounts)?d.discounts:[]; state.posNavigation=normalizePosNavigation(d.posNavigation);state.posFolder='';state.posPath=null;saveKey('posNavigation',state.posNavigation);state.categoryOrder=d.layout?.categoryOrder||[]; state.categoryColors=d.layout?.categoryColors||{}; state.categorySymbols=d.layout?.categorySymbols||{}; state.categoryOnline=d.layout?.categoryOnline||{}; state.categoryOrder.forEach(c=>{if(typeof state.categoryOnline[c]!=='boolean')state.categoryOnline[c]=true;}); state.layoutTiles=Array.isArray(d.layout?.tiles)?d.layout.tiles:state.products.map(p=>({type:'product',id:p.id})); saveKey('products',state.products); saveKey('employees',state.employees); saveKey('shifts',state.shifts); saveKey('orders',state.orders); saveKey('parked',state.parked); saveKey('receivings',state.receivings); saveKey('suppliers',state.suppliers); saveKey('purchaseOrders',state.purchaseOrders); saveKey('company',state.company); saveKey('discounts',state.discounts); saveKey('layout',{categoryOrder:state.categoryOrder,categoryColors:state.categoryColors,categorySymbols:state.categorySymbols,categoryOnline:state.categoryOnline,tiles:state.layoutTiles}); render(); flash('Данные восстановлены'); }catch(e){ flash('Не удалось прочитать резервную копию'); } }; r.readAsText(file); }; input.click();
+  input.onchange=()=>{const file=input.files?.[0];if(!file)return;const reader=new FileReader();reader.onload=async()=>{try{await applyBackupData(JSON.parse(reader.result))}catch(e){flash('Резервная копия не восстановлена: '+(e?.message||'неизвестная ошибка'))}};reader.readAsText(file)};input.click();
 }
 
 /* ============================= UTIL ============================= */

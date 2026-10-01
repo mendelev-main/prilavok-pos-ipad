@@ -1,50 +1,59 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!-- Sync Impact Report: unfilled template → 1.0.0. Five project principles populated from
+MASTER_SPEC and explicit user decisions. Sections: constraints, workflow, governance.
+No template changes. No deferred placeholders. Remove this review comment before commit. -->
+# M POS Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Локальный POS — источник истины
+Продажи, чеки, смены, товары и основные операции работают без интернета.
+Авторитетные локальные данные сохраняются до сетевых операций. Направление данных:
+POS → Backend → Web / Mini App. Backend не перезаписывает локальные данные автоматически.
+Сетевая ошибка не должна блокировать обычную локальную продажу.
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+### II. Совместимость и сохранность
+Префикс `prilavok_`, ключи и JSON-форматы нельзя менять без явной миграции
+и проверки старых данных. Нельзя удалять историю чеков на iPad ради очистки кода.
+Удаление backend-заказов со статусом ready старше суток — согласованная политика;
+это не основание удалять локальные чеки.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### III. Сетевые каналы имеют определённые границы
+Полная синхронизация каталога запускается вручную существующей кнопкой в сетевых настройках.
+Позднее согласованные исключения: публикация доступности остатков раз в 10 минут,
+operational outbox/heartbeat, входящие web-события и ACK/retry, повторы лояльности,
+Telegram-отчёты согласно настройкам. Эти исключения не разрешают автоматический импорт каталога
+или произвольную синхронизацию после изменения товаров. Новые триггеры требуют решения пользователя.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### IV. Изменения небольшими проверяемыми этапами
+Перед изменением проверяются git status и реальная реализация. Рефакторинг постепенный;
+касса, рецептуры, остатки, печать и данные сохраняют поведение. Работа идёт на main по решению
+пользователя. Commit/push — в пределах явного разрешения, без включения посторонних изменений.
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### V. Доказательства важнее статуса «готово»
+После существенного этапа требуется физический iPad. Статические проверки, unit-тесты,
+сборка симулятора и физическая приёмка отмечаются отдельно. Неуспешная запись критических данных
+не может считаться успешно завершённой продажей. Неисполненные проверки остаются открытыми.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+## Ограничения продукта
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+Имя приложения M POS; исторические технические идентификаторы сохраняются.
+Текущая версия определяется MASTER_SPEC.md и отображается в быстрых настройках.
+Не менять project.pbxproj ради ненужного повышения версии. Печать по LAN, Bluetooth не используется.
+Owner/Telegram-восстановление и automatic ETA не возвращаются без нового решения пользователя.
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+## Рабочий процесс
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+MASTER_SPEC — существующее поведение; DELTA_SPEC — открытые задачи;
+LOYALTY_SPEC — детали лояльности; specs — требования, планы, проверки и результаты этапа.
+Архивные решения не являются действующими требованиями. Для аудита не изменять production-данные,
+не запускать синхронизацию и не повышать версию. Исправления выявленных ошибок вести отдельными этапами.
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+Это первая заполненная версия конституции Spec Kit, а не новая версия приложения.
+Основание — существующая документация и решения пользователя; явные новые решения пользователя
+имеют приоритет. Поправки сопровождаются причиной, обновлением связанных спецификаций и проверкой
+совместимости. Версия конституции меняется по SemVer: изменение принципа — major,
+новый принцип — minor, уточнение — patch. Перед завершением этапа проверяется соблюдение принципов.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Version**: 1.0.0 | **Ratified**: 2026-10-01 | **Last Amended**: 2026-10-01

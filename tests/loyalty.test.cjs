@@ -5,7 +5,7 @@ test("loyalty is published only from finalized payment path",()=>{const finalize
 test("reward selection is bounded by server-provided balance",()=>{assert.match(html,/Array\.from\(\{length:Number\(p\.rewards\)\}/);assert.match(html,/loyaltyRedemptions/)});
 
 test("reward discount is separated from product base price",()=>{assert.match(html,/function loyaltyRewardDiscount/);assert.match(html,/Программа лояльности/);assert.match(html,/Math\.max\(0,cartSubtotal\(\).*loyaltyRewardDiscount\(\)/s)});
-test("paid loyalty has reconnect retry and refund reversal",()=>{assert.match(html,/function retryPendingLoyalty/);assert.match(html,/function reverseOrderLoyalty/);assert.match(html,/\/api\/loyalty\/reversal/);assert.match(html,/processFullReturn[\s\S]*reverseOrderLoyalty\(order\)/)});
+test("paid loyalty has ordered reconnect retry and refund reversal",()=>{assert.match(html,/function retryPendingLoyalty/);assert.match(html,/function settleReturnedOrderLoyalty/);assert.match(html,/\/api\/loyalty\/reversal/);assert.match(html,/processFullReturn[\s\S]*settleReturnedOrderLoyalty\(committedOrder\)/)});
 test("admin panel exposes customers and loyalty programs",()=>{assert.match(html,/openCustomersAdmin/);assert.match(html,/openLoyaltyAdmin/);assert.match(html,/Новая программа/);assert.match(html,/Клиенты/)});
 test('offline POS keeps normal payment available while reward redemption requires server confirmation',()=>{assert.match(html,/Продажу и оплату можно продолжить без интернета/);assert.match(html,/Продолжить без подарка/);assert.match(html,/revalidateSelectedLoyaltyReward/);});
-test('pending loyalty reversals retry after reconnect',()=>{assert.match(html,/loyaltyReversal\?\.status==='pending'/);assert.match(html,/void reverseOrderLoyalty\(order\)/);});
+test('pending loyalty reversals retry after reconnect',()=>{assert.match(html,/loyaltyReversal\?\.status==='pending'/);assert.match(html,/void settleReturnedOrderLoyalty\(order\)/);});

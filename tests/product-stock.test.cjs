@@ -21,7 +21,7 @@ function fixture(){
  state.products=[{id:'flour',name:'Мука',type:'simple',stock:10,cost:2,price:2,category:'Сырьё',sortOrder:0,availableOnline:false,imageUrl:''},{id:'water',name:'Вода',type:'simple',stock:10,cost:1,price:1},{id:'dough',name:'Тесто',type:'composite',components:[{productId:'flour',qty:0.2},{productId:'water',qty:0.1}]},{id:'pizza',name:'Пицца',type:'composite',price:10,components:[{productId:'dough',qty:1}]}];
  state.shifts=[{id:'shift',status:'open',openingCash:100}];state.orders=[];state.cart=[];state.printer={autoPrint:false};state.discounts=[];
  function cart(id='pizza',qty=1){state.cart=[{productId:id,name:c.getProduct(id)?.name||id,price:10,qty}];}
- function sale(payments){cart();c.finalizePayment(payments||[{method:'cash',amount:10}]);return state.orders[0];}
+ async function sale(payments){cart();await c.finalizePayment(payments||[{method:'cash',amount:10}]);return state.orders[0];}
  return {c,state,data,messages,writes,fields,events,cart,sale};
 }
 test('all inline JavaScript and adapter parse',()=>{new vm.Script(inline);new vm.Script(adapter);});
@@ -42,19 +42,65 @@ test('nested recipe multiplies quantities and aggregates repeated ingredients',(
  f.c.getProduct('flour').stock=1;assert.equal(f.c.availableStock(f.c.getProduct('pizza')),2);
 });
 test('sale writes nested stock snapshot through real adapter; same receipt survives restart',async()=>{
- const f=fixture(),order=f.sale();near(f.c.getProduct('flour').stock,9.8);near(f.c.getProduct('water').stock,9.9);
+ const f=fixture(),order=await f.sale();near(f.c.getProduct('flour').stock,9.8);near(f.c.getProduct('water').stock,9.9);
  assert.deepEqual(plain(order.stockConsumption),{version:1,items:[{productId:'flour',qty:0.2},{productId:'water',qty:0.1}]});
  const saved=JSON.parse(f.data.get('prilavok_orders'));assert.deepEqual(saved[0].stockConsumption,plain(order.stockConsumption));
  const next=fixture();for(const [k,v] of f.data)next.data.set(k,v);await next.c.loadAll();
  assert.deepEqual(plain(next.state.orders[0].stockConsumption),saved[0].stockConsumption);
  assert.ok(f.writes.every(k=>k.startsWith('prilavok_')));
 });
-test('cash, card and split payments create one receipt and retain payment data',()=>{
+test('cash, card and split payments create one receipt and retain payment data',async()=>{
  for(const payments of [[{method:'cash',amount:10,cashGiven:20,change:10}],[{method:'card',amount:10}],[{method:'cash',amount:4,cashGiven:5,change:1},{method:'card',amount:6}]]){
-  const f=fixture(),order=f.sale(payments);assert.equal(f.state.orders.length,1);assert.equal(order.total,10);
+  const f=fixture(),order=await f.sale(payments);assert.equal(f.state.orders.length,1);assert.equal(order.total,10);
   assert.equal(order.payments.length,payments.length);near(f.c.getProduct('flour').stock,9.8);
-  f.c.finalizePayment(payments);assert.equal(f.state.orders.length,1,'empty cart cannot create duplicate receipt');
+  await f.c.finalizePayment(payments);assert.equal(f.state.orders.length,1,'empty cart cannot create duplicate receipt');
  }
+});
+
+test('critical payment journal recovers every related key after an interrupted write',async()=>{
+ const f=fixture();f.cart();const originalSet=f.c.localStorage.setItem;let failed=false;
+ f.c.localStorage.setItem=(key,value)=>{if(key==='prilavok_orders'&&!failed){failed=true;throw Error('injected write failure')}originalSet(key,value)};
+ await f.c.finalizePayment([{method:'cash',amount:10}]);
+ assert.equal(f.state.orders.length,0);assert.equal(f.state.cart.length,1);assert.match(f.messages.at(-1),/Оплата не завершена/);
+ assert.ok(JSON.parse(f.data.get('prilavok_criticalStorageJournal'))?.writes?.length);
+ const restarted=fixture();for(const [key,value] of f.data)restarted.data.set(key,value);await restarted.c.loadAll();
+ assert.equal(restarted.state.orders.length,1);near(restarted.c.getProduct('flour').stock,9.8);near(restarted.c.getProduct('water').stock,9.9);
+ assert.equal(JSON.parse(restarted.data.get('prilavok_criticalStorageJournal')),null);
+ assert.deepEqual(JSON.parse(restarted.data.get('prilavok_currentOrderSession')).items,[]);
+});
+
+test('failed journal creation leaves payment, stock and cart unchanged',async()=>{
+ const f=fixture();f.cart();const before=JSON.stringify(f.state);const originalSet=f.c.localStorage.setItem;
+ f.c.localStorage.setItem=(key,value)=>{if(key==='prilavok_criticalStorageJournal')throw Error('injected journal failure');originalSet(key,value)};
+ await f.c.finalizePayment([{method:'cash',amount:10}]);
+ assert.equal(JSON.stringify(f.state),before);assert.equal(f.data.has('prilavok_orders'),false);assert.match(f.messages.at(-1),/Оплата не завершена/);
+});
+
+test('loyalty job is durable, and overlapping programs cannot reuse one item',async()=>{
+ const f=fixture();f.cart();f.state.customer={id:'customer',name:'Клиент',phone:'+375290000000'};
+ f.state.loyaltyPrograms=['a','b'].map(id=>({id,loyalty_reward_products:[{product_id:'pizza'}]}));f.state.loyaltyRedemptions={a:1,b:1};
+ assert.equal(f.c.loyaltyRewardDiscount(),10);assert.equal(f.c.cartTotal(),0);
+ await f.c.finalizePayment([{method:'cash',amount:0}]);assert.equal(f.state.orders.length,0);assert.match(f.messages.at(-1),/Недостаточно/);
+ f.state.loyaltyRedemptions={a:1};
+ let release;f.c.loyaltyApi=()=>new Promise(resolve=>{release=resolve});await f.c.finalizePayment([{method:'cash',amount:0}]);
+ const stored=JSON.parse(f.data.get('prilavok_orders'))[0];assert.equal(stored.loyaltySync.status,'pending');
+ assert.deepEqual(stored.loyaltyRewardAllocations,{a:[{productId:'pizza',quantity:1}]});
+ release({events:[]});
+});
+
+test('returned loyalty sale is always posted before its reversal',async()=>{
+ const f=fixture(),calls=[];const order={id:'paid',customer:{id:'customer'},items:[{productId:'pizza',qty:1}],loyaltySync:{status:'pending'},loyaltyReversal:{status:'pending'},returnedAt:Date.now()};f.state.orders=[order];
+ f.c.loyaltyApi=async path=>{calls.push(path);return path.endsWith('/sales')?{events:[]}:{};};
+ await f.c.settleReturnedOrderLoyalty(order);
+ assert.deepEqual(calls,['/api/loyalty/sales','/api/loyalty/reversal']);assert.equal(order.loyaltySync.status,'synced');assert.equal(order.loyaltyReversal.status,'synced');
+});
+
+test('return during an in-flight loyalty sale waits and then reverses it',async()=>{
+ const f=fixture(),calls=[];let releaseSale;const gate=new Promise(resolve=>{releaseSale=resolve});
+ const order={id:'paid',customer:{id:'customer'},items:[{productId:'pizza',qty:1}],loyaltySync:{status:'pending'}};f.state.orders=[order];
+ f.c.loyaltyApi=async path=>{calls.push(path);if(path.endsWith('/sales'))await gate;return path.endsWith('/sales')?{events:[]}:{};};
+ const publishing=f.c.publishPaidOrderLoyalty(order);order.returnedAt=Date.now();order.loyaltyReversal={status:'pending'};releaseSale();await publishing;
+ assert.deepEqual(calls,['/api/loyalty/sales','/api/loyalty/reversal']);assert.equal(order.loyaltyReversal.status,'synced');
 });
 
 test('WEB ready action has no retired production gate',()=>{
@@ -63,30 +109,30 @@ test('WEB ready action has no retired production gate',()=>{
  assert.doesNotMatch(source,/productionOrderById/);
  assert.doesNotMatch(source,/Сначала завершите приготовление на всех участвующих станциях/);
 });
-test('web order context is cleared after payment and after removing the last cart item',()=>{
+test('web order context is cleared after payment and after removing the last cart item',async()=>{
  const paid=fixture();paid.state.orderComment='Комментарий с WEB';paid.state.currentOrderSource='web';paid.state.currentWebOrderId='web-1';paid.state.currentWebOrderStatus='accepted';
- paid.sale();assert.equal(paid.state.orderComment,'');assert.equal(paid.state.currentOrderSource,'');assert.equal(paid.state.currentWebOrderId,'');assert.equal(paid.state.currentWebOrderStatus,'');
+ await paid.sale();assert.equal(paid.state.orderComment,'');assert.equal(paid.state.currentOrderSource,'');assert.equal(paid.state.currentWebOrderId,'');assert.equal(paid.state.currentWebOrderStatus,'');
  const removed=fixture();removed.cart();removed.state.orderComment='Не оставлять';removed.state.currentOrderSource='web';removed.state.currentWebOrderId='web-2';removed.state.currentWebOrderStatus='accepted';
  removed.c.removeFromCart('pizza');assert.equal(removed.state.cart.length,0);assert.equal(removed.state.orderComment,'');assert.equal(removed.state.currentOrderSource,'');assert.equal(removed.state.currentWebOrderId,'');assert.equal(removed.state.currentWebOrderStatus,'');
  const saved=JSON.parse(removed.data.get('prilavok_currentOrderSession'));assert.equal(saved.orderComment,'');assert.equal(saved.webOrderId,'');
 });
 
-test('stock arithmetic is normalized to at most three decimal places',()=>{
- const sale=fixture();sale.c.getProduct('pizza').components=[{productId:'flour',qty:0.1}];sale.c.getProduct('flour').stock=15.1;sale.sale();
+test('stock arithmetic is normalized to at most three decimal places',async()=>{
+ const sale=fixture();sale.c.getProduct('pizza').components=[{productId:'flour',qty:0.1}];sale.c.getProduct('flour').stock=15.1;await sale.sale();
  assert.equal(sale.c.getProduct('flour').stock,15);assert.equal(sale.c.stockQtyText(15.0000000000002),'15');assert.equal(sale.c.stockQtyText(1.2345),'1.235');
- sale.c.processFullReturn(sale.state.orders[0].id);assert.equal(sale.c.getProduct('flour').stock,15.1);
+ await sale.c.processFullReturn(sale.state.orders[0].id);assert.equal(sale.c.getProduct('flour').stock,15.1);
 });
 
-test('modifier stock is aggregated with base recipe and survives exact return',()=>{
+test('modifier stock is aggregated with base recipe and survives exact return',async()=>{
  const f=fixture();
  f.state.products.push({id:'bacon',name:'Бекон',type:'simple',stock:1,cost:10,price:10});
  const pizza=f.c.getProduct('pizza');pizza.modifierGroups=[{id:'filling',name:'Начинка',min:1,max:1,options:[{id:'bacon-opt',productId:'bacon',qty:.05,priceDelta:1.5}]}];
  f.state.cart=[{cartLineId:'line-1',productId:'pizza',name:'Пицца',price:11.5,qty:2,selectedModifiers:[{groupId:'filling',groupName:'Начинка',optionId:'bacon-opt',productId:'bacon',name:'Бекон',qty:.05,priceDelta:1.5}]}];
  const plan=f.c.checkedStockConsumption(f.state.cart);
  near(plan.items.find(i=>i.productId==='flour').qty,.4);near(plan.items.find(i=>i.productId==='water').qty,.2);near(plan.items.find(i=>i.productId==='bacon').qty,.1);
- f.c.finalizePayment([{method:'cash',amount:23}]);near(f.c.getProduct('bacon').stock,.9);
+ await f.c.finalizePayment([{method:'cash',amount:23}]);near(f.c.getProduct('bacon').stock,.9);
  const order=f.state.orders[0];assert.equal(order.items[0].selectedModifiers[0].name,'Бекон');near(order.total,23);
- f.c.processFullReturn(order.id);near(f.c.getProduct('bacon').stock,1);
+ await f.c.processFullReturn(order.id);near(f.c.getProduct('bacon').stock,1);
 });
 test('modifier can be composite and expands recursively into simple stock',()=>{
  const f=fixture();
@@ -122,31 +168,39 @@ test('cart quantity increase checks other products, decrease remains possible',(
  const f=fixture();f.c.getProduct('flour').stock=0.5;f.cart();f.state.cart.push({productId:'flour',qty:0.2,price:2});
  f.c.changeQty('pizza',1);assert.equal(f.state.cart[0].qty,1);f.c.changeQty('pizza',-1);assert.equal(f.state.cart.length,1);
 });
-test('fractional consumption permits exact stock, never consumes a material shortage',()=>{
+test('fractional consumption permits exact stock, never consumes a material shortage',async()=>{
  const f=fixture();f.c.getProduct('pizza').components=[{productId:'flour',qty:0.1}];f.c.getProduct('flour').stock=0.3;
- assert.equal(f.c.availableStock(f.c.getProduct('pizza')),3);f.cart('pizza',3);f.c.finalizePayment([{method:'cash',amount:30}]);near(f.c.getProduct('flour').stock,0);
+ assert.equal(f.c.availableStock(f.c.getProduct('pizza')),3);f.cart('pizza',3);await f.c.finalizePayment([{method:'cash',amount:30}]);near(f.c.getProduct('flour').stock,0);
  const missing=fixture();missing.c.getProduct('flour').stock=0.199;assert.throws(()=>missing.c.checkedStockConsumption([{productId:'pizza',qty:1}]),/Недостаточно/);
  missing.c.getProduct('flour').stock=0;assert.throws(()=>missing.c.checkedStockConsumption([{productId:'flour',qty:1e-20}]),/Недостаточно/);
 });
-test('return uses sold recipe after edit and ignores current tracking flag',()=>{
- const f=fixture(),order=f.sale();f.c.getProduct('dough').components[0].qty=0.8;f.c.getProduct('flour').noStockTracking=true;
- f.c.processFullReturn(order.id);near(f.c.getProduct('flour').stock,10);near(f.c.getProduct('water').stock,10);assert.ok(order.returnedAt);
- const first=JSON.stringify(f.state);f.c.processFullReturn(order.id);assert.equal(JSON.stringify(f.state),first,'second return cannot add stock or cash twice');
+test('return uses sold recipe after edit and ignores current tracking flag',async()=>{
+ const f=fixture(),order=await f.sale();f.c.getProduct('dough').components[0].qty=0.8;f.c.getProduct('flour').noStockTracking=true;
+ await f.c.processFullReturn(order.id);near(f.c.getProduct('flour').stock,10);near(f.c.getProduct('water').stock,10);assert.ok(f.state.orders[0].returnedAt);
+ const first=JSON.stringify(f.state);await f.c.processFullReturn(order.id);assert.equal(JSON.stringify(f.state),first,'second return cannot add stock or cash twice');
 });
-test('deleted sold composite does not affect return of recorded ingredients',()=>{
- const f=fixture(),order=f.sale();f.state.products=f.state.products.filter(p=>p.id!=='pizza'&&p.id!=='dough');f.c.restoreOrderStock(order);near(f.c.getProduct('flour').stock,10);
+test('return journal recovers stock, receipt and cash movement together',async()=>{
+ const f=fixture(),order=await f.sale();const originalSet=f.c.localStorage.setItem;let failed=false;
+ f.c.localStorage.setItem=(key,value)=>{if(key==='prilavok_shifts'&&!failed){failed=true;throw Error('injected return failure')}originalSet(key,value)};
+ await f.c.processFullReturn(order.id);assert.equal(f.state.orders[0].returnedAt,undefined);assert.match(f.messages.at(-1),/Не удалось выполнить возврат/);
+ const restarted=fixture();for(const [key,value] of f.data)restarted.data.set(key,value);await restarted.c.loadAll();
+ assert.ok(restarted.state.orders[0].returnedAt);near(restarted.c.getProduct('flour').stock,10);near(restarted.c.getProduct('water').stock,10);
+ assert.equal(restarted.state.shifts[0].cashMovements.filter(x=>x.subtype==='refund').length,1);
 });
-test('untracked ingredients are not deducted or restored, even if flag later changes',()=>{
- const f=fixture();f.c.getProduct('flour').noStockTracking=true;const order=f.sale();assert.equal(order.stockConsumption.items.length,1);f.c.getProduct('flour').noStockTracking=false;f.c.restoreOrderStock(order);near(f.c.getProduct('flour').stock,10);
- const all=fixture();all.c.getProduct('flour').noStockTracking=true;all.c.getProduct('water').noStockTracking=true;assert.equal(all.c.availableStock(all.c.getProduct('pizza')),Infinity);const o=all.sale();assert.deepEqual(plain(o.stockConsumption.items),[]);all.c.restoreOrderStock(o);
+test('deleted sold composite does not affect return of recorded ingredients',async()=>{
+ const f=fixture(),order=await f.sale();f.state.products=f.state.products.filter(p=>p.id!=='pizza'&&p.id!=='dough');f.c.restoreOrderStock(order);near(f.c.getProduct('flour').stock,10);
+});
+test('untracked ingredients are not deducted or restored, even if flag later changes',async()=>{
+ const f=fixture();f.c.getProduct('flour').noStockTracking=true;const order=await f.sale();assert.equal(order.stockConsumption.items.length,1);f.c.getProduct('flour').noStockTracking=false;f.c.restoreOrderStock(order);near(f.c.getProduct('flour').stock,10);
+ const all=fixture();all.c.getProduct('flour').noStockTracking=true;all.c.getProduct('water').noStockTracking=true;assert.equal(all.c.availableStock(all.c.getProduct('pizza')),Infinity);const o=await all.sale();assert.deepEqual(plain(o.stockConsumption.items),[]);all.c.restoreOrderStock(o);
 });
 test('legacy receipt has no fabricated snapshot and retains legacy one-level return',()=>{
  const f=fixture();const order={id:'old',items:[{productId:'pizza',qty:1}]};f.c.restoreOrderStock(order);near(f.c.getProduct('flour').stock,10);assert.equal('stockConsumption' in order,false);
  f.c.getProduct('pizza').components=[{productId:'flour',qty:0.2}];f.c.restoreOrderStock(order);near(f.c.getProduct('flour').stock,10.2);
 });
-test('invalid snapshot or missing target cannot partially change stock, cash or receipt',()=>{
+test('invalid snapshot or missing target cannot partially change stock, cash or receipt',async()=>{
  for(const snapshot of [null,{version:2,items:[]},{version:1,items:[{productId:'flour',qty:0.2},{productId:'missing',qty:0.1}]},{version:1,items:[{productId:'flour',qty:-1}]},{version:1,items:[{productId:'flour',qty:1},{productId:'flour',qty:1}]}]){
-  const f=fixture(),order=f.sale();order.stockConsumption=snapshot;const before=JSON.stringify(f.state);f.c.processFullReturn(order.id);assert.equal(JSON.stringify(f.state),before);assert.match(f.messages.at(-1),/Не удалось выполнить возврат/);
+  const f=fixture(),order=await f.sale();order.stockConsumption=snapshot;const before=JSON.stringify(f.state);await f.c.processFullReturn(order.id);assert.equal(JSON.stringify(f.state),before);assert.match(f.messages.at(-1),/Не удалось выполнить возврат/);
  }
 });
 test('cycles, absent ingredients, empty recipe and invalid quantity fail safely',()=>{
@@ -166,7 +220,7 @@ test('save validation rejects cycle before product mutation or any write',async(
  await f.c.saveProduct('dough');assert.equal(JSON.stringify(f.state.products),before);assert.equal(f.writes.length,0);assert.match(f.messages.at(-1),/Циклический состав/);
 });
 test('cannot delete or change type of a tracked product needed by an unreturned new receipt',async()=>{
- const f=fixture();f.sale();Object.assign(f.fields,{'pf-name':{value:'Мука'},'pf-category':{value:'Сырьё'},'pf-price':{value:'2'}});
+ const f=fixture();await f.sale();Object.assign(f.fields,{'pf-name':{value:'Мука'},'pf-category':{value:'Сырьё'},'pf-price':{value:'2'}});
  f.c._pmType='composite';f.c._pmComponents=[{productId:'water',qty:1}];const before=JSON.stringify(f.state.products);await f.c.saveProduct('flour');assert.equal(JSON.stringify(f.state.products),before);assert.match(f.messages.at(-1),/Нельзя изменить тип/);
  f.state.products=f.state.products.filter(p=>p.type==='simple');
  f.fields['delete-password']={value:html.match(/function confirmDelete[\s\S]*?pass!=='([^']+)'/)[1]};
@@ -176,22 +230,37 @@ test('cannot delete or change type of a tracked product needed by an unreturned 
 test('insufficient stock blocks payment screen before card-terminal instruction',()=>{
  const f=fixture();f.cart();f.c.getProduct('flour').stock=0;let shown=false;f.c.renderPaymentScreen=()=>{shown=true;};f.c.openCardPartConfirmation=()=>{shown=true;};f.c.openPaymentModal();f.c.confirmPaymentScreen('card');assert.equal(shown,false);
 });
-test('print bridge still receives original receipt fields plus ignored stock snapshot',()=>{
- const f=fixture(),order=f.sale();let sent;f.c.sendOrderToPrint=o=>{sent=o;};f.c.printReceipt(order.id);
+test('print bridge still receives original receipt fields plus ignored stock snapshot',async()=>{
+ const f=fixture(),order=await f.sale();let sent;f.c.sendOrderToPrint=o=>{sent=o;};f.c.printReceipt(order.id);
  assert.equal(sent.total,10);assert.equal(sent.items[0].productId,'pizza');assert.equal(sent.stockConsumption.version,1);
  assert.match(f.c.receiptBodyHtml(order),/Пицца/);
 });
 
-test('existing backup export/import retains new snapshot and old receipt without adding fields',()=>{
- const f=fixture(),order=f.sale();const legacy={id:'old',items:[],total:0};f.state.orders.push(legacy);let backup;
+test('existing backup export/import retains new snapshot and old receipt without adding fields',async()=>{
+ const f=fixture(),order=await f.sale();const legacy={id:'old',items:[],total:0};f.state.orders.push(legacy);let backup;
  f.c.Blob=class{constructor(parts){this.parts=parts;}};
  f.c.URL={createObjectURL:b=>{backup=JSON.parse(b.parts.join(''));return 'blob:test';},revokeObjectURL:()=>{}};
  f.c.document.createElement=()=>({click(){}});f.c.exportBackup();
  assert.deepEqual(backup.orders[0].stockConsumption,plain(order.stockConsumption));assert.equal('stockConsumption' in backup.orders[1],false);
  const restored=fixture();restored.c.FileReader=class{readAsText(file){this.result=file.text;this.onload();}};
- restored.c.document.createElement=()=>({files:[{text:JSON.stringify(backup)}],click(){this.onchange();}});
- restored.c.importBackup();assert.deepEqual(plain(restored.state.orders),backup.orders);
+ await restored.c.applyBackupData(backup);assert.deepEqual(plain(restored.state.orders),backup.orders);
  restored.c.restoreOrderStock(restored.state.orders[0]);near(restored.c.getProduct('flour').stock,10);
+});
+test('backup rejects incomplete core data before changing local state',async()=>{
+ const f=fixture();await f.sale();const before=JSON.stringify(f.state);
+ await assert.rejects(f.c.applyBackupData({version:11,products:[]}),/employees/);
+ assert.equal(JSON.stringify(f.state),before);assert.equal(f.messages.includes('Данные восстановлены'),false);
+});
+test('backup import is journaled and recovers all promised data after a write failure',async()=>{
+ const f=fixture();await f.sale();const backup={version:11,products:plain(f.state.products),employees:[],shifts:plain(f.state.shifts),orders:[],parked:[],receivings:[],suppliers:[],purchaseOrders:[],discounts:[],layout:{categoryOrder:[],categoryColors:{},categorySymbols:{},categoryOnline:{},tiles:[]}};
+ const originalSet=f.c.localStorage.setItem;let failed=false;f.c.localStorage.setItem=(key,value)=>{if(key==='prilavok_orders'&&!failed){failed=true;throw Error('injected backup failure')}originalSet(key,value)};
+ await assert.rejects(f.c.applyBackupData(backup));assert.equal(f.state.orders.length,1);assert.ok(JSON.parse(f.data.get('prilavok_criticalStorageJournal')));
+ const restarted=fixture();for(const [key,value] of f.data)restarted.data.set(key,value);await restarted.c.loadAll();assert.equal(restarted.state.orders.length,0);assert.equal(JSON.parse(restarted.data.get('prilavok_criticalStorageJournal')),null);
+});
+test('backup version 11 includes inventory and unfinished current order',()=>{
+ const f=fixture();f.cart();f.state.inventoryHistory=[{id:'inventory'}];f.state.inventoryDraft={id:'draft'};let backup;
+ f.c.Blob=class{constructor(parts){this.parts=parts}};f.c.URL={createObjectURL:value=>{backup=JSON.parse(value.parts[0]);return 'blob:test'},revokeObjectURL:()=>{}};f.c.document.createElement=()=>({click(){}});f.c.exportBackup();
+ assert.equal(backup.version,11);assert.equal(backup.inventoryHistory[0].id,'inventory');assert.equal(backup.inventoryDraft.id,'draft');assert.equal(backup.currentOrderSession.items[0].productId,'pizza');
 });
 test('valid nested recipe edit retains product ID and existing component shape',async()=>{
  const f=fixture();Object.assign(f.fields,{'pf-name':{value:'Пицца обновлённая'},'pf-category':{value:'Пицца'},'pf-price':{value:'10'}});
@@ -246,10 +315,10 @@ test('unit conversions accept mass/volume pairs and reject cross dimension conve
  const f=fixture();near(f.c.convertProductQty(250,'g','kg'),0.25);near(f.c.convertProductQty(1.5,'l','ml'),1500);
  near(f.c.convertProductQty(7,'',''),7);assert.throws(()=>f.c.convertProductQty(1,'kg','l'));assert.throws(()=>f.c.convertProductQty(1,'piece','g'));
 });
-test('recipe input grams normalizes to original kg; sale and return preserve snapshot',()=>{
+test('recipe input grams normalizes to original kg; sale and return preserve snapshot',async()=>{
  const f=fixture();f.c.getProduct('flour').stockUnit='kg';f.c._pmComponents=[{productId:'flour',qty:0.2,displayUnit:'g'}];f.c.renderTypeFields=()=>{};
  f.c.setComponentQty(0,'250');near(f.c._pmComponents[0].qty,0.25);near(f.c.componentDisplayQty(f.c._pmComponents[0]),250);
- f.c.getProduct('pizza').components=plain(f.c._pmComponents);const order=f.sale();near(f.c.getProduct('flour').stock,9.75);near(order.stockConsumption.items[0].qty,0.25);
+ f.c.getProduct('pizza').components=plain(f.c._pmComponents);const order=await f.sale();near(f.c.getProduct('flour').stock,9.75);near(order.stockConsumption.items[0].qty,0.25);
  f.c.getProduct('flour').stockDisplayUnit='g';f.c.restoreOrderStock(order);near(f.c.getProduct('flour').stock,10);
 });
 test('unit selector changes presentation without changing recipe consumption',()=>{
@@ -331,10 +400,17 @@ function invoiceFixture(){
  const f=fixture();f.state.suppliers=[{id:'supplier',name:'Поставщик',productIds:['flour']}];f.state.purchaseOrders=[{id:'purchase',supplierId:'supplier',supplierName:'Поставщик',items:[{productId:'flour',qty:3}],status:'pending'}];f.state.receivings=[];
  f.c._receivingPending={orderId:'purchase',draft:{invoiceNumber:'ТТН-001',invoiceDate:'2026-09-14',supplierId:'supplier',lines:[{productId:'flour',qtyInput:'3',unit:'',totalInput:'60'}]}};return f;
 }
-test('confirmation applies current weighted cost once and persists TTN history',()=>{
+test('confirmation applies current weighted cost once and persists TTN history',async()=>{
  const f=invoiceFixture();Object.assign(f.c.getProduct('flour'),{stock:2,cost:10});
- f.c.applyReceivingDocument();near(f.c.getProduct('flour').stock,5);near(f.c.getProduct('flour').cost,16);assert.equal(f.state.receivings.length,1);assert.equal(f.state.receivings[0].invoiceNumber,'ТТН-001');assert.equal(f.state.purchaseOrders[0].status,'received');
- f.c.applyReceivingDocument();assert.equal(f.state.receivings.length,1);near(f.c.getProduct('flour').stock,5);assert.ok(f.data.has('prilavok_receivings'));
+ await f.c.applyReceivingDocument();near(f.c.getProduct('flour').stock,5);near(f.c.getProduct('flour').cost,16);assert.equal(f.state.receivings.length,1);assert.equal(f.state.receivings[0].invoiceNumber,'ТТН-001');assert.equal(f.state.purchaseOrders[0].status,'received');
+ await f.c.applyReceivingDocument();assert.equal(f.state.receivings.length,1);near(f.c.getProduct('flour').stock,5);assert.ok(f.data.has('prilavok_receivings'));
+});
+test('receiving journal recovers document, order status and stock together',async()=>{
+ const f=invoiceFixture();Object.assign(f.c.getProduct('flour'),{stock:2,cost:10});const originalSet=f.c.localStorage.setItem;let failed=false;
+ f.c.localStorage.setItem=(key,value)=>{if(key==='prilavok_receivings'&&!failed){failed=true;throw Error('injected receiving failure')}originalSet(key,value)};
+ await f.c.applyReceivingDocument();assert.equal(f.state.receivings.length,0);assert.match(f.messages.at(-1),/Приёмка не выполнена/);
+ const restarted=fixture();for(const [key,value] of f.data)restarted.data.set(key,value);await restarted.c.loadAll();
+ assert.equal(restarted.state.receivings.length,1);assert.equal(restarted.state.purchaseOrders[0].status,'received');near(restarted.c.getProduct('flour').stock,5);near(restarted.c.getProduct('flour').cost,16);
 });
 test('deleted order cannot be received and missing product cannot partially apply TTN',()=>{
  const f=invoiceFixture();f.state.purchaseOrders[0].status='deleted';const before=JSON.stringify(f.state);f.c.applyReceivingDocument();assert.equal(JSON.stringify(f.state),before);
@@ -347,8 +423,8 @@ test('text and native share payload preserve fractional package request',()=>{
  const f=fixture();const order={id:'p',supplierName:'Supplier',items:[{productId:'flour',productName:'Мука',qty:0,requestedQty:1.5,requestedUnit:'box'}],timestamp:1};f.state.purchaseOrders=[order];
  assert.match(f.c.purchaseOrderText(order),/1.5 коробка/);let payload;f.c.webkit={messageHandlers:{printer:{postMessage:p=>payload=p}}};f.c.sharePurchaseOrder('p');assert.equal(payload.order.items[0].qty,1.5);assert.equal(payload.order.items[0].quantityText,'1.5 коробка');
 });
-test('standalone invoice has same cost calculation and no purchase order requirement',()=>{
- const f=invoiceFixture();f.c._receivingPending.orderId=null;f.c.applyReceivingDocument();near(f.c.getProduct('flour').stock,13);near(f.c.getProduct('flour').cost,80/13);assert.equal(f.state.receivings[0].type,'purchase');assert.equal(f.state.purchaseOrders[0].status,'pending');
+test('standalone invoice has same cost calculation and no purchase order requirement',async()=>{
+ const f=invoiceFixture();f.c._receivingPending.orderId=null;await f.c.applyReceivingDocument();near(f.c.getProduct('flour').stock,13);near(f.c.getProduct('flour').cost,80/13);assert.equal(f.state.receivings[0].type,'purchase');assert.equal(f.state.purchaseOrders[0].status,'pending');
 });
 
 test('standalone TTN draft is local and can be reopened without applying stock',async()=>{
@@ -360,8 +436,8 @@ test('legacy receiving draft opens with unchanged amounts and no stock mutation'
  const f=invoiceFixture(),before=JSON.stringify(f.state.products);f.state.purchaseOrders[0].receivingDraft={flour:{qty:2,totalCost:'14'}};f.c.renderReceivingDocument=()=>{};
  await f.c.openReceivingDocument('purchase');assert.equal(f.c._receivingDraft.lines[0].qtyInput,2);assert.equal(f.c._receivingDraft.lines[0].totalInput,'14');assert.equal(JSON.stringify(f.state.products),before);
 });
-test('backup export preserves TTN invoice and original normalized amounts',()=>{
- const f=invoiceFixture();f.c.applyReceivingDocument();let backup;f.c.Blob=class{constructor(parts){this.parts=parts;}};f.c.URL={createObjectURL:b=>{backup=JSON.parse(b.parts.join(''));return 'blob:test';},revokeObjectURL:()=>{}};f.c.document.createElement=()=>({click(){}});f.c.exportBackup();
+test('backup export preserves TTN invoice and original normalized amounts',async()=>{
+ const f=invoiceFixture();await f.c.applyReceivingDocument();let backup;f.c.Blob=class{constructor(parts){this.parts=parts;}};f.c.URL={createObjectURL:b=>{backup=JSON.parse(b.parts.join(''));return 'blob:test';},revokeObjectURL:()=>{}};f.c.document.createElement=()=>({click(){}});f.c.exportBackup();
  assert.equal(backup.receivings[0].invoiceNumber,'ТТН-001');near(backup.receivings[0].items[0].qty,3);near(backup.receivings[0].items[0].totalCost,60);
 });
 
@@ -602,12 +678,12 @@ test('category drag drop delegates correct target and cancelled drag does not sa
  call=null;f.c.dragTest=make();vm.runInContext('layoutDragState=dragTest',f.c);f.c.onLayoutPointerUp({pointerId:1,type:'pointercancel',preventDefault:()=>{}});assert.equal(call,null);assert.equal(f.writes.length,0);
 });
 test('backup export includes versioned navigation and legacy backups normalize to empty folders',async()=>{
- const f=navigationFixture();await f.c.savePosFolder();let saved;f.c.Blob=class{constructor(parts){saved=JSON.parse(parts[0]);}};f.c.URL={createObjectURL:()=>'',revokeObjectURL:()=>{}};f.c.document.createElement=()=>({click:()=>{}});f.c.exportBackup();assert.equal(saved.version,10);assert.equal(saved.posNavigation.version,1);assert.ok(saved.posNavigation.categories[0].items.some(i=>i.type==='folder'));assert.equal(f.c.normalizePosNavigation(undefined).categories.length,0);
+ const f=navigationFixture();await f.c.savePosFolder();let saved;f.c.Blob=class{constructor(parts){saved=JSON.parse(parts[0]);}};f.c.URL={createObjectURL:()=>'',revokeObjectURL:()=>{}};f.c.document.createElement=()=>({click:()=>{}});f.c.exportBackup();assert.equal(saved.version,11);assert.equal(saved.posNavigation.version,1);assert.ok(saved.posNavigation.categories[0].items.some(i=>i.type==='folder'));assert.equal(f.c.normalizePosNavigation(undefined).categories.length,0);
 });
 
 test('folder modal leaves category visible and renders six products without folder icon or counter',async()=>{
  const f=navigationFixture();for(let n=3;n<6;n++)f.state.products.push({id:'p'+n,name:'Товар '+n,type:'simple',category:'Пицца',stock:3,price:1});await f.c.savePosFolder();const id=f.state.posNavigation.categories[0].items.find(i=>i.type==='folder').id;for(const p of f.state.products)await f.c.movePosProduct(p.id,id);
- f.state.editMode=false;const before=f.c.renderPosScreen(f.c.currentShift());const folderTile=before.slice(before.indexOf('data-tile-type="folder"'),before.indexOf('data-tile-type="folder"')+700);assert.ok(!folderTile.includes('<svg'));assert.ok(!folderTile.includes('Папка ·'));
+ f.state.editMode=false;const before=f.c.renderPosScreen(f.c.currentShift());const folderTile=before.slice(before.indexOf('data-tile-type="folder"'),before.indexOf('</div></div></div>',before.indexOf('data-tile-type="folder"'))+18);assert.ok(!folderTile.includes('<svg'));assert.ok(!folderTile.includes('Папка ·'));
  f.c.openPosFolder(id);assert.equal(f.state.posPath,'Пицца');assert.equal(f.state.posFolder,'');const html=f.fields['modal-root'].innerHTML;assert.match(html,/pos-folder-modal/);assert.equal((html.match(/data-tile-type="product"/g)||[]).length,6);assert.match(html,/Закрыть/);f.c.closeModal();assert.equal(f.c._posFolderModal,null);assert.equal(f.state.posPath,'Пицца');
 });
 
@@ -703,4 +779,47 @@ test('operational deterministic suite restores outbox and revision',()=>{
  assert.ok(Array.isArray(result)&&result.length>0,'operational checks must be a non-empty array');
  assert.deepEqual(plain(result.filter(x=>!x.ok)),[],'all operational checks must pass');
  assert.deepEqual(plain({revision:f.state.operationalRevision,outbox:f.state.operationalOutbox}),before);
+});
+test('verified WEB customer survives local acceptance and resumes with loyalty identity',async()=>{
+ const f=webAcceptFixture();f.state.webEvents[0].customer_id='verified-customer';f.state.webEvents[0].customer_name='Анна';f.state.webEvents[0].phone='+375291234567';f.c.fetch=async()=>({ok:true,json:async()=>({ok:true})});
+ await f.c.acceptWebOrder('web-1','15m');assert.equal(f.state.parked[0].customer.id,'verified-customer');assert.equal(JSON.parse(f.data.get('prilavok_parked'))[0].customer.id,'verified-customer');
+ let loaded;f.c.loadCustomerLoyalty=async id=>{loaded=id};f.state.cart=[];f.c.resumeParked(f.state.parked[0].id);assert.equal(f.state.customer.id,'verified-customer');assert.equal(loaded,'verified-customer');assert.equal(JSON.parse(f.data.get('prilavok_currentOrderSession')).customer.id,'verified-customer');
+ let sent;f.c.loyaltyApi=async(url,options)=>{sent={url,body:JSON.parse(options.body)};return {events:[]}};const order={id:'paid-1',customer:f.state.customer,items:f.state.cart};await f.c.publishPaidOrderLoyalty(order);assert.equal(sent.body.customerId,'verified-customer');assert.equal(sent.url,'/api/loyalty/sales');assert.equal(order.loyaltySync.status,'synced');
+});
+test('SSE normalization persists verified identity through acceptance, resume and paid loyalty',async()=>{
+ const f=webAcceptFixture();const raw={...f.state.webEvents[0],status:'new',customer_id:'verified-customer',customer_name:'Анна',phone:'+375291234567',created_at:'2026-10-01T08:00:00Z'};
+ // Reproduce a previously cached version of the same order without identity.
+ f.state.webEvents=[{...raw,customer_id:''}];let stream;
+ f.c.EventSource=function(){stream=this;this.close=()=>{}};
+ f.c.startWebOrderEvents();stream.onmessage({data:JSON.stringify({type:'orders',orders:[raw]})});
+ assert.equal(f.state.webEvents[0].customer_id,'verified-customer');
+ assert.equal(JSON.parse(f.data.get('prilavok_webEvents'))[0].customer_id,'verified-customer');
+ // Reload the persisted event, then use real acceptance and resume functions.
+ f.state.webEvents=JSON.parse(f.data.get('prilavok_webEvents'));f.c.fetch=async()=>({ok:true,json:async()=>({ok:true})});await f.c.acceptWebOrder('web-1','15m');
+ assert.equal(f.state.parked[0].customer.id,'verified-customer');
+ f.c.loadCustomerLoyalty=async()=>{};f.c.resumeParked(f.state.parked[0].id);
+ assert.equal(f.state.customer.id,'verified-customer');
+ let payload;f.c.loyaltyApi=async(url,options)=>{payload=JSON.parse(options.body);return {events:[]}};
+ await f.c.publishPaidOrderLoyalty({id:'paid',customer:f.state.customer,items:f.state.cart});assert.equal(payload.customerId,'verified-customer');
+});
+test('legacy WEB normalization remains compatible without a customer identity',()=>{const f=fixture();assert.equal(f.c.normalizeWebOrder({id:'old',order_items:[]}).customer_id,'')});
+test('custom ready time is validated and retained for acceptance retry',async()=>{
+ const f=webAcceptFixture();assert.equal(f.c.validWebReadyEstimate('at:18:45'),true);for(const v of ['custom','at:24:00','at:18:60',''])assert.equal(f.c.validWebReadyEstimate(v),false);
+ let sent;f.c.fetch=async(url,options)=>{sent=JSON.parse(options.body);throw Error('offline')};await f.c.acceptWebOrder('web-1','at:18:45');assert.equal(sent.readyEstimate,'at:18:45');const journal=JSON.parse(f.data.get('prilavok_webOrderAcceptances'));assert.equal(journal['web-1'].readyEstimate,'at:18:45');f.c.fetch=async(url,options)=>{sent=JSON.parse(options.body);return {ok:true,json:async()=>({ok:true})}};await f.c.confirmWebAcceptance('web-1',journal['web-1'],journal);assert.equal(sent.readyEstimate,'at:18:45');assert.equal(f.state.parked.length,1);
+});
+test('delivery payment requires explicit tariff, including configured free delivery',async()=>{
+ const f=fixture();f.cart();f.state.orderType='Доставка';f.state.deliveryRates=[{name:'Бесплатно',amount:0},{name:'Город',amount:5}];f.state.deliveryFee=0;let prompted=0;f.c.openOrderSettings=()=>prompted++;
+ f.c.openPaymentModal();assert.equal(prompted,1);await f.c.finalizePayment([{method:'cash',amount:10}]);assert.equal(f.state.orders.length,0);
+ f.c.selectDeliveryFee(0);assert.equal(f.c.hasDeliveryTariff(),true);assert.equal(JSON.parse(f.data.get('prilavok_currentOrderSession')).deliveryTariffSelected,true);await f.c.finalizePayment([{method:'cash',amount:10}]);assert.equal(f.state.orders.length,1);
+});
+test('delivery selection is cleared on type switch and cannot use a deleted rate',()=>{
+ const f=fixture();f.state.deliveryRates=[{amount:5}];f.state.orderType='Доставка';f.c.openOrderSettings=()=>{};f.c.selectDeliveryFee(5);assert.equal(f.c.hasDeliveryTariff(),true);f.state.deliveryRates=[];assert.equal(f.c.hasDeliveryTariff(),false);f.c.setOrderType('На месте');assert.equal(f.state.deliveryTariffSelected,false);assert.equal(f.c.hasDeliveryTariff(),true);f.c.setOrderType('Доставка');assert.equal(f.c.hasDeliveryTariff(),false);
+});
+test('parked delivery restores explicit tariff choice',()=>{
+ const f=fixture();f.state.deliveryRates=[{amount:5}];f.state.parked=[{id:'p',items:[{productId:'pizza',qty:1,price:10}],orderType:'Доставка',deliveryFee:5,deliveryTariffSelected:true,customer:{}}];f.c.resumeParked('p');assert.equal(f.c.hasDeliveryTariff(),true);assert.equal(JSON.parse(f.data.get('prilavok_currentOrderSession')).deliveryTariffSelected,true);
+});
+test('editing readiness time saves without remounting the picker and rejects incomplete values',()=>{
+ const f=webAcceptFixture();f.fields['web-order-accept']={disabled:true};let opened=0;f.c.openWebOrder=()=>opened++;
+ for(const value of ['18:30','19:30','19:45']){f.c.editWebReadyTime(value);assert.equal(opened,0);assert.equal(f.fields['web-order-accept'].disabled,false);assert.equal(vm.runInContext('selectedWebReadyEstimate',f.c),'at:'+value)}
+ for(const value of ['','19:','24:00']){f.c.editWebReadyTime(value);assert.equal(opened,0);assert.equal(f.fields['web-order-accept'].disabled,true);assert.equal(vm.runInContext('selectedWebReadyEstimate',f.c),'custom')}
 });

@@ -1,0 +1,54 @@
+[
+  {
+    "fail": "customer",
+    "consumed": true,
+    "orderCreated": false,
+    "itemsCreated": false,
+    "sessionCompleted": false,
+    "error": "Injected customer",
+    "retry": {
+      "ok": false,
+      "reason": "NOT_VERIFIED"
+    },
+    "defect": true
+  },
+  {
+    "fail": "order",
+    "consumed": true,
+    "orderCreated": false,
+    "itemsCreated": false,
+    "sessionCompleted": false,
+    "error": "Injected order",
+    "retry": {
+      "ok": false,
+      "reason": "NOT_VERIFIED"
+    },
+    "defect": true
+  },
+  {
+    "fail": "items",
+    "consumed": true,
+    "orderCreated": true,
+    "itemsCreated": false,
+    "sessionCompleted": false,
+    "error": "Injected items",
+    "retry": {
+      "ok": false,
+      "reason": "NOT_VERIFIED"
+    },
+    "defect": true
+  },
+  {
+    "fail": "session",
+    "consumed": true,
+    "orderCreated": true,
+    "itemsCreated": true,
+    "sessionCompleted": false,
+    "error": "Injected session",
+    "retry": {
+      "ok": false,
+      "reason": "NOT_VERIFIED"
+    },
+    "defect": true
+  }
+]
