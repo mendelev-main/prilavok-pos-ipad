@@ -1,0 +1,69 @@
+# M POS: текущая архитектура
+
+Это reference-документ о фактической системе. Он не хранит backlog и task-status. Постоянные инварианты задаёт [constitution](../.specify/memory/constitution.md), будущие срезы — [roadmap](../ROADMAP.md), а проверяемые изменения — `specs/`.
+
+## Продукт и runtime
+
+M POS — offline-first iPad POS для кафе. Публичное имя — **M POS**; исторические технические имена `PrilavokPOS`, bundle identifier, имена файлов и storage-prefix `prilavok_` сохраняются для совместимости.
+
+```text
+Swift/UIKit application
+  └─ WKWebView
+      ├─ PrilavokPOS/pos.html: UI и основная business logic
+      ├─ Web/js/core/storage.js: storage adapter
+      ├─ network-printer.js: JS-граница LAN-печати
+      └─ notification-native.js: native notifications
+
+PrilavokPOSApp.swift / SceneDelegate.swift
+  ├─ lifecycle и WKWebView bridge
+  ├─ photo picker / image processing
+  ├─ native share, PDF и XLSX
+  └─ Telegram/native callbacks
+
+NetworkPrinterManager.swift
+  └─ LAN printing через NWConnection
+```
+
+Большая часть JS пока остаётся в `pos.html`. В `PrilavokPOS/Web` создаются только постепенно подключаемые модули; само наличие файла не означает его runtime-использование.
+
+## Данные и offline-first
+
+- iPad POS — авторитетный источник операционных данных.
+- Продажи, чеки, смены, товары, рецептуры, приёмка и основная касса работают без интернета.
+- Логические storage-ключи пишутся с префиксом `prilavok_`; формат и ключи не меняются без миграции.
+- `loadKey`/`saveKey` — совместимый фасад над `Web/js/core/storage.js`.
+- Оплата, возврат, приёмка и backup-import используют `prilavok_criticalStorageJournal`: после прерывания заранее сохранённый снимок доводится до целого состояния на следующем запуске.
+- Backup v11 включает основные операционные сущности, навигацию, инвентаризацию, зал/брони и незавершённый текущий заказ; импорт сначала валидируется.
+
+## Домены POS
+
+- Касса: текущий заказ, cash/card/split, доставка, отложенные чеки, скидки, печать и возврат.
+- Товары: простые/составные, вложенные рецептуры, модификаторы, единицы, остатки, себестоимость, WEB-публикация, CSV-import, категории и папки.
+- Склад: заказы поставщикам, приёмка, средневзвешенная себестоимость, инвентаризация, отчёт PDF/XLSX.
+- Смены и сотрудники: открытие/закрытие, кассовые движения, роль administrator, защита самоудаления.
+- Лояльность: клиент привязывается к оплаченному чеку; pending сохраняется до сети; подарочные единицы не участвуют в новом накоплении; sale завершается до reversal.
+- Зал, бронирования, аналитика, складский учёт и настройки остаются локальными доменами.
+
+## Сетевые границы
+
+- Основное направление: POS → Backend → Web / Mini App.
+- Полная публикация меню — только явной кнопкой в сетевых настройках.
+- Согласованные узкие каналы: доступность остатков, operational snapshot/heartbeat/outbox, входящие WEB-события и ACK/retry, loyalty retry, Telegram-отчёты.
+- Ни один сетевой канал не должен блокировать локальную продажу.
+- Backend URL по умолчанию — `https://project-dubrovno.up.railway.app`; сохранённая на iPad конфигурация имеет приоритет.
+
+## Backend
+
+Backend — Node/Express в отдельном GitHub-репозитории, Railway runtime и Supabase/PostgreSQL. Меню, WEB-заказы, Telegram-подтверждение телефона, клиенты и loyalty обслуживаются центрально. Создание подтверждённого WEB-заказа и замена правил loyalty выполняются атомарными restricted RPC.
+
+## Печать и отчёты
+
+- Штатный путь печати — сетевой ESC/POS; Bluetooth и HTTP Print Bridge не используются.
+- Есть отдельные шаблоны платёжного и кухонного чека, category routing, comments, copies и reprint.
+- Складские и закупочные отчёты экспортируются через native PDF/XLSX/share; ежемесячный складской PDF может уходить в настроенный Telegram-чат.
+
+## Версия и проверки
+
+Текущая сборка — **130.52**. Debug и Release используют Xcode `MARKETING_VERSION`; build phase штампует то же значение в заголовок Настроек. Отдельный roadmap-срез R2 должен устранить дублирование между build configurations.
+
+Автоматические тесты покрывают JS syntax, кассу, рецептуры, возвраты, storage failures, приёмку, аналитику, импорт, навигацию, WEB и loyalty. Самый новый датированный baseline и границы доказательств указаны в [audit results](../specs/001-production-audit/results.md). Симулятор и unit tests не заменяют приёмку на физическом iPad.

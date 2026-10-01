@@ -1,5 +1,8 @@
 # Результаты проверки — 2026-10-01
 
+> Названия корневых MASTER/DELTA/LOYALTY ниже относятся к историческому baseline этого аудита.
+> Текущий процесс документации определён в [спецификации 002](../002-speckit-workflow/spec.md).
+
 ## Baseline
 
 - POS: /Users/Aleksandr/code/Personal/prilavok-pos-ipad, main, HEAD 540be3c1274cdfd22ffd874df05dbeab89e37a9d.

@@ -24,8 +24,9 @@ localStorage через Web/js/core/storage.js. Backend: Node/Express, PostgreSQ
 
 ## Project Structure
 
-- MASTER_SPEC.md, DELTA_SPEC.md, LOYALTY_SPEC.md — продуктовые документы.
-- docs/README.md — навигация; docs/archive/ — исторические решения.
+- .specify/memory/constitution.md — постоянные правила; ROADMAP.md — направления.
+- docs/ARCHITECTURE.md — фактическое устройство; docs/README.md — навигация;
+  docs/archive/ — исторические решения.
 - specs/001-production-audit/ — spec, plan, tasks, research, data-model, contracts,
   quickstart, cases, findings, results, analyze и diagnostics.cjs.
 - PrilavokPOS/pos.html — основной runtime; Web/js/core/storage.js — storage adapter.

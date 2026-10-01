@@ -3,8 +3,9 @@
 - GitHub Spec Kit установлен локально: .specify/integration.json, version 1.0.12.dev0,
   integration codex и .agents/skills/speckit-*. Это инструменты спецификаций, не GitHub CI.
 - Конституция была шаблоном. Заполнена существующими принципами без добавления Owner/automatic ETA.
-- AGENTS.md/PROJECT_RULES.md/README.md в текущем корне отсутствуют. Актуальные правила — MASTER_SPEC
-  и заполненная .specify/memory/constitution.md. Старые запросы не доказывают наличие файлов.
+- Постоянные правила собраны в `.specify/memory/constitution.md`; текущее устройство системы —
+  в `docs/ARCHITECTURE.md`, направления — в `ROADMAP.md`, изменения — в каталогах `specs/`.
+  Старые запросы не доказывают наличие файлов или действующее состояние функции.
 - Архив D13 automatic ETA не является задачей к реализации. D13A реализован, остаток приёмки — D13B.
 - Backend cleanup ready >24h намеренный; локальные чеки сохраняются. Сам cleanup не дефект.
 - Данные из реального iPad не доступны в этих тестах; проверяем синтетические состояния.
