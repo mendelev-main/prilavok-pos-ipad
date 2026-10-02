@@ -14,6 +14,7 @@ Swift/UIKit application
       ├─ Web/js/features/web-orders.js: входящие WEB-заказы, local-first acceptance и ACK/recovery
       ├─ Web/js/features/inventory.js: график, черновик, фиксация и завершение инвентаризации
       ├─ Web/js/features/warehouse-reporting.js: read-only складской отчёт и PDF/XLSX payload
+      ├─ Web/js/features/hall-bookings.js: карта зала, столы и локальные бронирования
       ├─ network-printer.js: JS-граница LAN-печати
       └─ notification-native.js: native notifications
 
@@ -31,7 +32,8 @@ NetworkPrinterManager.swift
 одному домену. Feature-компоненты загружаются после основного runtime и до `loadAll()`, сохраняя
 прежний глобальный API для inline-обработчиков. Инвентаризация продолжает использовать общий
 critical storage journal. `warehouse-reporting.js` только читает локальные движения и формирует
-совместимый payload для существующих native PDF/XLSX и Telegram-путей.
+совместимый payload для существующих native PDF/XLSX и Telegram-путей. `hall-bookings.js` сохраняет
+прежний глобальный API карты зала и работает с прежними ключами `hallTables` и `bookings`.
 
 ## Данные и offline-first
 

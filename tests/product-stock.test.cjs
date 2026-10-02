@@ -12,6 +12,7 @@ const adapter=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/core/storage.js
 const webOrdersScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/web-orders.js'),'utf8');
 const inventoryScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/inventory.js'),'utf8');
 const warehouseReportingScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/warehouse-reporting.js'),'utf8');
+const hallBookingsScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/hall-bookings.js'),'utf8');
 const printerScript=fs.readFileSync(path.join(root,'PrilavokPOS/network-printer.js'),'utf8');
 const appSwift=fs.readFileSync(path.join(root,'PrilavokPOS/PrilavokPOSApp.swift'),'utf8');
 const sceneSwift=fs.readFileSync(path.join(root,'PrilavokPOS/SceneDelegate.swift'),'utf8');
@@ -21,7 +22,7 @@ function fixture(){
  const data=new Map(),messages=[],writes=[],fields={'pf-prep-station':{value:'kitchen'},'pf-prep-difficulty':{value:'1'},'pf-base-prep-minutes':{value:'5'}},events=[];
  const document={getElementById:id=>fields[id]||null,querySelector:()=>null,addEventListener:()=>{}};
  const c={console:{error:()=>{}},document,crypto:{randomUUID:()=> 'device-test'},setTimeout:()=>0,clearTimeout:()=>{},addEventListener:()=>{},removeEventListener:()=>{},AbortController,localStorage:{getItem:k=>data.has(k)?data.get(k):null,setItem:(k,v)=>{data.set(k,String(v));writes.push(k);},removeItem:k=>data.delete(k)},fetch:()=>{throw Error('Network is prohibited in this test');},setInterval:()=>{throw Error('Timer is prohibited in this test');}};
- c.window=c;vm.createContext(c);vm.runInContext(adapter,c);vm.runInContext(inline.replace(/loadAll\(\);\s*$/,''),c);vm.runInContext(webOrdersScript,c);vm.runInContext(inventoryScript,c);vm.runInContext(warehouseReportingScript,c);
+ c.window=c;vm.createContext(c);vm.runInContext(adapter,c);vm.runInContext(inline.replace(/loadAll\(\);\s*$/,''),c);vm.runInContext(webOrdersScript,c);vm.runInContext(inventoryScript,c);vm.runInContext(warehouseReportingScript,c);vm.runInContext(hallBookingsScript,c);
  c.flash=m=>messages.push(m);c.render=()=>{};c.showReceipt=()=>{};c.showPaymentReceipt=()=>{};c.closeModal=()=>{};c.applyTheme=()=>{};
  const state=vm.runInContext('state',c);
  c.__printerSettingsSnapshot=()=>({printers:[],posNotifications:{soundEnabled:true,sound:'default'}});c.__restorePrinterSettings=()=>true;
@@ -31,7 +32,7 @@ function fixture(){
  async function sale(payments){cart();await c.finalizePayment(payments||[{method:'cash',amount:10}]);return state.orders[0];}
  return {c,state,data,messages,writes,fields,events,cart,sale};
 }
-test('all production JavaScript modules parse',()=>{new vm.Script(inline);new vm.Script(adapter);new vm.Script(webOrdersScript);new vm.Script(inventoryScript);new vm.Script(warehouseReportingScript);new vm.Script(printerScript);});
+test('all production JavaScript modules parse',()=>{new vm.Script(inline);new vm.Script(adapter);new vm.Script(webOrdersScript);new vm.Script(inventoryScript);new vm.Script(warehouseReportingScript);new vm.Script(hallBookingsScript);new vm.Script(printerScript);});
 test('WEB orders module loads before startup and preserves its public API',()=>{
  const moduleTag='<script src="Web/js/features/web-orders.js"></script>',startupTag='<script>loadAll();</script>';
  assert.ok(html.indexOf(moduleTag)>=0);assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));
@@ -46,6 +47,21 @@ test('warehouse reporting module loads before startup and preserves its public A
  const moduleTag='<script src="Web/js/features/warehouse-reporting.js"></script>',startupTag='<script>loadAll();</script>';
  assert.ok(html.indexOf(moduleTag)>=0);assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));
  const f=fixture();for(const name of ['warehouseRange','warehouseReport','warehouseExportPayload','openWarehousePage','renderWarehousePage','warehouseSelectedPayload','generateWarehouseReport'])assert.equal(typeof f.c[name],'function',name);
+});
+test('hall bookings module loads before startup and preserves its public API',()=>{
+ const moduleTag='<script src="Web/js/features/hall-bookings.js"></script>',startupTag='<script>loadAll();</script>';
+ assert.ok(html.indexOf(moduleTag)>=0);assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));
+ const f=fixture();for(const name of ['bookingWindow','tableBookings','tableBusyAt','createHallTable','confirmDeleteHallTable','saveNewBooking','hallPointerStart','renderBookingsScreen'])assert.equal(typeof f.c[name],'function',name);
+});
+test('booking intervals reject overlap, allow adjacent times and sort active rows',()=>{
+ const f=fixture(),a={id:'a',tableId:'t1',date:'2026-10-02',startAt:'2026-10-02T18:00:00',endAt:'2026-10-02T19:00:00',status:'confirmed'},b={id:'b',tableId:'t1',date:'2026-10-02',startAt:'2026-10-02T17:00:00',endAt:'2026-10-02T17:30:00',status:'confirmed'},cancelled={id:'c',tableId:'t1',date:'2026-10-02',startAt:'2026-10-02T18:30:00',endAt:'2026-10-02T20:00:00',status:'cancelled'};
+ f.state.bookings=[a,cancelled,b];assert.equal(f.c.tableBusyAt('t1',new Date('2026-10-02T18:30:00'),new Date('2026-10-02T19:30:00')),true);assert.equal(f.c.tableBusyAt('t1',new Date('2026-10-02T19:00:00'),new Date('2026-10-02T20:00:00')),false);assert.deepEqual(plain(f.c.tableBookings('t1','2026-10-02').map(x=>x.id)),['b','a']);
+});
+test('hall table persistence keeps legacy keys and deletion removes linked bookings',async()=>{
+ const f=fixture();f.fields['new-hall-table-name']={value:'Терраса'};f.c.createHallTable('rectangle');await Promise.resolve();
+ const table=f.state.hallTables[0];assert.equal(table.name,'Терраса');assert.equal(table.shape,'rectangle');assert.equal(JSON.parse(f.data.get('prilavok_hallTables'))[0].name,'Терраса');
+ f.state.bookings=[{id:'linked',tableId:table.id,date:'2026-10-02',status:'confirmed'},{id:'other',tableId:'other',date:'2026-10-02',status:'confirmed'}];f.c.saveBookings();await Promise.resolve();f.c.confirmDeleteHallTable(table.id);await Promise.resolve();
+ assert.equal(f.state.hallTables.length,0);assert.deepEqual(plain(f.state.bookings.map(x=>x.id)),['other']);assert.deepEqual(JSON.parse(f.data.get('prilavok_hallTables')),[]);assert.deepEqual(JSON.parse(f.data.get('prilavok_bookings')).map(x=>x.id),['other']);
 });
 test('scene delegate is the single owner of the POS window',()=>{
  const appLifecycle=appSwift.slice(appSwift.indexOf('@main'),appSwift.indexOf('final class POSViewController'));
