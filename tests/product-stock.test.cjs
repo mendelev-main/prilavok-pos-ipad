@@ -29,6 +29,7 @@ const parkedOrdersScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/feat
 const paymentScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/payment.js'),'utf8');
 const receiptsScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/receipts.js'),'utf8');
 const hallBookingsScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/hall-bookings.js'),'utf8');
+const backupScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/backup.js'),'utf8');
 const printerScript=fs.readFileSync(path.join(root,'PrilavokPOS/network-printer.js'),'utf8');
 const appSwift=fs.readFileSync(path.join(root,'PrilavokPOS/PrilavokPOSApp.swift'),'utf8');
 const sceneSwift=fs.readFileSync(path.join(root,'PrilavokPOS/SceneDelegate.swift'),'utf8');
@@ -38,7 +39,7 @@ function fixture(){
  const data=new Map(),messages=[],writes=[],fields={'pf-prep-station':{value:'kitchen'},'pf-prep-difficulty':{value:'1'},'pf-base-prep-minutes':{value:'5'}},events=[];
  const document={getElementById:id=>fields[id]||null,querySelector:()=>null,addEventListener:()=>{}};
  const c={console:{error:()=>{}},document,crypto:{randomUUID:()=> 'device-test'},setTimeout:()=>0,clearTimeout:()=>{},addEventListener:()=>{},removeEventListener:()=>{},AbortController,localStorage:{getItem:k=>data.has(k)?data.get(k):null,setItem:(k,v)=>{data.set(k,String(v));writes.push(k);},removeItem:k=>data.delete(k)},fetch:()=>{throw Error('Network is prohibited in this test');},setInterval:()=>{throw Error('Timer is prohibited in this test');}};
- c.window=c;vm.createContext(c);vm.runInContext(adapter,c);vm.runInContext(inline.replace(/loadAll\(\);\s*$/,''),c);vm.runInContext(shiftsScript,c);vm.runInContext(employeesScript,c);vm.runInContext(suppliersScript,c);vm.runInContext(purchaseOrdersScript,c);vm.runInContext(receivingUiScript,c);vm.runInContext(receivingDraftsScript,c);vm.runInContext(receivingScript,c);vm.runInContext(webOrdersScript,c);vm.runInContext(inventoryScript,c);vm.runInContext(warehouseReportingScript,c);vm.runInContext(analyticsScript,c);vm.runInContext(productCatalogScript,c);vm.runInContext(productCategoriesScript,c);vm.runInContext(posNavigationScript,c);vm.runInContext(cartPresentationScript,c);vm.runInContext(cartCompositionScript,c);vm.runInContext(parkedOrdersScript,c);vm.runInContext(paymentScript,c);vm.runInContext(receiptsScript,c);vm.runInContext(hallBookingsScript,c);
+ c.window=c;vm.createContext(c);vm.runInContext(adapter,c);vm.runInContext(inline.replace(/loadAll\(\);\s*$/,''),c);vm.runInContext(shiftsScript,c);vm.runInContext(employeesScript,c);vm.runInContext(suppliersScript,c);vm.runInContext(purchaseOrdersScript,c);vm.runInContext(receivingUiScript,c);vm.runInContext(receivingDraftsScript,c);vm.runInContext(receivingScript,c);vm.runInContext(webOrdersScript,c);vm.runInContext(inventoryScript,c);vm.runInContext(warehouseReportingScript,c);vm.runInContext(analyticsScript,c);vm.runInContext(productCatalogScript,c);vm.runInContext(productCategoriesScript,c);vm.runInContext(posNavigationScript,c);vm.runInContext(cartPresentationScript,c);vm.runInContext(cartCompositionScript,c);vm.runInContext(parkedOrdersScript,c);vm.runInContext(paymentScript,c);vm.runInContext(receiptsScript,c);vm.runInContext(hallBookingsScript,c);vm.runInContext(backupScript,c);
  c.flash=m=>messages.push(m);c.render=()=>{};c.showReceipt=()=>{};c.showPaymentReceipt=()=>{};c.closeModal=()=>{};c.applyTheme=()=>{};
  const state=vm.runInContext('state',c);
  c.__printerSettingsSnapshot=()=>({printers:[],posNotifications:{soundEnabled:true,sound:'default'}});c.__restorePrinterSettings=()=>true;
@@ -48,7 +49,7 @@ function fixture(){
  async function sale(payments){cart();await c.finalizePayment(payments||[{method:'cash',amount:10}]);return state.orders[0];}
  return {c,state,data,messages,writes,fields,events,cart,sale};
 }
-test('all production JavaScript modules parse',()=>{new vm.Script(inline);new vm.Script(adapter);new vm.Script(shiftsScript);new vm.Script(employeesScript);new vm.Script(suppliersScript);new vm.Script(purchaseOrdersScript);new vm.Script(receivingUiScript);new vm.Script(receivingDraftsScript);new vm.Script(receivingScript);new vm.Script(webOrdersScript);new vm.Script(inventoryScript);new vm.Script(warehouseReportingScript);new vm.Script(analyticsScript);new vm.Script(productCatalogScript);new vm.Script(productCategoriesScript);new vm.Script(posNavigationScript);new vm.Script(cartPresentationScript);new vm.Script(cartCompositionScript);new vm.Script(parkedOrdersScript);new vm.Script(paymentScript);new vm.Script(receiptsScript);new vm.Script(hallBookingsScript);new vm.Script(printerScript);});
+test('all production JavaScript modules parse',()=>{new vm.Script(inline);new vm.Script(adapter);new vm.Script(shiftsScript);new vm.Script(employeesScript);new vm.Script(suppliersScript);new vm.Script(purchaseOrdersScript);new vm.Script(receivingUiScript);new vm.Script(receivingDraftsScript);new vm.Script(receivingScript);new vm.Script(webOrdersScript);new vm.Script(inventoryScript);new vm.Script(warehouseReportingScript);new vm.Script(analyticsScript);new vm.Script(productCatalogScript);new vm.Script(productCategoriesScript);new vm.Script(posNavigationScript);new vm.Script(cartPresentationScript);new vm.Script(cartCompositionScript);new vm.Script(parkedOrdersScript);new vm.Script(paymentScript);new vm.Script(receiptsScript);new vm.Script(hallBookingsScript);new vm.Script(backupScript);new vm.Script(printerScript);});
 test('shifts module loads before dependent features and preserves its public API',()=>{
  const moduleTag='<script src="Web/js/features/shifts.js"></script>',paymentTag='<script src="Web/js/features/payment.js"></script>',startupTag='<script>loadAll();</script>';
  assert.ok(html.indexOf(moduleTag)>=0);assert.ok(html.indexOf(paymentTag)>html.indexOf(moduleTag));assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));assert.doesNotMatch(inline,/function submitCloseShift\s*\(/);
@@ -188,6 +189,11 @@ test('hall bookings module loads before startup and preserves its public API',()
  const moduleTag='<script src="Web/js/features/hall-bookings.js"></script>',startupTag='<script>loadAll();</script>';
  assert.ok(html.indexOf(moduleTag)>=0);assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));
  const f=fixture();for(const name of ['bookingWindow','tableBookings','tableBusyAt','createHallTable','confirmDeleteHallTable','saveNewBooking','hallPointerStart','renderBookingsScreen'])assert.equal(typeof f.c[name],'function',name);
+});
+test('backup module loads after feature dependencies and before startup with its public API',()=>{
+ const hallTag='<script src="Web/js/features/hall-bookings.js"></script>',moduleTag='<script src="Web/js/features/backup.js"></script>',startupTag='<script>loadAll();</script>';
+ assert.ok(html.indexOf(moduleTag)>html.indexOf(hallTag));assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));assert.doesNotMatch(inline,/function applyBackupData\s*\(/);
+ const f=fixture();for(const name of ['exportBackup','backupArray','validateBackupData','applyBackupData','importBackup'])assert.equal(typeof f.c[name],'function',name);
 });
 test('booking intervals reject overlap, allow adjacent times and sort active rows',()=>{
  const f=fixture(),a={id:'a',tableId:'t1',date:'2026-10-02',startAt:'2026-10-02T18:00:00',endAt:'2026-10-02T19:00:00',status:'confirmed'},b={id:'b',tableId:'t1',date:'2026-10-02',startAt:'2026-10-02T17:00:00',endAt:'2026-10-02T17:30:00',status:'confirmed'},cancelled={id:'c',tableId:'t1',date:'2026-10-02',startAt:'2026-10-02T18:30:00',endAt:'2026-10-02T20:00:00',status:'cancelled'};
@@ -723,6 +729,12 @@ test('backup rejects incomplete core data before changing local state',async()=>
  const f=fixture();await f.sale();const before=JSON.stringify(f.state);
  await assert.rejects(f.c.applyBackupData({version:11,products:[]}),/employees/);
  assert.equal(JSON.stringify(f.state),before);assert.equal(f.messages.includes('Данные восстановлены'),false);
+});
+test('backup rejects a malformed present optional collection before any write',async()=>{
+ const f=fixture(),before=JSON.stringify(f.state),writesBefore=f.writes.length;
+ const backup={version:11,products:plain(f.state.products),employees:[],shifts:plain(f.state.shifts),orders:[],parked:{invalid:true}};
+ await assert.rejects(f.c.applyBackupData(backup),/parked/);
+ assert.equal(JSON.stringify(f.state),before);assert.equal(f.writes.length,writesBefore);assert.equal(f.messages.includes('Данные восстановлены'),false);
 });
 test('backup import is journaled and recovers all promised data after a write failure',async()=>{
  const f=fixture();await f.sale();const backup={version:11,products:plain(f.state.products),employees:[],shifts:plain(f.state.shifts),orders:[],parked:[],receivings:[],suppliers:[],purchaseOrders:[],discounts:[],layout:{categoryOrder:[],categoryColors:{},categorySymbols:{},categoryOnline:{},tiles:[]}};

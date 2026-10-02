@@ -13,7 +13,7 @@
 | Закупки | supplier order creation/deletion, storage-first, presentation result, safe legacy IDs, history | review + tests | PASS after specs 010/038; A003-F11, F19/F20 fixed |
 | Приёмка | draft open/save/retry, UI/editor/history, validation, weighted cost, global critical guard, commit/recovery, safe legacy quantity | Node tests | PASS after specs 036–039; A003-F17/F18/F21 fixed |
 | Инвентаризация | draft, fix, complete, history/config writes | injected write failure | A003-F03 |
-| Backup | schema validation, version 11, journal recovery, legacy data | Node tests | PASS; printer settings excluded |
+| Backup | schema validation, versions 1–12, malformed optional sections, journal recovery, legacy data, printer settings | Node tests | PASS after spec 040; A003-F22 fixed |
 | Сотрудники | create/edit/delete, self-delete, admin delete, storage failure, rights | tests + review | PASS after spec 034; A003-F10 for credential model; A003-F15 fixed |
 | Поставщики | create/edit/delete, product links, storage failure, historical snapshots | tests + review | PASS after spec 035; A003-F16 fixed |
 | Навигация POS | category/folder layout, drag/drop, legacy normalization | Node tests | PASS |

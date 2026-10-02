@@ -30,6 +30,7 @@ Swift/UIKit application
       ├─ Web/js/features/payment.js: cash/card/split, durable draft, проведение и оплаченный чек
       ├─ Web/js/features/receipts.js: история чеков, LAN reprint handoff и атомарный полный возврат
       ├─ Web/js/features/hall-bookings.js: карта зала, столы и локальные бронирования
+      ├─ Web/js/features/backup.js: export, validation и journaled import резервной копии
       ├─ network-printer.js: JS-граница LAN-печати
       └─ notification-native.js: native notifications
 
@@ -92,6 +93,9 @@ draft открывается без повторной записи. Standalone 
 Приёмка занимает общий `criticalOperationBusy`, записывает товары, заказ и историю одним critical
 journal и только затем публикует снимки в runtime. Это исключает пересечение с оплатой, возвратом,
 сменой, инвентаризацией и другими критическими локальными операциями.
+`backup.js` экспортирует schema v12 и восстанавливает storage-часть через существующий critical
+journal. Отсутствующие optional collections старых версий сохраняют прежние defaults; если такой
+раздел присутствует с неверным типом, импорт прекращается до первой записи.
 
 ## Данные и offline-first
 
