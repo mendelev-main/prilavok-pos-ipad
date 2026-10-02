@@ -9,6 +9,7 @@ const root=path.resolve(__dirname,'..');
 const html=fs.readFileSync(path.join(root,'PrilavokPOS/pos.html'),'utf8');
 const inline=[...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].map(m=>m[1]).join('\n');
 const adapter=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/core/storage.js'),'utf8');
+const printerScript=fs.readFileSync(path.join(root,'PrilavokPOS/network-printer.js'),'utf8');
 const appSwift=fs.readFileSync(path.join(root,'PrilavokPOS/PrilavokPOSApp.swift'),'utf8');
 const sceneSwift=fs.readFileSync(path.join(root,'PrilavokPOS/SceneDelegate.swift'),'utf8');
 const plain=x=>JSON.parse(JSON.stringify(x));
@@ -20,13 +21,14 @@ function fixture(){
  c.window=c;vm.createContext(c);vm.runInContext(adapter,c);vm.runInContext(inline.replace(/loadAll\(\);\s*$/,''),c);
  c.flash=m=>messages.push(m);c.render=()=>{};c.showReceipt=()=>{};c.showPaymentReceipt=()=>{};c.closeModal=()=>{};c.applyTheme=()=>{};
  const state=vm.runInContext('state',c);
+ c.__printerSettingsSnapshot=()=>({printers:[],posNotifications:{soundEnabled:true,sound:'default'}});c.__restorePrinterSettings=()=>true;
  state.products=[{id:'flour',name:'Мука',type:'simple',stock:10,cost:2,price:2,category:'Сырьё',sortOrder:0,availableOnline:false,imageUrl:''},{id:'water',name:'Вода',type:'simple',stock:10,cost:1,price:1},{id:'dough',name:'Тесто',type:'composite',components:[{productId:'flour',qty:0.2},{productId:'water',qty:0.1}]},{id:'pizza',name:'Пицца',type:'composite',price:10,components:[{productId:'dough',qty:1}]}];
  state.shifts=[{id:'shift',status:'open',openingCash:100}];state.orders=[];state.cart=[];state.printer={autoPrint:false};state.discounts=[];
  function cart(id='pizza',qty=1){state.cart=[{productId:id,name:c.getProduct(id)?.name||id,price:10,qty}];}
  async function sale(payments){cart();await c.finalizePayment(payments||[{method:'cash',amount:10}]);return state.orders[0];}
  return {c,state,data,messages,writes,fields,events,cart,sale};
 }
-test('all inline JavaScript and adapter parse',()=>{new vm.Script(inline);new vm.Script(adapter);});
+test('all inline JavaScript, storage adapter and printer module parse',()=>{new vm.Script(inline);new vm.Script(adapter);new vm.Script(printerScript);});
 test('scene delegate is the single owner of the POS window',()=>{
  const appLifecycle=appSwift.slice(appSwift.indexOf('@main'),appSwift.indexOf('final class POSViewController'));
  assert.doesNotMatch(appLifecycle,/UIWindow\s*\(/);assert.doesNotMatch(appLifecycle,/POSViewController\s*\(/);assert.match(sceneSwift,/window\.rootViewController\s*=\s*POSViewController\(\)/);
@@ -434,10 +436,26 @@ test('backup import is journaled and recovers all promised data after a write fa
  await assert.rejects(f.c.applyBackupData(backup));assert.equal(f.state.orders.length,1);assert.ok(JSON.parse(f.data.get('prilavok_criticalStorageJournal')));
  const restarted=fixture();for(const [key,value] of f.data)restarted.data.set(key,value);await restarted.c.loadAll();assert.equal(restarted.state.orders.length,0);assert.equal(JSON.parse(restarted.data.get('prilavok_criticalStorageJournal')),null);
 });
-test('backup version 11 includes inventory and unfinished current order',()=>{
+test('backup version 12 includes inventory and unfinished current order',()=>{
  const f=fixture();f.cart();f.state.inventoryHistory=[{id:'inventory'}];f.state.inventoryDraft={id:'draft'};let backup;
  f.c.Blob=class{constructor(parts){this.parts=parts}};f.c.URL={createObjectURL:value=>{backup=JSON.parse(value.parts[0]);return 'blob:test'},revokeObjectURL:()=>{}};f.c.document.createElement=()=>({click(){}});f.c.exportBackup();
- assert.equal(backup.version,11);assert.equal(backup.inventoryHistory[0].id,'inventory');assert.equal(backup.inventoryDraft.id,'draft');assert.equal(backup.currentOrderSession.items[0].productId,'pizza');
+ assert.equal(backup.version,12);assert.equal(backup.inventoryHistory[0].id,'inventory');assert.equal(backup.inventoryDraft.id,'draft');assert.equal(backup.currentOrderSession.items[0].productId,'pizza');
+});
+test('backup version 12 round-trips legacy printer and notification settings',async()=>{
+ const f=fixture(),settings={printers:[{id:'printer-1',name:'Кухня',ip:'192.168.1.10',printOrders:true}],posNotifications:{soundEnabled:false,sound:'bell'}};let backup,restoredSettings;
+ f.c.__printerSettingsSnapshot=()=>plain(settings);f.c.Blob=class{constructor(parts){this.parts=parts}};f.c.URL={createObjectURL:value=>{backup=JSON.parse(value.parts[0]);return 'blob:test'},revokeObjectURL:()=>{}};f.c.document.createElement=()=>({click(){}});f.c.exportBackup();assert.deepEqual(backup.printerSettings,settings);
+ const restored=fixture();restored.c.__restorePrinterSettings=value=>{restoredSettings=plain(value);return true};await restored.c.applyBackupData(backup);assert.deepEqual(restoredSettings,settings);
+});
+test('printer backup adapter preserves exact legacy keys and rolls back a partial restore',()=>{
+ const data=new Map([['printers','[{"id":"old"}]'],['posNotificationSettings','{"sound":"soft"}']]),errors=[],messages=[];let failNotify=false;
+ const c={console:{error:()=>{}},state:{},document:{documentElement:{},getElementById:()=>null},MutationObserver:class{observe(){}},queueMicrotask:()=>{},localStorage:{getItem:key=>data.has(key)?data.get(key):null,setItem:(key,value)=>{if(key==='posNotificationSettings'&&failNotify){failNotify=false;throw Error('quota')}data.set(key,String(value))},removeItem:key=>data.delete(key)},markStorageBroken:error=>errors.push(error),flash:message=>messages.push(message)};c.window=c;vm.createContext(c);vm.runInContext(printerScript,c);
+ assert.equal(c.__printerSettingsSnapshot().printers[0].id,'old');assert.deepEqual([...data.keys()],['printers','posNotificationSettings']);
+ failNotify=true;assert.throws(()=>c.__restorePrinterSettings({printers:[{id:'new'}],posNotifications:{soundEnabled:false,sound:'bell'}}),/Не удалось восстановить/);assert.equal(data.get('printers'),'[{"id":"old"}]');assert.equal(data.get('posNotificationSettings'),'{"sound":"soft"}');assert.equal(errors.length,1);assert.match(messages.at(-1),/Не удалось восстановить/);
+});
+test('backup rejects invalid printer settings and old backups preserve current printer setup',async()=>{
+ const f=fixture(),backup={version:12,products:plain(f.state.products),employees:[],shifts:plain(f.state.shifts),orders:[],printerSettings:{printers:{},posNotifications:{}}},before=JSON.stringify(f.state);
+ await assert.rejects(f.c.applyBackupData(backup),/printerSettings/);assert.equal(JSON.stringify(f.state),before);
+ let restored=false;backup.version=11;delete backup.printerSettings;f.c.__restorePrinterSettings=()=>{restored=true;return true};await f.c.applyBackupData(backup);assert.equal(restored,false);
 });
 test('valid nested recipe edit retains product ID and existing component shape',async()=>{
  const f=fixture();Object.assign(f.fields,{'pf-name':{value:'Пицца обновлённая'},'pf-category':{value:'Пицца'},'pf-price':{value:'10'}});
@@ -895,7 +913,7 @@ test('category drag drop delegates correct target and cancelled drag does not sa
  call=null;f.c.dragTest=make();vm.runInContext('layoutDragState=dragTest',f.c);f.c.onLayoutPointerUp({pointerId:1,type:'pointercancel',preventDefault:()=>{}});assert.equal(call,null);assert.equal(f.writes.length,0);
 });
 test('backup export includes versioned navigation and legacy backups normalize to empty folders',async()=>{
- const f=navigationFixture();await f.c.savePosFolder();let saved;f.c.Blob=class{constructor(parts){saved=JSON.parse(parts[0]);}};f.c.URL={createObjectURL:()=>'',revokeObjectURL:()=>{}};f.c.document.createElement=()=>({click:()=>{}});f.c.exportBackup();assert.equal(saved.version,11);assert.equal(saved.posNavigation.version,1);assert.ok(saved.posNavigation.categories[0].items.some(i=>i.type==='folder'));assert.equal(f.c.normalizePosNavigation(undefined).categories.length,0);
+ const f=navigationFixture();await f.c.savePosFolder();let saved;f.c.Blob=class{constructor(parts){saved=JSON.parse(parts[0]);}};f.c.URL={createObjectURL:()=>'',revokeObjectURL:()=>{}};f.c.document.createElement=()=>({click:()=>{}});f.c.exportBackup();assert.equal(saved.version,12);assert.equal(saved.posNavigation.version,1);assert.ok(saved.posNavigation.categories[0].items.some(i=>i.type==='folder'));assert.equal(f.c.normalizePosNavigation(undefined).categories.length,0);
 });
 
 test('folder modal leaves category visible and renders six products without folder icon or counter',async()=>{
