@@ -263,6 +263,22 @@ unknown legacy fields и блокирует повторное нажатие в
 **Решение**: [spec 035](../035-suppliers-module/spec.md) вводит storage-first CRUD, сохраняет unknown
 legacy fields, повторно проверяет admin access при удалении и защищает от повторного нажатия.
 
+### A003-F17 — черновик приёмки изменяет заказ до локальной записи
+
+**Статус**: Code-confirmed на baseline `00ef151`; исправлено в spec 036.
+**Код**: прежние `PrilavokPOS/pos.html:3390` и `PrilavokPOS/pos.html:3476`, теперь
+`PrilavokPOS/Web/js/features/receiving-drafts.js`.
+
+Первое открытие и сохранение «Завершить позже» записывали `receivingDraftV2` и
+`receivingIncomplete` прямо в живой order до adapter write. При отказе storage приложение могло
+показывать начатую приёмку, которой не существовало после перезапуска.
+
+**Закрытие**: строить отдельный снимок `purchaseOrders`, публиковать его после успешной записи и при
+ошибке сохранять активный editor без закрытия. Уже записанный draft открывать без redundant write.
+
+**Решение**: [spec 036](../036-receiving-drafts/spec.md) защищает first-open, order/standalone save,
+retry и повторные нажатия, сохраняя legacy/V2 shape и существующее проведение прихода.
+
 ## Подтверждённо защищённые критические пути
 
 - Оплата cash/card/split, списание вложенных рецептур и создание чека объединены critical journal.

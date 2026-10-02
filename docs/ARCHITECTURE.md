@@ -14,6 +14,7 @@ Swift/UIKit application
       ├─ Web/js/features/shifts.js: смены, кассовые итоги, движения и отчёт
       ├─ Web/js/features/employees.js: сотрудники, локальные роли и защищённое сохранение
       ├─ Web/js/features/suppliers.js: справочник поставщиков и связи с товарами
+      ├─ Web/js/features/receiving-drafts.js: начало, повторное открытие и сохранение черновика приёмки
       ├─ Web/js/features/web-orders.js: входящие WEB-заказы, local-first acceptance и ACK/recovery
       ├─ Web/js/features/inventory.js: график, черновик, фиксация и завершение инвентаризации
       ├─ Web/js/features/warehouse-reporting.js: read-only складской отчёт и PDF/XLSX payload
@@ -74,6 +75,10 @@ storage UI сохраняет исходное состояние и позво�
 записывает полный снимок прежнего `prilavok_suppliers`, а затем публикует его в памяти. Исторические
 заказы и приёмки сохраняют собственные `supplierId`/`supplierName` и при удалении справочника не
 переписываются.
+`receiving-drafts.js` владеет границей начала и отложенного продолжения приёмки. Новый order draft
+сначала записывается в снимке `purchaseOrders`, после чего публикуется и открывается; сохранённый
+draft открывается без повторной записи. Standalone draft сохраняет прежний ключ `receivingDraft`.
+Проведение прихода и средневзвешенная себестоимость остаются в общем critical journal.
 
 ## Данные и offline-first
 

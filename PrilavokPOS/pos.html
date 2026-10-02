@@ -3387,19 +3387,8 @@ function renderReceivingScreen(){
   <div class="supply-layout supply-focused"><div class="card supply-pending"><h2>К приёмке <span class="badge">${pending.length}</span></h2><div class="supply-pending-grid">${pending.map(o=>`<div class="supply-request"><strong>${escapeHtml(o.supplierName||'Поставщик')}</strong><p class="pe-note">${fmtDate(o.timestamp)} · ${(o.items||[]).length} позиций</p><div class="supply-preview">${(o.items||[]).slice(0,5).map(i=>`<div>${escapeHtml(i.productName)} <b>${escapeHtml(requestedQuantityText(i))}</b></div>`).join('')}</div><div class="supply-actions"><button class="btn btn-primary ${o.receivingDraftV2||o.receivingIncomplete?'receiving-resume':''}" onclick="openReceivingDocument(${escapeAttr(JSON.stringify(o.id))})">${o.receivingDraftV2||o.receivingIncomplete?'Продолжить приёмку':'Принять'}</button>${canAdminDeletePurchaseOrder()?`<button class="btn btn-outline" onclick="openDeletePurchaseOrderModal(${escapeAttr(JSON.stringify(o.id))})">Удалить</button>`:''}</div></div>`).join('')||'<p class="pe-note">Нет ожидающих заказов.</p>'}</div></div>
 </div></div></div>`;
 }
-async function openReceivingDocument(orderId=null){
-  const order=orderId?state.purchaseOrders.find(o=>o.id===orderId):null;
-  if(orderId&&(!order||['received','deleted'].includes(order.status))){flash('Заказ недоступен для приёмки');return;}
-  const saved=order?.receivingDraftV2||(!order?await loadKey('receivingDraft',null):null);
-  window._receivingDraft=saved?JSON.parse(JSON.stringify(saved)):{version:1,orderId:orderId||null,supplierId:order?.supplierId||'',invoiceNumber:'',invoiceDate:'',lines:(order?.items||state.receivingCart||[]).map(i=>({productId:i.productId,qtyInput:order?.receivingDraft?.[i.productId]?.qty??(!order?i.qty:(i.expectedQty===null?'':(i.requestedQty??i.expectedQty??i.qty??''))),unit:order?(i.requestedUnit??i.stockUnit??stockUnit(getProduct(i.productId))):(i.stockUnit??stockUnit(getProduct(i.productId))),packSize:order?(i.packSize??''):'',contentUnit:order?(i.contentUnit??i.stockUnit??stockUnit(getProduct(i.productId))):stockUnit(getProduct(i.productId)),priceInput:'',totalInput:order?.receivingDraft?.[i.productId]?.totalCost??(!order?i.totalCost:''),priceMode:'total'}))};
-  window._receivingDraft.orderId=orderId||null;
-  if(order){
-    window._receivingPageScroll=document.querySelector('.screen.active')?.scrollTop||0;
-    order.receivingDraftV2=JSON.parse(JSON.stringify(window._receivingDraft));order.receivingIncomplete=true;
-    try{await window.PrilavokCore.Storage.set('purchaseOrders',state.purchaseOrders);}catch(e){flash('Не удалось сохранить начало приёмки: '+e.message);}
-  }
-  renderReceivingDocument();
-}
+/* Receiving draft runtime: Web/js/features/receiving-drafts.js */
+
 function receivingDocumentInput(){
   const d=window._receivingDraft;if(!d)return;
   d.invoiceNumber=document.getElementById('ttn-number').value;d.invoiceDate=document.getElementById('ttn-date').value;
@@ -3430,7 +3419,7 @@ function removeInvoiceLine(index){
 }
 function receivingDocumentMarkup(){
   const d=window._receivingDraft,order=state.purchaseOrders.find(o=>o.id===d.orderId);
-  return `<div class="supply-doc-header"><div><div class="modal-title">${order?'Приёмка заказа':'Приёмка без заказа'}</div><p class="pe-note">Не поставлено — укажите 0.</p></div>${order?'<div class="receiving-page-actions"><button class="btn btn-outline" onclick="saveReceivingDraft()">← Назад</button><button class="btn btn-outline" onclick="saveReceivingDraft()">Завершить приёмку позже</button></div>':'<button class="btn btn-outline" onclick="saveReceivingDraft()">Сохранить и выйти</button>'}</div>
+  return `<div class="supply-doc-header"><div><div class="modal-title">${order?'Приёмка заказа':'Приёмка без заказа'}</div><p class="pe-note">Не поставлено — укажите 0.</p></div>${order?'<div class="receiving-page-actions"><button data-receiving-draft-save class="btn btn-outline" onclick="saveReceivingDraft()">← Назад</button><button data-receiving-draft-save class="btn btn-outline" onclick="saveReceivingDraft()">Завершить приёмку позже</button></div>':'<button data-receiving-draft-save class="btn btn-outline" onclick="saveReceivingDraft()">Сохранить и выйти</button>'}</div>
   <div class="supply-document-meta" oninput="receivingDocumentInput()"><div class="field"><label for="ttn-supplier">Поставщик</label><select id="ttn-supplier" ${order?'disabled':''}><option value="">Не указан</option>${state.suppliers.map(s=>`<option value="${escapeAttr(s.id)}" ${s.id===d.supplierId?'selected':''}>${escapeHtml(s.name)}</option>`).join('')}${order&&!state.suppliers.some(s=>s.id===d.supplierId)?`<option selected value="${escapeAttr(d.supplierId)}">${escapeHtml(order.supplierName)}</option>`:''}</select></div><div class="field"><label for="ttn-number">Номер</label><input id="ttn-number" maxlength="100" value="${escapeAttr(d.invoiceNumber||'')}" placeholder="Номер"></div><div class="field"><label for="ttn-date">Дата</label><input id="ttn-date" type="date" value="${escapeAttr(d.invoiceDate||'')}"></div></div>
   <div class="supply-invoice-table">${d.lines.map((line,index)=>{const p=getProduct(line.productId),ordered=order?.items.find(i=>i.productId===line.productId),isPack=['bottle','pack','box'].includes(line.unit);return `<div class="supply-invoice-row" data-invoice-line="${index}"><div class="supply-product"><strong>${escapeHtml(p?.name||'Товар не найден')}</strong><small>${ordered?'Заказано: '+escapeHtml(requestedQuantityText(ordered)):'Дополнительная позиция'} · Склад: ${unitLabel(stockUnit(p))}</small></div><div class="field"><label>Принято</label><input type="number" min="0" step="any" inputmode="decimal" data-invoice-field="qtyInput" value="${escapeAttr(String(line.qtyInput))}" oninput="updateInvoiceLine(${index},'qtyInput',this.value)"></div><div class="field"><label>Единица</label><select onchange="updateInvoiceLine(${index},'unit',this.value);renderReceivingDocument()">${purchaseUnitOptions(p,line.unit)}</select></div>${isPack?`<div class="field"><label>В единице</label><input type="number" min="0" step="any" inputmode="decimal" value="${escapeAttr(String(line.packSize??''))}" oninput="updateInvoiceLine(${index},'packSize',this.value)"></div><div class="field"><label>Единица внутри</label><select onchange="updateInvoiceLine(${index},'contentUnit',this.value)">${productUnitOptions(stockUnit(p),line.contentUnit||stockUnit(p))}</select></div>`:''}<div class="field"><label>Сумма строки</label><input type="number" min="0" step="0.01" inputmode="decimal" data-invoice-field="totalInput" value="${escapeAttr(String(line.totalInput))}" oninput="updateInvoiceLine(${index},'totalInput',this.value)"></div>${!order?`<button class="icon-btn danger" onclick="removeInvoiceLine(${index})" aria-label="Убрать строку">✕</button>`:''}</div>`;}).join('')}</div>
   ${!order?`<div class="supply-actions"><select id="ttn-add-product"><option value="">Добавить товар</option>${state.products.filter(p=>p.type==='simple').map(p=>`<option value="${escapeAttr(p.id)}">${escapeHtml(p.name)}</option>`).join('')}</select><button class="btn btn-outline" onclick="addInvoiceProduct()">Добавить</button></div>`:''}
@@ -3472,14 +3461,6 @@ function renderReceivingDocument(){
     document.querySelector('#modal-root .modal')?.classList.add('supply-document');
     const overlay=document.querySelector('#modal-root .modal-overlay');if(overlay)overlay.onclick=null;
   }
-}
-async function saveReceivingDraft(){
-  receivingDocumentInput();const d=window._receivingDraft;
-  try{
-    if(d.orderId){const order=state.purchaseOrders.find(o=>o.id===d.orderId);if(!order||['received','deleted'].includes(order.status))throw new Error('Заказ недоступен');order.receivingDraftV2=JSON.parse(JSON.stringify(d));order.receivingIncomplete=true;await window.PrilavokCore.Storage.set('purchaseOrders',state.purchaseOrders);}
-    else await window.PrilavokCore.Storage.set('receivingDraft',d);
-    window._receivingExpanded=false;if(d.orderId){finishReceivingPage();window._receivingDraft=null;}closeModal();render();flash('Черновик сохранён локально');
-  }catch(e){flash('Не удалось сохранить черновик: '+e.message);}
 }
 function invoiceReceivingItems(d){
   if(!d.lines.length)throw new Error('Добавьте товары');
@@ -3742,6 +3723,7 @@ document.addEventListener('touchmove',function(e){
 <script src="Web/js/features/shifts.js"></script>
 <script src="Web/js/features/employees.js"></script>
 <script src="Web/js/features/suppliers.js"></script>
+<script src="Web/js/features/receiving-drafts.js"></script>
 <script src="Web/js/features/web-orders.js"></script>
 <script src="Web/js/features/inventory.js"></script>
 <script src="Web/js/features/warehouse-reporting.js"></script>

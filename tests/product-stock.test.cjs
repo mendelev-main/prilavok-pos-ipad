@@ -12,6 +12,7 @@ const adapter=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/core/storage.js
 const shiftsScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/shifts.js'),'utf8');
 const employeesScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/employees.js'),'utf8');
 const suppliersScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/suppliers.js'),'utf8');
+const receivingDraftsScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/receiving-drafts.js'),'utf8');
 const webOrdersScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/web-orders.js'),'utf8');
 const inventoryScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/inventory.js'),'utf8');
 const warehouseReportingScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/warehouse-reporting.js'),'utf8');
@@ -34,7 +35,7 @@ function fixture(){
  const data=new Map(),messages=[],writes=[],fields={'pf-prep-station':{value:'kitchen'},'pf-prep-difficulty':{value:'1'},'pf-base-prep-minutes':{value:'5'}},events=[];
  const document={getElementById:id=>fields[id]||null,querySelector:()=>null,addEventListener:()=>{}};
  const c={console:{error:()=>{}},document,crypto:{randomUUID:()=> 'device-test'},setTimeout:()=>0,clearTimeout:()=>{},addEventListener:()=>{},removeEventListener:()=>{},AbortController,localStorage:{getItem:k=>data.has(k)?data.get(k):null,setItem:(k,v)=>{data.set(k,String(v));writes.push(k);},removeItem:k=>data.delete(k)},fetch:()=>{throw Error('Network is prohibited in this test');},setInterval:()=>{throw Error('Timer is prohibited in this test');}};
- c.window=c;vm.createContext(c);vm.runInContext(adapter,c);vm.runInContext(inline.replace(/loadAll\(\);\s*$/,''),c);vm.runInContext(shiftsScript,c);vm.runInContext(employeesScript,c);vm.runInContext(suppliersScript,c);vm.runInContext(webOrdersScript,c);vm.runInContext(inventoryScript,c);vm.runInContext(warehouseReportingScript,c);vm.runInContext(analyticsScript,c);vm.runInContext(productCatalogScript,c);vm.runInContext(productCategoriesScript,c);vm.runInContext(posNavigationScript,c);vm.runInContext(cartPresentationScript,c);vm.runInContext(cartCompositionScript,c);vm.runInContext(parkedOrdersScript,c);vm.runInContext(paymentScript,c);vm.runInContext(receiptsScript,c);vm.runInContext(hallBookingsScript,c);
+ c.window=c;vm.createContext(c);vm.runInContext(adapter,c);vm.runInContext(inline.replace(/loadAll\(\);\s*$/,''),c);vm.runInContext(shiftsScript,c);vm.runInContext(employeesScript,c);vm.runInContext(suppliersScript,c);vm.runInContext(receivingDraftsScript,c);vm.runInContext(webOrdersScript,c);vm.runInContext(inventoryScript,c);vm.runInContext(warehouseReportingScript,c);vm.runInContext(analyticsScript,c);vm.runInContext(productCatalogScript,c);vm.runInContext(productCategoriesScript,c);vm.runInContext(posNavigationScript,c);vm.runInContext(cartPresentationScript,c);vm.runInContext(cartCompositionScript,c);vm.runInContext(parkedOrdersScript,c);vm.runInContext(paymentScript,c);vm.runInContext(receiptsScript,c);vm.runInContext(hallBookingsScript,c);
  c.flash=m=>messages.push(m);c.render=()=>{};c.showReceipt=()=>{};c.showPaymentReceipt=()=>{};c.closeModal=()=>{};c.applyTheme=()=>{};
  const state=vm.runInContext('state',c);
  c.__printerSettingsSnapshot=()=>({printers:[],posNotifications:{soundEnabled:true,sound:'default'}});c.__restorePrinterSettings=()=>true;
@@ -44,7 +45,7 @@ function fixture(){
  async function sale(payments){cart();await c.finalizePayment(payments||[{method:'cash',amount:10}]);return state.orders[0];}
  return {c,state,data,messages,writes,fields,events,cart,sale};
 }
-test('all production JavaScript modules parse',()=>{new vm.Script(inline);new vm.Script(adapter);new vm.Script(shiftsScript);new vm.Script(employeesScript);new vm.Script(suppliersScript);new vm.Script(webOrdersScript);new vm.Script(inventoryScript);new vm.Script(warehouseReportingScript);new vm.Script(analyticsScript);new vm.Script(productCatalogScript);new vm.Script(productCategoriesScript);new vm.Script(posNavigationScript);new vm.Script(cartPresentationScript);new vm.Script(cartCompositionScript);new vm.Script(parkedOrdersScript);new vm.Script(paymentScript);new vm.Script(receiptsScript);new vm.Script(hallBookingsScript);new vm.Script(printerScript);});
+test('all production JavaScript modules parse',()=>{new vm.Script(inline);new vm.Script(adapter);new vm.Script(shiftsScript);new vm.Script(employeesScript);new vm.Script(suppliersScript);new vm.Script(receivingDraftsScript);new vm.Script(webOrdersScript);new vm.Script(inventoryScript);new vm.Script(warehouseReportingScript);new vm.Script(analyticsScript);new vm.Script(productCatalogScript);new vm.Script(productCategoriesScript);new vm.Script(posNavigationScript);new vm.Script(cartPresentationScript);new vm.Script(cartCompositionScript);new vm.Script(parkedOrdersScript);new vm.Script(paymentScript);new vm.Script(receiptsScript);new vm.Script(hallBookingsScript);new vm.Script(printerScript);});
 test('shifts module loads before dependent features and preserves its public API',()=>{
  const moduleTag='<script src="Web/js/features/shifts.js"></script>',paymentTag='<script src="Web/js/features/payment.js"></script>',startupTag='<script>loadAll();</script>';
  assert.ok(html.indexOf(moduleTag)>=0);assert.ok(html.indexOf(paymentTag)>html.indexOf(moduleTag));assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));assert.doesNotMatch(inline,/function submitCloseShift\s*\(/);
@@ -59,6 +60,11 @@ test('suppliers module loads after access helpers and before startup with its pu
  const employeesTag='<script src="Web/js/features/employees.js"></script>',moduleTag='<script src="Web/js/features/suppliers.js"></script>',startupTag='<script>loadAll();</script>';
  assert.ok(html.indexOf(moduleTag)>html.indexOf(employeesTag));assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));assert.doesNotMatch(inline,/function saveSupplier\s*\(/);
  const f=fixture();for(const name of ['openSupplierModal','filterSupplierProducts','deleteSupplier','confirmDeleteSupplier','saveSupplier'])assert.equal(typeof f.c[name],'function',name);
+});
+test('receiving drafts module loads before startup with its public API',()=>{
+ const suppliersTag='<script src="Web/js/features/suppliers.js"></script>',moduleTag='<script src="Web/js/features/receiving-drafts.js"></script>',startupTag='<script>loadAll();</script>';
+ assert.ok(html.indexOf(moduleTag)>html.indexOf(suppliersTag));assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));assert.doesNotMatch(inline,/async function openReceivingDocument\s*\(/);assert.doesNotMatch(inline,/async function saveReceivingDraft\s*\(/);
+ const f=fixture();for(const name of ['receivingDraftForOrder','openReceivingDocument','saveReceivingDraft'])assert.equal(typeof f.c[name],'function',name);
 });
 test('WEB orders module loads before startup and preserves its public API',()=>{
  const moduleTag='<script src="Web/js/features/web-orders.js"></script>',startupTag='<script>loadAll();</script>';
@@ -1008,6 +1014,27 @@ test('package keypad shares numeric input without changing requested order quant
  const f=fixture(),qty={value:'4'},size={value:'2'};let html='';f.c.showModal=value=>{html=value;};f.c.document.querySelectorAll=()=>[{dataset:{purchaseRow:'flour'},querySelector:s=>s==='[data-request-size]'?size:qty}];f.c.updatePurchaseRequest=()=>{};
  f.c.openPurchaseQuantity('flour','size');assert.match(html,/В упаковке/);assert.doesNotMatch(html,/>Отмена</);
  f.c.purchaseQuantityKey('1');f.c.purchaseQuantityKey(',');f.c.purchaseQuantityKey('5');f.c.applyPurchaseQuantity();assert.equal(size.value,'1.5');assert.equal(qty.value,'4');
+});
+
+test('starting order receiving publishes draft only after local persistence',async()=>{
+ const f=invoiceFixture(),before=JSON.stringify(f.state.purchaseOrders);f.c._receivingDraft=null;let rendered=0;f.c.renderReceivingDocument=()=>rendered++;f.c.localStorage.setItem=()=>{throw Error('quota')};
+ assert.equal(await f.c.openReceivingDocument('purchase'),false);assert.equal(JSON.stringify(f.state.purchaseOrders),before);assert.equal(f.c._receivingDraft,null);assert.equal(rendered,0);assert.match(f.messages.at(-1),/Не удалось сохранить начало приёмки/);
+});
+test('already persisted order draft reopens without a redundant storage write',async()=>{
+ const f=invoiceFixture();f.state.purchaseOrders[0].receivingIncomplete=true;f.state.purchaseOrders[0].receivingDraftV2={version:1,orderId:'purchase',supplierId:'supplier',invoiceNumber:'SAVED',invoiceDate:'',lines:[]};let rendered=0;f.c.renderReceivingDocument=()=>rendered++;f.c.localStorage.setItem=()=>{throw Error('must not write')};
+ assert.equal(await f.c.openReceivingDocument('purchase'),true);assert.equal(f.c._receivingDraft.invoiceNumber,'SAVED');assert.equal(rendered,1);assert.equal(f.writes.length,0);
+});
+test('order draft save failure keeps order, editor and page intact',async()=>{
+ const f=invoiceFixture();f.c._receivingDraft={version:1,orderId:'purchase',supplierId:'supplier',invoiceNumber:'EDITED',invoiceDate:'',lines:[]};f.c.receivingDocumentInput=()=>{};const before=JSON.stringify(f.state.purchaseOrders),buttons=[{disabled:false},{disabled:false}];f.c.document.querySelectorAll=selector=>selector==='[data-receiving-draft-save]'?buttons:[];let finished=0,closed=0,rendered=0;f.c.finishReceivingPage=()=>finished++;f.c.closeModal=()=>closed++;f.c.render=()=>rendered++;f.c.localStorage.setItem=()=>{throw Error('quota')};
+ assert.equal(await f.c.saveReceivingDraft(),false);assert.equal(JSON.stringify(f.state.purchaseOrders),before);assert.equal(f.c._receivingDraft.invoiceNumber,'EDITED');assert.equal(finished+closed+rendered,0);assert.ok(buttons.every(button=>button.disabled===false));assert.match(f.messages.at(-1),/Не удалось сохранить черновик/);
+});
+test('order draft save persists a full snapshot before closing and preserves order fields',async()=>{
+ const f=invoiceFixture();f.state.purchaseOrders[0].legacyNote='keep';f.c._receivingDraft={version:1,orderId:'purchase',supplierId:'supplier',invoiceNumber:'EDITED',invoiceDate:'2026-10-02',lines:[]};f.c.receivingDocumentInput=()=>{};const before=JSON.stringify(f.state.purchaseOrders);let finished=0,closed=0,rendered=0;f.c.finishReceivingPage=()=>finished++;f.c.closeModal=()=>closed++;f.c.render=()=>rendered++;
+ const pending=f.c.saveReceivingDraft();assert.equal(JSON.stringify(f.state.purchaseOrders),before);assert.equal(await pending,true);assert.equal(f.state.purchaseOrders[0].receivingDraftV2.invoiceNumber,'EDITED');assert.equal(f.state.purchaseOrders[0].legacyNote,'keep');assert.equal(f.c._receivingDraft,null);assert.equal(finished,1);assert.equal(closed,1);assert.equal(rendered,1);assert.deepEqual(f.writes,['prilavok_purchaseOrders']);
+});
+test('standalone draft failure remains editable and repeated save writes once',async()=>{
+ const failed=invoiceFixture();failed.c._receivingDraft={version:1,orderId:null,supplierId:'supplier',invoiceNumber:'LOCAL',invoiceDate:'',lines:[]};failed.c.receivingDocumentInput=()=>{};let closed=0;failed.c.closeModal=()=>closed++;failed.c.localStorage.setItem=()=>{throw Error('quota')};assert.equal(await failed.c.saveReceivingDraft(),false);assert.equal(failed.c._receivingDraft.invoiceNumber,'LOCAL');assert.equal(closed,0);
+ const f=invoiceFixture();f.c._receivingDraft={version:1,orderId:null,supplierId:'supplier',invoiceNumber:'LOCAL',invoiceDate:'',lines:[]};f.c.receivingDocumentInput=()=>{};const first=f.c.saveReceivingDraft(),second=f.c.saveReceivingDraft();assert.equal(await second,false);assert.equal(await first,true);assert.deepEqual(f.writes,['prilavok_receivingDraft']);assert.equal(JSON.parse(f.data.get('prilavok_receivingDraft')).invoiceNumber,'LOCAL');
 });
 
 test('opening supply pre-fills ordered base quantity and persists started draft without stock change',async()=>{
