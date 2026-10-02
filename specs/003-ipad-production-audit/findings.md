@@ -295,6 +295,32 @@ retry и повторные нажатия, сохраняя legacy/V2 shape и 
 **Решение**: [spec 037](../037-receiving-completion/spec.md) добавляет общий guard, regression tests
 для занятого и ожидающего commit и выделяет completion boundary без изменения данных или UI.
 
+### A003-F19 — ошибка UI после commit выдаёт сохранённый заказ за несформированный
+
+**Статус**: Code-confirmed на baseline `ff43ba7`; исправлено в spec 038.
+**Код**: прежний `PrilavokPOS/pos.html:3297`, теперь
+`PrilavokPOS/Web/js/features/purchase-orders.js`.
+
+`finalizePurchaseOrder` включал commit, публикацию state, `render()` и открытие карточки в один
+`try/catch`. Исключение presentation после успешной записи возвращало `false` и показывало «Заказ
+не сформирован». Повтор оператора мог создать второй заказ.
+
+**Решение**: [spec 038](../038-purchase-orders-module/spec.md) отделяет validation/commit failure от
+post-commit presentation, подтверждает durable success и блокирует повтор во время pending commit.
+
+### A003-F20 — ID заказа из backup может разорвать inline action
+
+**Статус**: Code-confirmed на baseline `ff43ba7`; исправлено в spec 038.
+**Код**: прежние `PrilavokPOS/pos.html:3152`, `PrilavokPOS/pos.html:3532`, теперь
+`PrilavokPOS/Web/js/features/purchase-orders.js`.
+
+Backup допускает любой непустой строковый ID. Карточка заказа помещала его в JavaScript-строку
+внутри HTML без JSON/attribute escaping, поэтому кавычки и HTML могли сломать действие или внедрить
+разметку после импорта подготовленного файла.
+
+**Решение**: [spec 038](../038-purchase-orders-module/spec.md) использует
+`escapeAttr(JSON.stringify(id))` для просмотра, передачи и административного удаления.
+
 ## Подтверждённо защищённые критические пути
 
 - Оплата cash/card/split, списание вложенных рецептур и создание чека объединены critical journal.

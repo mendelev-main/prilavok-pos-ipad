@@ -10,7 +10,7 @@
 | Возвраты | receipt state, stock restore, cash movement, loyalty reversal | Node tests | PASS |
 | Смены/касса | open, movement, close, reports, invalid amount | review + diagnostics | A003-F02, F05 |
 | Товары | editor, cost protection, imports, photos, dependencies | tests + review | A003-F07 |
-| Закупки | supplier order creation/deletion, drafts, status history | review + tests | A003-F11 |
+| Закупки | supplier order creation/deletion, storage-first, presentation result, safe legacy IDs, history | review + tests | PASS after specs 010/038; A003-F11, F19/F20 fixed |
 | Приёмка | draft open/save/retry, validation, weighted cost, global critical guard, commit/recovery | Node tests | PASS after specs 036–037; A003-F17/F18 fixed |
 | Инвентаризация | draft, fix, complete, history/config writes | injected write failure | A003-F03 |
 | Backup | schema validation, version 11, journal recovery, legacy data | Node tests | PASS; printer settings excluded |
