@@ -14,6 +14,15 @@
     try { settings = { ...settings, ...JSON.parse(localStorage.getItem('posNotificationSettings') || '{}') }; } catch (_) {}
     return settings;
   }
+  let remotePushRegistered=false,remotePushStatus='waiting';
+  function remotePushStatusText(){return remotePushStatus==='active'?'Системные уведомления включены':remotePushStatus==='denied'?'Уведомления запрещены в настройках iPad':remotePushStatus==='server_pending'?'iPad зарегистрирован, сервер APNs ещё не настроен':'Системные уведомления ожидают регистрации'}
+  function syncRemotePushRegistration(){
+    const handler=window.webkit?.messageHandlers?.pushNotifications,network=window.networkConfigFromState?.()||window.state?.network||{};
+    if(!handler||!network.backendUrl||!network.deviceKey)return false;
+    try{handler.postMessage({action:'configure',backendUrl:String(network.backendUrl),deviceKey:String(network.deviceKey),soundEnabled:notificationSettings().soundEnabled!==false});return true}catch(_){return false}
+  }
+  window.onNativePushRegistration=result=>{remotePushStatus=String(result?.status||'error');remotePushRegistered=result?.ok===true&&result?.configured===true;const el=document.getElementById('native-push-status');if(el)el.textContent=remotePushStatusText()};
+  window.onNativeOrderPush=()=>window.playPOSEventSound?.();
   window.previewNotificationSound = () => nativeSound(document.getElementById('notify-sound')?.value || 'default');
   window.playPOSEventSound = () => { const settings = notificationSettings(); if (settings.soundEnabled) nativeSound(settings.sound); };
   const originalOpenNotificationSettings = window.openNotificationSettings;
@@ -23,9 +32,14 @@
       const select = document.getElementById('notify-sound'); if (!select) return;
       const selected = notificationSettings().sound;
       select.innerHTML = SOUND_OPTIONS.map(([value,label]) => `<option value="${value}" ${value===selected?'selected':''}>${label}</option>`).join('');
+      const actions=select.closest('.modal')?.querySelector('.modal-actions');if(actions&&!document.getElementById('native-push-status'))actions.insertAdjacentHTML('beforebegin',`<div id="native-push-status" class="settings-note" style="margin-top:10px">${remotePushStatusText()}</div>`);
     });
     return result;
   };
+  const originalSaveNotificationSettings=window.saveNotificationSettings;
+  if(typeof originalSaveNotificationSettings==='function')window.saveNotificationSettings=(...args)=>{const result=originalSaveNotificationSettings(...args);if(result)syncRemotePushRegistration();return result};
+  const originalSaveNetworkSettings=window.saveNetworkSettings;
+  if(typeof originalSaveNetworkSettings==='function')window.saveNetworkSettings=(...args)=>{const result=originalSaveNetworkSettings(...args);if(result)setTimeout(syncRemotePushRegistration,0);return result};
 
   let readyBusy = false;
   const originalOpenParkedModal = typeof openParkedModal === 'function' ? openParkedModal : null;
@@ -91,8 +105,9 @@
 
   let baselineReady=false,lastEventCount=0,checkTimer=0;
   function readEventsCount(){const controls=[...document.querySelectorAll('button, [role="button"]')];const control=controls.find(el=>/события/i.test(el.textContent||''));if(!control)return null;const badge=control.querySelector('.badge,.count,.counter,[class*="badge"],[class*="count"]');const badgeNumber=badge?.textContent?.match(/\d+/);if(badgeNumber)return Number(badgeNumber[0]);const text=(control.textContent||'').replace(/\s+/g,' ').trim();const number=text.match(/(?:события)\D*(\d+)/i);return number?Number(number[1]):0;}
-  function checkForNewEvents(){checkTimer=0;const count=readEventsCount();if(count==null)return;if(!baselineReady){baselineReady=true;lastEventCount=count;return;}if(count>lastEventCount)window.playPOSEventSound?.();lastEventCount=count;}
+  function checkForNewEvents(){checkTimer=0;const count=readEventsCount();if(count==null)return;if(!baselineReady){baselineReady=true;lastEventCount=count;return;}if(count>lastEventCount&&!remotePushRegistered)window.playPOSEventSound?.();lastEventCount=count;}
   function scheduleCheck(){if(!checkTimer)checkTimer=window.setTimeout(checkForNewEvents,120);}
   const startObserver=()=>{checkForNewEvents();const observer=new MutationObserver(scheduleCheck);observer.observe(document.body,{childList:true,subtree:true,characterData:true});};
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',startObserver,{once:true});else startObserver();
+  const registerWhenReady=()=>{if(window.state?.loaded){syncRemotePushRegistration();return}setTimeout(registerWhenReady,100)};registerWhenReady();
 })();

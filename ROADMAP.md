@@ -17,6 +17,7 @@
 | R9 | Аудит кода и схемы БД | Удалять только доказанно неиспользуемое; каждую миграцию выполнять отдельно с rollback-планом | R1 | planned | — |
 | R10 | Локальный OCR приёмки | Apple Vision OCR → parser → catalog matching → редактируемый draft; без сети и без автопроводки | R1, R6 | planned | — |
 | R11 | Documentation workflow | Перейти на Constitution → Roadmap → feature specs без MASTER/DELTA | — | done | [002-speckit-workflow](specs/002-speckit-workflow/spec.md) |
+| R12 | Уведомление о WEB-заказе на заблокированном iPad | Доставлять privacy-safe APNs alert со звуком через durable backend outbox, не влияя на создание заказа и offline POS | R4 | in-progress | [047 remote notifications](specs/047-remote-order-notifications/spec.md) |
 
 ## Правила обновления
 

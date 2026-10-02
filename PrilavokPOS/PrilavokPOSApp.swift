@@ -3,6 +3,13 @@ import WebKit
 import UniformTypeIdentifiers
 import PhotosUI
 import Foundation
+import UserNotifications
+
+extension Notification.Name {
+    static let remotePushTokenUpdated = Notification.Name("MPosRemotePushTokenUpdated")
+    static let foregroundRemoteOrder = Notification.Name("MPosForegroundRemoteOrder")
+    static let remotePushAuthorizationChanged = Notification.Name("MPosRemotePushAuthorizationChanged")
+}
 
 final class ProductImageStore: NSObject, WKURLSchemeHandler {
     private let directory: URL
@@ -27,12 +34,38 @@ final class WeakScriptMessageHandler: NSObject, WKScriptMessageHandler {
 }
 
 @main
-final class PrilavokPOSApp: UIResponder, UIApplicationDelegate {
+final class PrilavokPOSApp: UIResponder, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        let notifications = UNUserNotificationCenter.current()
+        notifications.delegate = self
+        notifications.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+            NotificationCenter.default.post(name: .remotePushAuthorizationChanged, object: nil, userInfo: ["granted": granted])
+            if granted { DispatchQueue.main.async { application.registerForRemoteNotifications() } }
+        }
         return true
+    }
+
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        let token = deviceToken.map { String(format: "%02x", $0) }.joined()
+        UserDefaults.standard.set(token, forKey: "MPosRemotePushToken")
+        NotificationCenter.default.post(name: .remotePushTokenUpdated, object: nil, userInfo: ["token": token])
+    }
+
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        NotificationCenter.default.post(name: .remotePushAuthorizationChanged, object: nil, userInfo: ["granted": false, "message": error.localizedDescription])
+    }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        let info = notification.request.content.userInfo
+        if info["kind"] as? String == "web_order" {
+            NotificationCenter.default.post(name: .foregroundRemoteOrder, object: nil, userInfo: ["orderId": info["orderId"] as? String ?? ""])
+            completionHandler([.banner, .list])
+        } else {
+            completionHandler([.banner, .list, .sound])
+        }
     }
 }
 
@@ -40,12 +73,16 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
     private var webView: WKWebView!
     private let networkPrinter = NetworkPrinterManager()
     private let productImages = ProductImageStore()
+    private var pushBackendURL = ""
+    private var pushDeviceKey = ""
+    private var pushSoundEnabled = true
 
     override func loadView() {
         let contentController = WKUserContentController()
         contentController.add(WeakScriptMessageHandler(self), name: "printer")
         contentController.add(WeakScriptMessageHandler(self), name: "telegram")
         contentController.add(WeakScriptMessageHandler(self), name: "photoPicker")
+        contentController.add(WeakScriptMessageHandler(self), name: "pushNotifications")
 
         let configuration = WKWebViewConfiguration()
         configuration.userContentController = contentController
@@ -78,6 +115,9 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
         super.viewDidLoad()
         NotificationCenter.default.addObserver(self, selector: #selector(pauseAvailability), name: UIApplication.willResignActiveNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(resumeAvailability), name: UIApplication.didBecomeActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(remotePushTokenUpdated(_:)), name: .remotePushTokenUpdated, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(foregroundRemoteOrder(_:)), name: .foregroundRemoteOrder, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(remotePushAuthorizationChanged(_:)), name: .remotePushAuthorizationChanged, object: nil)
         networkPrinter.onEvent = { [weak self] event in
             self?.sendPrinterEvent(event)
         }
@@ -99,6 +139,10 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        if message.name == "pushNotifications", let body = message.body as? [String: Any], body["action"] as? String == "configure" {
+            configureRemotePush(body)
+            return
+        }
         if message.name == "photoPicker" {
             if let body=message.body as? [String:Any],let action=body["action"] as? String,action != "pick" {
                 let id=body["id"] as? String ?? ""
@@ -144,6 +188,94 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
         default:
             break
         }
+    }
+
+    private var pushEnvironment: String {
+        #if DEBUG
+        return "development"
+        #else
+        return "production"
+        #endif
+    }
+
+    private func configureRemotePush(_ body: [String: Any]) {
+        pushBackendURL = (body["backendUrl"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "/+$", with: "", options: .regularExpression)
+        pushDeviceKey = (body["deviceKey"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        pushSoundEnabled = body["soundEnabled"] as? Bool ?? true
+        refreshRemotePushAuthorization()
+    }
+
+    private func refreshRemotePushAuthorization() {
+        let center = UNUserNotificationCenter.current()
+        center.getNotificationSettings { [weak self] settings in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                switch settings.authorizationStatus {
+                case .authorized, .provisional, .ephemeral:
+                    UIApplication.shared.registerForRemoteNotifications()
+                    if let token = UserDefaults.standard.string(forKey: "MPosRemotePushToken"), !token.isEmpty {
+                        self.sendRemotePushToken(token)
+                    }
+                case .notDetermined:
+                    center.requestAuthorization(options: [.alert, .sound]) { granted, error in
+                        DispatchQueue.main.async {
+                            if granted {
+                                UIApplication.shared.registerForRemoteNotifications()
+                            } else {
+                                self.sendPushRegistrationResult(["ok": false, "status": "denied", "message": error?.localizedDescription ?? "Уведомления запрещены в настройках iPad"])
+                            }
+                        }
+                    }
+                case .denied:
+                    self.sendPushRegistrationResult(["ok": false, "status": "denied", "message": "Уведомления запрещены в настройках iPad"])
+                @unknown default:
+                    self.sendPushRegistrationResult(["ok": false, "status": "error", "message": "Не удалось определить разрешение уведомлений"])
+                }
+            }
+        }
+    }
+
+    @objc private func remotePushTokenUpdated(_ notification: Notification) {
+        guard let token = notification.userInfo?["token"] as? String else { return }
+        sendRemotePushToken(token)
+    }
+
+    @objc private func remotePushAuthorizationChanged(_ notification: Notification) {
+        guard notification.userInfo?["granted"] as? Bool == false else { return }
+        sendPushRegistrationResult(["ok": false, "status": "denied", "message": notification.userInfo?["message"] as? String ?? "Уведомления запрещены в настройках iPad"])
+    }
+
+    @objc private func foregroundRemoteOrder(_ notification: Notification) {
+        let orderId = notification.userInfo?["orderId"] as? String ?? ""
+        guard let data = try? JSONSerialization.data(withJSONObject: orderId), let json = String(data: data, encoding: .utf8) else { return }
+        webView.evaluateJavaScript("window.onNativeOrderPush&&window.onNativeOrderPush(\(json));", completionHandler: nil)
+    }
+
+    private func sendRemotePushToken(_ token: String) {
+        guard !pushBackendURL.isEmpty, !pushDeviceKey.isEmpty,
+              let url = URL(string: pushBackendURL + "/api/devices/push-token"),
+              url.scheme == "https" else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 20
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(pushDeviceKey, forHTTPHeaderField: "X-Device-Key")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: ["token": token, "environment": pushEnvironment, "soundEnabled": pushSoundEnabled])
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            var result: [String: Any] = ["ok": false, "status": "error"]
+            if let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) {
+                let body = (data.flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [String: Any]) ?? [:]
+                result = ["ok": true, "status": body["configured"] as? Bool == true ? "active" : "server_pending", "configured": body["configured"] as? Bool == true]
+            } else {
+                result["message"] = error?.localizedDescription ?? "HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0)"
+            }
+            self?.sendPushRegistrationResult(result)
+        }.resume()
+    }
+
+    private func sendPushRegistrationResult(_ result: [String: Any]) {
+        guard let data = try? JSONSerialization.data(withJSONObject: result), let json = String(data: data, encoding: .utf8) else { return }
+        DispatchQueue.main.async { [weak self] in self?.webView.evaluateJavaScript("window.onNativePushRegistration&&window.onNativePushRegistration(\(json));", completionHandler: nil) }
     }
 
 
