@@ -2,13 +2,13 @@
 function paymentCartLines(){
   return state.cart.map(i=>{
     const discount=discountValue(i);
-    return `<div class="receipt-line"><span>${escapeHtml(i.name)} × ${i.qty}</span><span>${money(itemTotal(i))}</span></div>${discount>0?`<div class="receipt-line" style="font-size:12px;color:var(--accent);padding-top:0;"><span>↳ Скидка</span><span>−${money(discount)}</span></div>`:''}`;
+    return `<div class="receipt-line"><span>${escapeHtml(i.name)} × ${i.qty}</span><span>${money(itemTotal(i))}</span></div>${discount>0?`<div class="receipt-line payment-line-discount"><span>↳ Скидка</span><span>−${money(discount)}</span></div>`:''}`;
   }).join('');
 }
 function paymentReceiptHtml(){
   const delivery=state.orderType==='Доставка'?Number(state.deliveryFee||0):0;
-  return `${state.orderLabel?`<div style="font-size:18px;font-weight:800;margin-bottom:6px;">${escapeHtml(state.orderLabel)}</div>`:''}
-    <div style="font-size:12.5px;color:var(--muted);margin-bottom:12px;">${escapeHtml(state.orderType||'На месте')}${state.customer.name?' · '+escapeHtml(state.customer.name):''}</div>
+  return `${state.orderLabel?`<div class="payment-order-label">${escapeHtml(state.orderLabel)}</div>`:''}
+    <div class="payment-order-meta">${escapeHtml(state.orderType||'На месте')}${state.customer.name?' · '+escapeHtml(state.customer.name):''}</div>
     ${paymentCartLines()}
     ${delivery>0?`<div class="receipt-line"><span>Доставка</span><span>${fullMoney(delivery)}</span></div>`:''}
     <div class="receipt-total"><span>Итого</span><span>${fullMoney(cartTotal())}</span></div>`;
@@ -43,16 +43,16 @@ function renderPaymentScreen(){
   page.className='payment-page';
   page.innerHTML=`<div class="payment-page-header"><button class="payment-page-back" onclick="closePaymentPage()">← Назад</button><div class="payment-page-title">Оплата</div></div><div class="payment-page-body"><div class="payment-layout">
       <div class="payment-receipt">
-        <div style="font-size:16px;font-weight:800;margin-bottom:12px;">Чек</div>
+        <div class="payment-section-title">Чек</div>
         ${paymentReceiptHtml()}
       </div>
       <div class="payment-box" id="payment-workspace">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
-          <div><div style="font-size:13px;color:var(--muted);font-weight:700;">К оплате</div><div class="payment-total-big">${fullMoney(total)}</div></div>
-          <button class="btn btn-outline" style="flex:none;min-width:120px;" onclick="openSplitPayment()">Разделить</button>
+        <div class="payment-total-row">
+          <div><div class="payment-total-label">К оплате</div><div class="payment-total-big">${fullMoney(total)}</div></div>
+          <button class="btn btn-outline payment-split-trigger" onclick="openSplitPayment()">Разделить</button>
         </div>
         <div class="field"><label>Сумма</label><div class="payment-amount-display" id="paymentCashGiven" role="button" tabindex="0" onclick="openPaymentKeypad(${total})" onkeydown="if(event.key==='Enter'||event.key===' ')openPaymentKeypad(${total})">${fullMoney(total)}</div></div>
-        <div class="payment-keypad" id="paymentKeypad" style="display:none;">
+        <div class="payment-keypad" id="paymentKeypad" hidden>
           <button type="button" class="payment-key" onclick="paymentKeyPress('1',${total})">1</button><button type="button" class="payment-key" onclick="paymentKeyPress('2',${total})">2</button><button type="button" class="payment-key" onclick="paymentKeyPress('3',${total})">3</button>
           <button type="button" class="payment-key" onclick="paymentKeyPress('4',${total})">4</button><button type="button" class="payment-key" onclick="paymentKeyPress('5',${total})">5</button><button type="button" class="payment-key" onclick="paymentKeyPress('6',${total})">6</button>
           <button type="button" class="payment-key" onclick="paymentKeyPress('7',${total})">7</button><button type="button" class="payment-key" onclick="paymentKeyPress('8',${total})">8</button><button type="button" class="payment-key" onclick="paymentKeyPress('9',${total})">9</button>
@@ -60,8 +60,8 @@ function renderPaymentScreen(){
           <button type="button" class="payment-key key-action" onclick="paymentKeyPress('backspace',${total})">⌫</button>
         </div>
         <div class="payment-quick" id="paymentQuick">${cashQuickValues(total).map(v=>`<button type="button" onclick="setPaymentCash(${v},${total})">${fullMoney(v)}</button>`).join('')}</div>
-        <div class="field" style="margin-top:14px;"><label>Сдача</label><div id="paymentChange" style="font-size:21px;font-weight:800;color:var(--accent);">0 ${state.currency}</div></div>
-        <div style="margin-top:auto;padding-top:14px;display:flex;flex-direction:column;gap:8px;">
+        <div class="field payment-change-field"><label>Сдача</label><div id="paymentChange" class="payment-change">0 ${state.currency}</div></div>
+        <div class="payment-actions">
           <button class="btn btn-cash" onclick="confirmPaymentScreen('cash')">Оплатить</button>
           <button class="btn btn-card" onclick="confirmPaymentScreen('card')">Оплата картой</button>
         </div>
@@ -85,15 +85,15 @@ function openPaymentKeypad(total){
   state._paymentCashGiven='';
   const kp=document.getElementById('paymentKeypad');
   const quick=document.getElementById('paymentQuick');
-  if(kp) kp.style.display='grid';
-  if(quick) quick.style.display='none';
+  if(kp) kp.hidden=false;
+  if(quick) quick.hidden=true;
   renderPaymentAmount(total);
 }
 function closePaymentKeypad(){
   const kp=document.getElementById('paymentKeypad');
   const quick=document.getElementById('paymentQuick');
-  if(kp) kp.style.display='none';
-  if(quick) quick.style.display='grid';
+  if(kp) kp.hidden=true;
+  if(quick) quick.hidden=false;
 }
 function paymentKeyPress(key,total){
   let raw=String(state._paymentCashGiven??'');
@@ -268,9 +268,9 @@ function openSplitAmountKeypad(index){
   if(!p||p.paid)return;
   state._activeSplitKeypad=index;
   state._splitAmountInput='';
-  document.querySelectorAll('.split-keypad').forEach(el=>el.style.display='none');
+  document.querySelectorAll('.split-keypad').forEach(el=>el.hidden=true);
   const kp=document.getElementById(`splitKeypad-${index}`);
-  if(kp)kp.style.display='grid';
+  if(kp)kp.hidden=false;
   const display=document.querySelector(`#split-payment-${index} .split-amount-display`);
   if(display)display.textContent='0,00';
 }
@@ -288,7 +288,7 @@ function splitKeyPress(index,key){
   syncSplitPaymentUI();
 }
 function closeSplitAmountKeypad(){
-  document.querySelectorAll('.split-keypad').forEach(el=>el.style.display='none');
+  document.querySelectorAll('.split-keypad').forEach(el=>el.hidden=true);
   state._activeSplitKeypad=null;
   state._splitAmountInput='';
   syncSplitPaymentUI();
@@ -323,7 +323,7 @@ function renderSplitPayment(){
       </div>
       <div class="split-amount-display" role="button" tabindex="0" ${p.paid?'aria-disabled="true"':''} onclick="openSplitAmountKeypad(${i})" onkeydown="if(event.key==='Enter'||event.key===' ')openSplitAmountKeypad(${i})">${Number(p.amount||0).toFixed(2).replace('.',',')}</div>
     </div>
-    <div class="split-keypad" id="splitKeypad-${i}" style="display:none;">
+    <div class="split-keypad" id="splitKeypad-${i}" hidden>
       <button type="button" class="payment-key" onclick="splitKeyPress(${i},'1')">1</button><button type="button" class="payment-key" onclick="splitKeyPress(${i},'2')">2</button><button type="button" class="payment-key" onclick="splitKeyPress(${i},'3')">3</button>
       <button type="button" class="payment-key" onclick="splitKeyPress(${i},'4')">4</button><button type="button" class="payment-key" onclick="splitKeyPress(${i},'5')">5</button><button type="button" class="payment-key" onclick="splitKeyPress(${i},'6')">6</button>
       <button type="button" class="payment-key" onclick="splitKeyPress(${i},'7')">7</button><button type="button" class="payment-key" onclick="splitKeyPress(${i},'8')">8</button><button type="button" class="payment-key" onclick="splitKeyPress(${i},'9')">9</button>
@@ -338,16 +338,16 @@ function renderSplitPayment(){
   state.paymentPage='split';
   workspace.innerHTML=`
     <div class="payment-split-head">
-      <div style="display:flex;align-items:center;gap:10px;">
-        <button class="btn btn-secondary" style="flex:none;" onclick="returnFromSplitPayment()">← Назад</button>
-        <span style="font-size:18px;font-weight:800;">Разделить оплату</span>
+      <div class="payment-split-title-row">
+        <button class="btn btn-secondary payment-split-back" onclick="returnFromSplitPayment()">← Назад</button>
+        <span class="payment-split-title">Разделить оплату</span>
       </div>
       <div class="split-count"><button onclick="adjustSplitCount(-1)">−</button><span>${ps.length}</span><button onclick="adjustSplitCount(1)">+</button></div>
     </div>
-    <div style="flex:1;min-height:0;overflow:auto;padding-right:3px;">${rows}</div>
+    <div class="split-payment-scroll">${rows}</div>
     <div class="split-summary"><span>Оплачено</span><span class="split-summary-value">${fullMoney(paidTotal)}</span></div>
-    <div class="split-summary" style="border-top:none;padding-top:0;margin-top:0;"><span>Осталось</span><span class="split-summary-value">${fullMoney(remaining)}</span></div>
-    ${ps.length&&ps.every(p=>p.paid)?`<button class="btn btn-primary" style="width:100%;margin-top:10px;" onclick="finalizePayment(state._splitPayments)">Завершить оплату</button>`:''}`;
+    <div class="split-summary split-summary-remaining"><span>Осталось</span><span class="split-summary-value">${fullMoney(remaining)}</span></div>
+    ${ps.length&&ps.every(p=>p.paid)?`<button class="btn btn-primary split-finish" onclick="finalizePayment(state._splitPayments)">Завершить оплату</button>`:''}`;
 }
 function setSplitMethod(index,method){
   const p=state._splitPayments?.[index];
@@ -390,12 +390,12 @@ function openSplitCashPayment(index){
   const buttons=splitCashDenominations(amount).map(v=>`<button type="button" onclick="setSplitCashGiven(${v},${amount})">${fullMoney(v)}</button>`).join('');
 
   showModal(`<div class="modal-title">Оплата наличными</div>
-    <div class="center-note" style="padding:8px 0 4px;">Платёж ${index+1}</div>
-    <div style="font-size:30px;font-weight:800;text-align:center;margin:8px 0 18px;">${fullMoney(amount)}</div>
+    <div class="center-note payment-part-caption">Платёж ${index+1}</div>
+    <div class="payment-part-amount">${fullMoney(amount)}</div>
     <div class="field"><label>Внесено наличными</label><input class="payment-input" type="number" id="splitCashGiven" min="0" step="0.01" inputmode="decimal" value="${given.toFixed(2)}" oninput="updateSplitCashChange(${amount})"></div>
     <div class="payment-quick">${buttons}</div>
-    <div class="field" style="margin-top:14px;"><label>Сдача</label><div id="splitCashChange" style="font-size:24px;font-weight:800;color:var(--accent);">${fullMoney(Math.max(0,given-amount))}</div></div>
-    <div class="modal-actions" style="margin-top:18px;">
+    <div class="field payment-change-field"><label>Сдача</label><div id="splitCashChange" class="payment-change payment-change-large">${fullMoney(Math.max(0,given-amount))}</div></div>
+    <div class="modal-actions">
       <button type="button" class="btn btn-secondary" onclick="closeModal();renderSplitPayment();">Отмена</button>
       <button type="button" class="btn btn-cash" onclick="confirmSplitCashPayment(${index},${amount})">Оплатить ${fullMoney(amount)}</button>
     </div>`, true);
@@ -444,8 +444,8 @@ async function completeSplitPayment(index){
 }
 function openCardPartConfirmation(amount,onSuccess){
   showModal(`<div class="modal-title">Оплата картой</div>
-    <div class="center-note" style="padding:18px 0 12px;">Проведите оплату на терминале</div>
-    <div style="font-size:30px;font-weight:800;text-align:center;margin-bottom:16px;">${fullMoney(amount)}</div>
+    <div class="center-note payment-card-instruction">Проведите оплату на терминале</div>
+    <div class="payment-card-amount">${fullMoney(amount)}</div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal();renderSplitPayment();">Отмена</button>
       <button class="btn btn-card" onclick="window.__cardPaymentConfirm&&window.__cardPaymentConfirm()">Оплата прошла</button>
@@ -469,7 +469,7 @@ async function beginPaymentWithLoyaltyGuard(action){
  finally{loyaltyPaymentGuardBusy=false}
  if(valid===true)return action();
  if(valid===false){flash('Подарок уже недоступен. Обновите клиента и повторите оплату');return}
- showModal(`<div class="modal-title">Нет связи с программой лояльности</div><div class="center-note" style="padding:10px 0 18px;">Продажу и оплату можно продолжить без интернета. Подарок сейчас подтвердить нельзя, поэтому он не будет списан и скидка по нему не применится.</div><div class="modal-actions"><button class="btn btn-secondary" onclick="cancelOfflinePayment()">Вернуться</button><button class="btn btn-primary" onclick="continuePaymentWithoutLoyalty()">Продолжить без подарка</button></div>`,true);window.__offlinePaymentAction=action;
+ showModal(`<div class="modal-title">Нет связи с программой лояльности</div><div class="center-note payment-offline-note">Продажу и оплату можно продолжить без интернета. Подарок сейчас подтвердить нельзя, поэтому он не будет списан и скидка по нему не применится.</div><div class="modal-actions"><button class="btn btn-secondary" onclick="cancelOfflinePayment()">Вернуться</button><button class="btn btn-primary" onclick="continuePaymentWithoutLoyalty()">Продолжить без подарка</button></div>`,true);window.__offlinePaymentAction=action;
  return false;
 }
 function confirmPaymentScreen(method,loyaltyValidated=false){
@@ -547,28 +547,28 @@ function receiptBodyHtml(order){
     const discount=receiptItemDiscount(i), total=receiptItemTotal(i);
     return `
     <div class="receipt-line"><span>${escapeHtml(i.name)} × ${i.qty}</span><span>${money(total)}</span></div>
-    ${discount>0 ? `<div class="receipt-line" style="font-size:12px;color:var(--accent);padding-top:0;"><span>↳ Скидка: ${escapeHtml(i.discountName)}${i.discountType==='percent'?` (${Number(i.discountValue)}%)`:''}</span><span>−${money(discount)}</span></div>` : ''}
-    ${(i.selectedModifiers||[]).length?`<div style="font-size:12px;color:var(--muted);padding:0 0 5px 10px;">↳ ${(i.selectedModifiers||[]).map(m=>escapeHtml(m.name)+(Number(m.priceDelta)?' ('+(Number(m.priceDelta)>0?'+':'')+money(m.priceDelta)+')':'')).join(' · ')}</div>`:''}
-    ${i.comment ? `<div style="font-size:12px;color:var(--muted);padding:0 0 5px 10px;"><strong>Комментарий:</strong> ${escapeHtml(i.comment)}</div>` : ''}`;
+    ${discount>0 ? `<div class="receipt-line payment-line-discount"><span>↳ Скидка: ${escapeHtml(i.discountName)}${i.discountType==='percent'?` (${Number(i.discountValue)}%)`:''}</span><span>−${money(discount)}</span></div>` : ''}
+    ${(i.selectedModifiers||[]).length?`<div class="receipt-line-detail">↳ ${(i.selectedModifiers||[]).map(m=>escapeHtml(m.name)+(Number(m.priceDelta)?' ('+(Number(m.priceDelta)>0?'+':'')+money(m.priceDelta)+')':'')).join(' · ')}</div>`:''}
+    ${i.comment ? `<div class="receipt-line-detail"><strong>Комментарий:</strong> ${escapeHtml(i.comment)}</div>` : ''}`;
   }).join('');
   return `
-    ${order.returnedAt ? `<div style="padding:10px 12px;margin-bottom:10px;border-radius:12px;background:#FFF1F1;color:#A22;font-weight:800;">Возврат · ${fmtDate(order.returnedAt)}</div>` : ''}
-    ${order.orderLabel ? `<div style="font-size:18px;font-weight:800;margin-bottom:5px;">${escapeHtml(order.orderLabel)}</div>` : ''}
-    <div style="font-size:12.5px;color:var(--muted);margin-bottom:10px;">${fmtDate(order.timestamp)} · ${order.method==='cash'?'Наличные':order.method==='card'?'Карта':'Наличные + карта'} · ${escapeHtml(order.orderType||'На месте')}</div>
+    ${order.returnedAt ? `<div class="receipt-return-banner">Возврат · ${fmtDate(order.returnedAt)}</div>` : ''}
+    ${order.orderLabel ? `<div class="receipt-order-label">${escapeHtml(order.orderLabel)}</div>` : ''}
+    <div class="receipt-order-meta">${fmtDate(order.timestamp)} · ${order.method==='cash'?'Наличные':order.method==='card'?'Карта':'Наличные + карта'} · ${escapeHtml(order.orderType||'На месте')}</div>
     ${order.customer && (order.customer.name||order.customer.phone||order.customer.address) ? `<div class="receipt-customer">${escapeHtml(order.customer.name||'')} ${escapeHtml(order.customer.phone||'')} ${escapeHtml(order.customer.address||'')}</div>`:''}
     ${lines}
     ${Number(order.deliveryFee||0)>0 ? `<div class="receipt-line"><span>Доставка</span><span>${fullMoney(order.deliveryFee)}</span></div>` : ''}
     ${(Array.isArray(order.payments) && order.payments.length) ? `
-      <div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px;font-size:12px;color:var(--muted);font-weight:800;">Платежи</div>
+      <div class="receipt-payment-heading">Платежи</div>
       ${order.payments.map((p,i)=>`<div class="receipt-line"><span>Платёж ${i+1} · ${p.method==='cash'?'Наличные':'Карта'}</span><span>${fullMoney(p.amount)}</span></div>`).join('')}
-      ${order.payments.filter(p=>p.method==='cash' && p.cashGiven!=null).map(p=>`<div class="receipt-line" style="font-size:12px;"><span>Наличные · внесено</span><span>${fullMoney(p.cashGiven)}</span></div><div class="receipt-line" style="font-size:12px;"><span>Сдача</span><span>${fullMoney(p.change||0)}</span></div>`).join('')}
+      ${order.payments.filter(p=>p.method==='cash' && p.cashGiven!=null).map(p=>`<div class="receipt-line receipt-line-compact"><span>Наличные · внесено</span><span>${fullMoney(p.cashGiven)}</span></div><div class="receipt-line receipt-line-compact"><span>Сдача</span><span>${fullMoney(p.change||0)}</span></div>`).join('')}
     ` : order.method==='cash' ? `
-      <div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px;font-size:12px;color:var(--muted);font-weight:800;">Платежи</div>
+      <div class="receipt-payment-heading">Платежи</div>
       <div class="receipt-line"><span>Наличные</span><span>${fullMoney(order.total)}</span></div>
       <div class="receipt-line"><span>Внесено</span><span>${fullMoney(order.cashGiven)}</span></div>
       <div class="receipt-line"><span>Сдача</span><span>${fullMoney(order.change)}</span></div>
     ` : `
-      <div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px;font-size:12px;color:var(--muted);font-weight:800;">Платежи</div>
+      <div class="receipt-payment-heading">Платежи</div>
       <div class="receipt-line"><span>Карта</span><span>${fullMoney(order.total)}</span></div>
     `}
     <div class="receipt-total"><span>Итого</span><span>${fullMoney(order.total)}</span></div>
@@ -596,9 +596,9 @@ function showPaymentReceipt(order){
   showModal(`
     <div class="modal-title">Чек оплачен</div>
     <div id="receipt-body">${receiptBodyHtml(order)}</div>
-    <div class="receipt-modal-actions" style="grid-template-columns:1fr 1fr;width:100%;">
-      <button class="btn receipt-action receipt-action-print" style="width:100%;" onclick="printPaymentReceipt('${escapeAttr(order.id)}')">Печать</button>
-      <button class="btn btn-cash receipt-action" style="width:100%;" onclick="finishPaymentFlow()">Готово</button>
+    <div class="receipt-modal-actions receipt-payment-complete-actions">
+      <button class="btn receipt-action receipt-action-print receipt-detail-action" onclick="printPaymentReceipt('${escapeAttr(order.id)}')">Печать</button>
+      <button class="btn btn-cash receipt-action receipt-detail-action" onclick="finishPaymentFlow()">Готово</button>
     </div>
   `);
 }

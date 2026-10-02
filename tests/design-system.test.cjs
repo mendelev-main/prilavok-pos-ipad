@@ -174,3 +174,16 @@ test('receipt history and returns use shared responsive presentation',()=>{
   assert.match(html,/\.receipts-layout\{/);
   assert.match(html,/@media\(max-width:900px\)\{\.receipts-layout\{grid-template-columns:1fr;/);
 });
+
+test('payment surfaces use shared presentation and semantic visibility',()=>{
+  const payment=featureSourceByName.get('payment.js');
+  assert.doesNotMatch(payment,/style="/);
+  assert.doesNotMatch(payment,/style\.display/);
+  assert.match(payment,/id="paymentKeypad" hidden/);
+  assert.match(payment,/id="splitKeypad-\$\{i\}" hidden/);
+  assert.match(payment,/kp\.hidden=false/);
+  assert.match(payment,/querySelectorAll\('\.split-keypad'\)\.forEach\(el=>el\.hidden=true\)/);
+  assert.match(html,/\.payment-total-row\{/);
+  assert.match(html,/\.receipt-payment-heading\{/);
+  assert.match(html,/\.payment-keypad\[hidden\],\.split-keypad\[hidden\],\.payment-quick\[hidden\]\{display:none;/);
+});
