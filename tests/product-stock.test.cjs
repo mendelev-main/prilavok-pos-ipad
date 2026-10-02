@@ -313,6 +313,11 @@ test('startup filters invalid product rows but preserves original catalogue byte
  const f=fixture(),raw=JSON.stringify([null,{id:'safe',name:'Безопасный',type:'simple',stock:1,cost:1,price:2}]);f.data.set('prilavok_products',raw);
  await assert.doesNotReject(f.c.loadAll());assert.equal(f.state.products.length,1);assert.equal(f.state.products[0].id,'safe');assert.equal(f.data.get('prilavok_products'),raw);assert.equal(vm.runInContext('storageBroken',f.c),true);
 });
+test('legacy products remain visible in online menu without changing online order setting',async()=>{
+ const f=fixture(),legacy={id:'legacy',name:'Старый товар',type:'simple',stock:1,cost:1,price:2,availableOnline:false};f.data.set('prilavok_products',JSON.stringify([legacy]));
+ await f.c.loadAll();const product=f.state.products[0];assert.equal(product.availableOnline,false);assert.equal(product.availableInOnlineMenu,true);
+ const saved=JSON.parse(f.data.get('prilavok_products'))[0];assert.equal(saved.availableOnline,false);assert.equal(saved.availableInOnlineMenu,true);
+});
 test('nested recipe multiplies quantities and aggregates repeated ingredients',()=>{
  const f=fixture();f.c.getProduct('pizza').components=[{productId:'dough',qty:2},{productId:'flour',qty:0.1}];
  const quantities=f.c.productIngredients(f.c.getProduct('pizza'),3);
@@ -864,8 +869,8 @@ test('valid nested recipe edit retains product ID and existing component shape',
 
 // v130.19 editor draft/save regression checks.
 function editorFixture(){
- const f=fixture();Object.assign(f.fields,{'pf-name':{value:'Мука новая'},'pf-category':{value:'Сырьё'},'pf-price':{value:'3'},'pf-cost':{value:'2'},'pf-stock':{value:'10'},'pf-symbol':{value:''},'pf-no-stock':{checked:false}});
- f.c._pmType='simple';f.c._pmComponents=[];f.c._pmOnline=false;f.c._pmRemoveImage=false;f.c._pmImageData=null;
+ const f=fixture();Object.assign(f.fields,{'pf-name':{value:'Мука новая'},'pf-category':{value:'Сырьё'},'pf-price':{value:'3'},'pf-cost':{value:'2'},'pf-stock':{value:'10'},'pf-symbol':{value:''},'pf-no-stock':{checked:false},'pf-description':{value:''}});
+ f.c._pmType='simple';f.c._pmComponents=[];f.c._pmOnline=false;f.c._pmOnlineMenu=false;f.c._pmRemoveImage=false;f.c._pmImageData=null;
  return f;
 }
 test('editor draft snapshot notices changes without mutating saved product',()=>{
@@ -942,6 +947,13 @@ test('configuration persists locally and internal note never enters menu payload
  const f=editorFixture();f.fields['pf-sku']={value:' RAW-001 '};f.fields['pf-note']={value:' Секрет рецептуры '};f.fields['pf-min-stock']={value:'2'};
  await f.c.saveProduct('flour');const saved=JSON.parse(f.data.get('prilavok_products')).find(p=>p.id==='flour');assert.equal(saved.sku,'RAW-001');assert.equal(saved.internalNote,'Секрет рецептуры');near(saved.minStock,2);
  assert.doesNotMatch(JSON.stringify(f.c.buildMenuSyncPayload()),/Секрет рецептуры|internalNote/);
+});
+test('online order, online menu and public description persist and sync independently',async()=>{
+ const f=editorFixture();f.c.currentShiftEmployeeIsAdmin=()=>true;f.c._pmOnline=false;f.c._pmOnlineMenu=true;f.fields['pf-description'].value='Тонкое тесто и томатный соус';
+ await f.c.saveProduct('flour');const saved=f.c.getProduct('flour'),web=f.c.buildMenuSyncPayload().products.find(p=>p.externalId==='flour');
+ assert.equal(saved.availableOnline,false);assert.equal(saved.availableInOnlineMenu,true);assert.equal(saved.description,'Тонкое тесто и томатный соус');
+ assert.equal(web.availableOnline,false);assert.equal(web.visibleInOnlineMenu,true);assert.equal(web.description,'Тонкое тесто и томатный соус');
+ assert.match(productEditorScript,/Онлайн заказ/);assert.match(productEditorScript,/Онлайн меню/);assert.match(productEditorScript,/id="pf-description"/);
 });
 test('negative minimum is rejected before local mutation',async()=>{
  const f=editorFixture();f.fields['pf-min-stock']={value:'-1'};const before=JSON.stringify(f.state.products);await f.c.saveProduct('flour');assert.equal(JSON.stringify(f.state.products),before);assert.equal(f.writes.length,0);
@@ -1298,7 +1310,7 @@ function importFixture(){const f=fixture();f.fields.app={inert:false};f.fields['
 test('import adds only name/category defaults and persists before publishing state',async()=>{
  const f=importFixture(),old=JSON.stringify(f.state.products),orders=JSON.stringify(f.state.orders);await f.c.confirmProductImport();
  assert.equal(JSON.stringify(f.state.products.slice(0,-1)),old);assert.equal(JSON.stringify(f.state.orders),orders);
- const p=f.state.products.at(-1);assert.equal(p.name,'Новый товар');assert.equal(p.category,'');assert.equal(p.price,0);assert.equal(p.stock,0);assert.equal(p.availableOnline,false);assert.equal(p.stockUnit,undefined);assert.equal(p.components,undefined);assert.deepEqual(f.writes,['prilavok_products']);assert.equal(f.fields.app.inert,false);
+ const p=f.state.products.at(-1);assert.equal(p.name,'Новый товар');assert.equal(p.category,'');assert.equal(p.price,0);assert.equal(p.stock,0);assert.equal(p.availableOnline,false);assert.equal(p.availableInOnlineMenu,false);assert.equal(p.stockUnit,undefined);assert.equal(p.components,undefined);assert.deepEqual(f.writes,['prilavok_products']);assert.equal(f.fields.app.inert,false);
  const plan=f.c.planProductImport([{name:'Новый товар',category:''}]);assert.equal(plan.add.length,0);
 });
 test('failed import storage write leaves existing products intact and permits retry',async()=>{

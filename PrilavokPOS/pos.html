@@ -1494,6 +1494,7 @@ async function loadAll(){
   for(const p of state.products){
     if(typeof p.sortOrder !== 'number'){ maxOrder += 1; p.sortOrder = maxOrder; if(productRowsValid)needSave = true; }
     if(typeof p.availableOnline !== 'boolean'){ p.availableOnline = true; if(productRowsValid)needSave = true; }
+    if(typeof p.availableInOnlineMenu !== 'boolean'){ p.availableInOnlineMenu = true; if(productRowsValid)needSave = true; }
     if(typeof p.imageUrl !== 'string'){ p.imageUrl = ''; if(productRowsValid)needSave = true; }
   }
   if(needSave) saveKey('products', state.products);
@@ -2109,6 +2110,7 @@ function buildMenuSyncPayload(){
     sortOrder:Number.isFinite(Number(p.sortOrder)) ? Number(p.sortOrder) : index,
     isActive:true,
     availableOnline:(p.availableOnline!==false) && (state.categoryOnline[String(p.category||'Без категории').trim() || 'Без категории']!==false),
+    visibleInOnlineMenu:(p.availableInOnlineMenu!==false) && (state.categoryOnline[String(p.category||'Без категории').trim() || 'Без категории']!==false),
     imageUrl:String(p.imageUrl||'')
   })).filter(p=>p.name);
   return {deviceKey:networkConfigFromState().deviceKey,deviceName:networkConfigFromState().deviceName,categories,products};

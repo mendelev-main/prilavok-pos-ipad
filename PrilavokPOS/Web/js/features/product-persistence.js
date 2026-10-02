@@ -13,6 +13,8 @@ async function saveProduct(editingId){
   const price = parseFloat(document.getElementById('pf-price').value) || 0;
   const tileSymbol = limitTileSymbol(document.getElementById('pf-symbol')?.value||'');
   const noStockTracking = !!document.getElementById('pf-no-stock')?.checked;
+  const canEditOnline = canEditProductWebSetting();
+  const onlineDescription = document.getElementById('pf-description')?.value.trim()||'';
   if(!name){ flash('Введите название'); return; }
   const type = window._pmType;
   if(type === 'composite' && window._pmComponents.length === 0){ flash('Добавьте хотя бы один товар в состав'); return; }
@@ -35,7 +37,9 @@ async function saveProduct(editingId){
       p.name = name; p.category = category; p.price = price; p.type = type;
       p.tileSymbol = tileSymbol;
       p.noStockTracking = noStockTracking;
-      p.availableOnline = canEditProductWebSetting() ? window._pmOnline !== false : getProduct(editingId)?.availableOnline !== false;
+      p.availableOnline = canEditOnline ? window._pmOnline !== false : getProduct(editingId)?.availableOnline !== false;
+      p.availableInOnlineMenu = canEditOnline ? window._pmOnlineMenu !== false : getProduct(editingId)?.availableInOnlineMenu !== false;
+      if(canEditOnline)p.description = onlineDescription;
       if(window._pmRemoveImage) p.imageUrl = '';
       if(type==='simple'){
         p.cost = parseFloat(document.getElementById('pf-cost').value) || 0;
@@ -51,7 +55,7 @@ async function saveProduct(editingId){
       const catKey = category.trim() || 'Без категории';
       const siblingOrders = state.products.filter(x=>productCategoryKey(x)===catKey).map(x=>x.sortOrder||0);
       const nextOrder = siblingOrders.length ? Math.max(...siblingOrders)+1 : 0;
-      p = {id: uid(), name, category, price, type, tileSymbol, noStockTracking, sortOrder: nextOrder, availableOnline: canEditProductWebSetting() ? window._pmOnline !== false : false, imageUrl:''};
+      p = {id: uid(), name, category, price, type, tileSymbol, noStockTracking, sortOrder: nextOrder, availableOnline: canEditOnline ? window._pmOnline !== false : false, availableInOnlineMenu: canEditOnline ? window._pmOnlineMenu !== false : false, description:canEditOnline?onlineDescription:'', imageUrl:''};
       if(type==='simple'){
         p.cost = parseFloat(document.getElementById('pf-cost')?.value) || 0;
         p.stock = parseFloat(document.getElementById('pf-stock')?.value) || 0;
@@ -107,7 +111,7 @@ function toggleProductOnline(id){
   const p=getProduct(id); if(!p) return;
   p.availableOnline = p.availableOnline===false;
   saveKey('products',state.products); render();
-  flash(p.availableOnline?'Товар опубликован в WEB':'Товар снят с публикации WEB');
+  flash(p.availableOnline?'Товар доступен для онлайн-заказа':'Товар недоступен для онлайн-заказа');
 }
 function toggleProductModalOnline(){
   if(!canEditProductWebSetting()){
@@ -117,4 +121,13 @@ function toggleProductModalOnline(){
   window._pmOnline = !window._pmOnline;
   const b=document.getElementById('pf-web-toggle');
   if(b){ b.classList.toggle('on',window._pmOnline); b.setAttribute('aria-checked',String(window._pmOnline)); }
+}
+function toggleProductModalMenu(){
+  if(!canEditProductWebSetting()){
+    flash('Настройку WEB может изменять только администратор при открытой им смене');
+    return;
+  }
+  window._pmOnlineMenu = !window._pmOnlineMenu;
+  const b=document.getElementById('pf-menu-toggle');
+  if(b){ b.classList.toggle('on',window._pmOnlineMenu); b.setAttribute('aria-checked',String(window._pmOnlineMenu)); }
 }

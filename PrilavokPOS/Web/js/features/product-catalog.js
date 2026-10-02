@@ -72,7 +72,7 @@ async function confirmProductImport(){
   const button=document.getElementById('product-import-confirm');if(button)button.disabled=true;
   try{
     const start=Math.max(0,...state.products.map(p=>Number(p.sortOrder)||0));
-    const added=plan.add.map((p,i)=>({id:uid(),name:p.name,category:p.category,type:'simple',price:p.price??0,cost:0,stock:0,noStockTracking:false,availableOnline:false,imageUrl:'',tileSymbol:'',sortOrder:start+i+1}));
+    const added=plan.add.map((p,i)=>({id:uid(),name:p.name,category:p.category,type:'simple',price:p.price??0,cost:0,stock:0,noStockTracking:false,availableOnline:false,availableInOnlineMenu:false,description:'',imageUrl:'',tileSymbol:'',sortOrder:start+i+1}));
     const next=[...state.products,...added];
     try{await window.PrilavokCore.Storage.set('products',next);}
     catch(e){markStorageBroken(e);flash('Импорт не сохранён: '+(e.message||'ошибка хранилища'));if(button)button.disabled=false;return;}
@@ -135,7 +135,7 @@ function renderProductsScreen(){
       <div class="products-table-cell"><span class="badge ${p.type==='composite'?'type-composite':''}">${typeLabel}</span></div>
       <div class="products-table-cell">${money(p.price)}</div>
       <div class="products-table-cell">${money(compositeCost(p))}</div>
-      <div class="products-table-cell products-web-cell"><button type="button" class="web-switch ${p.availableOnline!==false?'on':''}" role="switch" aria-label="Публиковать товар ${escapeAttr(p.name)} в WEB" aria-checked="${p.availableOnline!==false}" onclick="event.stopPropagation();toggleProductOnline(${productInlineArg(p.id)})" title="Публиковать в WEB"><span></span><b>WEB</b></button></div>
+      <div class="products-table-cell products-web-cell"><button type="button" class="web-switch ${p.availableOnline!==false?'on':''}" role="switch" aria-label="Онлайн заказ для товара ${escapeAttr(p.name)}" aria-checked="${p.availableOnline!==false}" onclick="event.stopPropagation();toggleProductOnline(${productInlineArg(p.id)})" title="Онлайн заказ"><span></span><b>Заказ</b></button></div>
       <div class="products-table-cell products-stock">${p.noStockTracking?'—':stockLabel}</div>
     </div>`;
   }).join('');
@@ -162,7 +162,7 @@ function renderProductsScreen(){
     <div class="card">
       <div class="section-mini-head"><div class="products-section-title">Товары</div><span class="badge">${query?filteredProducts.length+' / ':''}${state.products.length}</span></div>
       <div id="products-search-table" class="products-table" ${filteredProducts.length?'':'hidden'}>
-        <div class="products-table-head">${[['name','Товар'],['category','Категория'],['type','Тип'],['price','Цена'],['cost','Себестоимость'],['web','WEB'],['stock','Остаток']].map(([key,label])=>productSortHeader(key,label)).join('')}</div>
+        <div class="products-table-head">${[['name','Товар'],['category','Категория'],['type','Тип'],['price','Цена'],['cost','Себестоимость'],['web','Онлайн заказ'],['stock','Остаток']].map(([key,label])=>productSortHeader(key,label)).join('')}</div>
         ${rows}
       </div><div id="products-search-empty" class="center-note products-search-empty" ${filteredProducts.length?'hidden':''}>${state.products.length?'По вашему запросу товары не найдены.':'Пока нет товаров. Добавьте первый.'}</div>
     </div>
