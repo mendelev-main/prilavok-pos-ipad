@@ -14,6 +14,7 @@ const inventoryScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/feature
 const warehouseReportingScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/warehouse-reporting.js'),'utf8');
 const analyticsScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/analytics.js'),'utf8');
 const productCatalogScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/product-catalog.js'),'utf8');
+const productCategoriesScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/product-categories.js'),'utf8');
 const hallBookingsScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/hall-bookings.js'),'utf8');
 const printerScript=fs.readFileSync(path.join(root,'PrilavokPOS/network-printer.js'),'utf8');
 const appSwift=fs.readFileSync(path.join(root,'PrilavokPOS/PrilavokPOSApp.swift'),'utf8');
@@ -24,7 +25,7 @@ function fixture(){
  const data=new Map(),messages=[],writes=[],fields={'pf-prep-station':{value:'kitchen'},'pf-prep-difficulty':{value:'1'},'pf-base-prep-minutes':{value:'5'}},events=[];
  const document={getElementById:id=>fields[id]||null,querySelector:()=>null,addEventListener:()=>{}};
  const c={console:{error:()=>{}},document,crypto:{randomUUID:()=> 'device-test'},setTimeout:()=>0,clearTimeout:()=>{},addEventListener:()=>{},removeEventListener:()=>{},AbortController,localStorage:{getItem:k=>data.has(k)?data.get(k):null,setItem:(k,v)=>{data.set(k,String(v));writes.push(k);},removeItem:k=>data.delete(k)},fetch:()=>{throw Error('Network is prohibited in this test');},setInterval:()=>{throw Error('Timer is prohibited in this test');}};
- c.window=c;vm.createContext(c);vm.runInContext(adapter,c);vm.runInContext(inline.replace(/loadAll\(\);\s*$/,''),c);vm.runInContext(webOrdersScript,c);vm.runInContext(inventoryScript,c);vm.runInContext(warehouseReportingScript,c);vm.runInContext(analyticsScript,c);vm.runInContext(productCatalogScript,c);vm.runInContext(hallBookingsScript,c);
+ c.window=c;vm.createContext(c);vm.runInContext(adapter,c);vm.runInContext(inline.replace(/loadAll\(\);\s*$/,''),c);vm.runInContext(webOrdersScript,c);vm.runInContext(inventoryScript,c);vm.runInContext(warehouseReportingScript,c);vm.runInContext(analyticsScript,c);vm.runInContext(productCatalogScript,c);vm.runInContext(productCategoriesScript,c);vm.runInContext(hallBookingsScript,c);
  c.flash=m=>messages.push(m);c.render=()=>{};c.showReceipt=()=>{};c.showPaymentReceipt=()=>{};c.closeModal=()=>{};c.applyTheme=()=>{};
  const state=vm.runInContext('state',c);
  c.__printerSettingsSnapshot=()=>({printers:[],posNotifications:{soundEnabled:true,sound:'default'}});c.__restorePrinterSettings=()=>true;
@@ -34,7 +35,7 @@ function fixture(){
  async function sale(payments){cart();await c.finalizePayment(payments||[{method:'cash',amount:10}]);return state.orders[0];}
  return {c,state,data,messages,writes,fields,events,cart,sale};
 }
-test('all production JavaScript modules parse',()=>{new vm.Script(inline);new vm.Script(adapter);new vm.Script(webOrdersScript);new vm.Script(inventoryScript);new vm.Script(warehouseReportingScript);new vm.Script(analyticsScript);new vm.Script(productCatalogScript);new vm.Script(hallBookingsScript);new vm.Script(printerScript);});
+test('all production JavaScript modules parse',()=>{new vm.Script(inline);new vm.Script(adapter);new vm.Script(webOrdersScript);new vm.Script(inventoryScript);new vm.Script(warehouseReportingScript);new vm.Script(analyticsScript);new vm.Script(productCatalogScript);new vm.Script(productCategoriesScript);new vm.Script(hallBookingsScript);new vm.Script(printerScript);});
 test('WEB orders module loads before startup and preserves its public API',()=>{
  const moduleTag='<script src="Web/js/features/web-orders.js"></script>',startupTag='<script>loadAll();</script>';
  assert.ok(html.indexOf(moduleTag)>=0);assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));
@@ -59,6 +60,23 @@ test('product catalog module loads before startup and preserves its public API',
  const moduleTag='<script src="Web/js/features/product-catalog.js"></script>',startupTag='<script>loadAll();</script>';
  assert.ok(html.indexOf(moduleTag)>=0);assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));
  const f=fixture();for(const name of ['parseProductCSV','planProductImport','confirmProductImport','productMatchesSearch','sortProductsBy','sortedProductRows','renderProductsScreen','filterProductsScreen','clearProductsSearch'])assert.equal(typeof f.c[name],'function',name);
+});
+test('product categories module loads before startup and preserves its public API',()=>{
+ const moduleTag='<script src="Web/js/features/product-categories.js"></script>',startupTag='<script>loadAll();</script>';
+ assert.ok(html.indexOf(moduleTag)>=0);assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));
+ const f=fixture();for(const name of ['openCategoriesModal','openCategoryModal','selectCategoryColor','limitTileSymbol','saveCategory','toggleCategoryOnline','toggleCategoryModalOnline','deleteCategory'])assert.equal(typeof f.c[name],'function',name);
+});
+test('category create and rename preserve legacy layout, product and navigation references',()=>{
+ const f=fixture();Object.assign(f.state,{categoryOrder:[],categoryColors:{},categorySymbols:{},categoryOnline:{},layoutTiles:[]});Object.assign(f.fields,{'cf-name':{value:'Напитки'},'cf-color':{value:'#DDEBFF'},'cf-symbol':{value:'НП'}});f.c._cmOnline=false;f.c.saveCategory(null);
+ let layout=JSON.parse(f.data.get('prilavok_layout'));assert.deepEqual(layout.categoryOrder,['Напитки']);assert.equal(layout.categoryColors['Напитки'],'#DDEBFF');assert.equal(layout.categorySymbols['Напитки'],'НП');assert.equal(layout.categoryOnline['Напитки'],false);assert.equal(f.data.has('prilavok_products'),false);
+ const g=fixture();Object.assign(g.state,{categoryOrder:['Сырьё'],categoryColors:{'Сырьё':'#OLD'},categorySymbols:{'Сырьё':'С'},categoryOnline:{'Сырьё':false},layoutTiles:[{type:'category',id:'Сырьё'}],posNavigation:{version:1,categories:[{category:'Сырьё',items:[]}]}});Object.assign(g.fields,{'cf-name':{value:'Ингредиенты'},'cf-color':{value:'#DFF5E8'},'cf-symbol':{value:'ИНГ'}});g.c._cmOnline=false;g.c.saveCategory('Сырьё');
+ assert.equal(g.c.getProduct('flour').category,'Ингредиенты');assert.equal(g.state.layoutTiles[0].id,'Ингредиенты');assert.equal(g.state.posNavigation.categories[0].category,'Ингредиенты');assert.deepEqual(plain(g.state.categoryOrder),['Ингредиенты']);assert.equal(g.state.categoryColors['Сырьё'],undefined);assert.equal(g.state.categoryOnline['Ингредиенты'],false);assert.deepEqual(new Set(g.writes),new Set(['prilavok_posNavigation','prilavok_products','prilavok_layout']));assert.equal(JSON.parse(g.data.get('prilavok_products')).find(p=>p.id==='flour').category,'Ингредиенты');assert.equal(JSON.parse(g.data.get('prilavok_layout')).tiles[0].id,'Ингредиенты');
+});
+test('category tile symbol truncation keeps complete Unicode graphemes',()=>{
+ const f=fixture();assert.equal(f.c.limitTileSymbol('👨‍🍳❤️🇧🇾К'), '👨‍🍳❤️🇧🇾');assert.equal(f.c.limitTileSymbol('  КФ  '),'КФ');assert.equal(f.c.limitTileSymbol(''), '');
+});
+test('category deletion is blocked before confirmation while products still use it',()=>{
+ const f=fixture();f.state.categoryOrder=['Сырьё','Пустая'];let requested=null;f.c.requestDelete=(...args)=>{requested=args};f.c.deleteCategory('Сырьё');assert.equal(requested,null);assert.match(f.messages.at(-1),/есть товары/);assert.equal(f.writes.length,0);f.c.deleteCategory('Пустая');assert.deepEqual(requested,['category','Пустая']);
 });
 test('analytics keeps local payment, cost and grouping rules within the selected period',()=>{
  const f=fixture(),inside=new Date(2026,9,1,12).getTime(),outside=new Date(2026,8,30,12).getTime();
