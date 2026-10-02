@@ -103,7 +103,7 @@ function analyticsData(){
 function renderHbars(items, showValues=true){
   if(!items.length) return '<div class="center-note">Нет продаж за выбранный период.</div>';
   const max=Math.max(...items.map(x=>x.value),1);
-  return `<div class="hbar-list">${items.map(x=>`<div class="hbar-row"><div class="hbar-name" title="${escapeAttr(x.name)}">${escapeHtml(x.name)}</div><div class="hbar-track"><div class="hbar-fill" style="width:${Math.max(2,x.value/max*100)}%"></div></div>${showValues?`<div class="hbar-value">${money(x.value)}</div>`:'<div class="hbar-value" style="visibility:hidden">0</div>'}</div>`).join('')}</div>`;
+  return `<div class="hbar-list">${items.map(x=>`<div class="hbar-row"><div class="hbar-name" title="${escapeAttr(x.name)}">${escapeHtml(x.name)}</div><div class="hbar-track"><div class="hbar-fill" style="width:${Math.max(2,x.value/max*100)}%"></div></div>${showValues?`<div class="hbar-value">${money(x.value)}</div>`:'<div class="hbar-value hbar-value-hidden">0</div>'}</div>`).join('')}</div>`;
 }
 function renderAnalyticsBars(items,{format='money',percentTotal=0,percentOnly=false}={}){
   if(!items.length) return '<div class="center-note">Нет продаж за выбранный период.</div>';
@@ -140,8 +140,8 @@ function renderAnalyticsScreen(){
   const paymentTotal=d.cash+d.card;
   if(admin) loadLoyaltyAnalytics(from,to);
   const la=state.loyaltyAnalytics;
-  const loyaltyKpis=admin?`<div class="analytics-card" style="margin-bottom:14px"><div class="analytics-title">Клиенты и лояльность</div><div class="analytics-sub">Центральные данные POS + онлайн-заказы за выбранный период</div>${la?.error?'<div class="center-note">Нет связи с сервером. Продажи POS продолжают работать офлайн.</div>':!la||state.loyaltyAnalyticsKey!==(from+'|'+to)?'<div class="center-note">Загрузка…</div>':`<div class="analytics-kpis" style="margin-top:12px"><div class="analytics-kpi"><div class="k-label">Клиентов</div><div class="k-value">${la.customers||0}</div></div><div class="analytics-kpi"><div class="k-label">Новых</div><div class="k-value">${la.newCustomers||0}</div></div><div class="analytics-kpi"><div class="k-label">Повторных</div><div class="k-value">${la.repeatCustomers||0}</div></div><div class="analytics-kpi"><div class="k-label">Средний чек клиента</div><div class="k-value">${money(la.averageCustomerCheck||0)}</div></div><div class="analytics-kpi"><div class="k-label">Активных в лояльности</div><div class="k-value">${la.activeLoyaltyUsers||0}</div></div><div class="analytics-kpi"><div class="k-label">Подарков начислено</div><div class="k-value">${la.rewardsGranted||0}</div></div><div class="analytics-kpi"><div class="k-label">Подарков использовано</div><div class="k-value">${la.rewardsRedeemed||0}</div></div></div>`}</div>`:'';
-  const adminKpis=admin?`<div class="analytics-kpis" style="margin-bottom:14px;">
+  const loyaltyKpis=admin?`<div class="analytics-card analytics-section-gap"><div class="analytics-title">Клиенты и лояльность</div><div class="analytics-sub">Центральные данные POS + онлайн-заказы за выбранный период</div>${la?.error?'<div class="center-note">Нет связи с сервером. Продажи POS продолжают работать офлайн.</div>':!la||state.loyaltyAnalyticsKey!==(from+'|'+to)?'<div class="center-note">Загрузка…</div>':`<div class="analytics-kpis analytics-loyalty-kpis"><div class="analytics-kpi"><div class="k-label">Клиентов</div><div class="k-value">${la.customers||0}</div></div><div class="analytics-kpi"><div class="k-label">Новых</div><div class="k-value">${la.newCustomers||0}</div></div><div class="analytics-kpi"><div class="k-label">Повторных</div><div class="k-value">${la.repeatCustomers||0}</div></div><div class="analytics-kpi"><div class="k-label">Средний чек клиента</div><div class="k-value">${money(la.averageCustomerCheck||0)}</div></div><div class="analytics-kpi"><div class="k-label">Активных в лояльности</div><div class="k-value">${la.activeLoyaltyUsers||0}</div></div><div class="analytics-kpi"><div class="k-label">Подарков начислено</div><div class="k-value">${la.rewardsGranted||0}</div></div><div class="analytics-kpi"><div class="k-label">Подарков использовано</div><div class="k-value">${la.rewardsRedeemed||0}</div></div></div>`}</div>`:'';
+  const adminKpis=admin?`<div class="analytics-kpis analytics-section-gap">
       <div class="analytics-kpi"><div class="k-label">Выручка</div><div class="k-value">${money(d.revenue)}</div></div>
       <div class="analytics-kpi"><div class="k-label">Заказов</div><div class="k-value">${d.orders.length}</div></div>
       <div class="analytics-kpi"><div class="k-label">Средний чек</div><div class="k-value">${money(d.avg)}</div></div>
@@ -149,7 +149,7 @@ function renderAnalyticsScreen(){
       <div class="analytics-kpi"><div class="k-label">Стоимость остатков товаров</div><div class="k-value">${money(inventoryCostValue())}</div></div>
     </div>`:'';
   return `<div class="screen content-screen ${state.tab==='analytics'?'active':''}">
-    <div class="card" style="margin-bottom:14px;">
+    <div class="card analytics-section-gap">
       <div class="analytics-filters">
         <div class="analytics-period-head"><div><div class="analytics-period-title">Период аналитики</div><div class="analytics-period-sub">Выберите готовый период или задайте даты вручную.</div></div></div>
         <div class="analytics-period-layout">
@@ -167,7 +167,7 @@ function renderAnalyticsScreen(){
     </div>
     ${adminKpis}
     ${loyaltyKpis}
-    <div class="analytics-grid-2" style="margin-bottom:14px;">
+    <div class="analytics-grid-2 analytics-section-gap">
       <div class="analytics-card"><div class="analytics-title">Продажи сотрудников</div><div class="analytics-sub">${admin?'Выручка по сотруднику за выбранный период':'Продажи по сотруднику за выбранный период'}</div>${admin?renderHbars(d.employees,true):renderHbars(d.employees,false)}</div>
       <div class="analytics-card"><div class="analytics-title">Способы оплаты</div><div class="analytics-sub">Распределение оплат</div>${renderAnalyticsBars([{name:'Наличные',value:d.cash},{name:'Карта',value:d.card}],{format:'money',percentTotal:paymentTotal,percentOnly:!admin})}</div>
     </div>

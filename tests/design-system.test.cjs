@@ -103,3 +103,14 @@ test('settings and suppliers use shared presentation classes',()=>{
   assert.match(html,/\.settings-section-title\{/);
   assert.match(html,/\.supplier-product-option\[hidden\]/);
 });
+
+test('loyalty and analytics isolate dynamic chart presentation',()=>{
+  const loyalty=featureSourceByName.get('loyalty.js');
+  const analytics=featureSourceByName.get('analytics.js');
+  assert.doesNotMatch(loyalty,/style="/);
+  const dynamicStyles=[...analytics.matchAll(/style="([^"]*)"/g)].map(match=>match[1]);
+  assert.deepEqual(dynamicStyles,['width:${Math.max(2,x.value/max*100)}%','width:${Math.max(2,value/max*100)}%']);
+  assert.match(html,/\.loyalty-customer-section-title\{/);
+  assert.match(html,/\.analytics-section-gap\{/);
+  assert.match(html,/\.hbar-value-hidden\{/);
+});
