@@ -42,6 +42,12 @@ test('missing native printer bridge reports failure without throwing',async()=>{
   const f=fixture([receipt('r')]);delete f.c.webkit;await assert.doesNotReject(f.c.sendOrderToPrint(order));assert.equal(f.posts.length,0);assert.match(f.messages.at(-1),/только в приложении/);
 });
 
+test('printer module does not rewrite the network settings DOM',()=>{
+  assert.doesNotMatch(script,/decorateSettings|MutationObserver/);
+  assert.match(script,/window\.openPrintersManager/);
+  assert.match(script,/window\.openNotificationSettings/);
+});
+
 test('Swift bridge retains printer routing, validation, timeout and receipt document contracts',()=>{
   assert.match(swiftBridge,/case "print":[\s\S]*networkPrinter\.print\(order: order\)/);assert.match(swiftPrinter,/connectionTimeout:\s*TimeInterval\s*=\s*10/);assert.match(swiftPrinter,/validIPv4\(ip\)/);assert.match(swiftPrinter,/documentType=="kitchen"/);assert.match(swiftPrinter,/documentType=="shift-close"/);assert.match(swiftPrinter,/printPaymentComments/);assert.match(swiftPrinter,/receiptRandomPhrases/);assert.match(swiftPrinter,/discountName/);assert.match(swiftPrinter,/loyaltyProgramsApplied/);assert.match(swiftPrinter,/Скидки на товары/);
 });

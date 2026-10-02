@@ -131,6 +131,11 @@ test('system and network settings contain no inline presentation',()=>{
   assert.doesNotMatch(html,/style="/);
   assert.doesNotMatch(html,/☀️|🌙/);
   assert.match(html,/\.network-card-title\{/);
+  const networkScreen=html.slice(html.indexOf('function renderNetworkScreen()'),html.indexOf('function toggleTelegramToken()'));
+  assert.equal((networkScreen.match(/<section class="settings-card network-settings-card">/g)||[]).length,4);
+  assert.doesNotMatch(networkScreen,/class="settings-note/);
+  assert.match(networkScreen,/Меню и backend[\s\S]+Чековые принтеры[\s\S]+Уведомления[\s\S]+Telegram/);
+  assert.match(networkScreen,/openBackendSettings\(\)[\s\S]+openPrintersManager\(\)[\s\S]+openNotificationSettings\(\)[\s\S]+openTelegramSettings\(\)/);
   assert.match(html,/\.network-device-key\{/);
   assert.match(html,/\.telegram-token-row\{/);
   assert.match(html,/\.appearance-theme-options\{/);

@@ -7,3 +7,4 @@
 - [x] T5 Проверить network/theme regression scenarios.
 - [x] T6 Выполнить light/dark browser smoke-check и simulator build.
 - [x] T7 Обновить design system, roadmap и results.
+- [x] T8 Разделить сетевые настройки на четыре единообразные карточки и перенести справочные тексты в информационные окна.
