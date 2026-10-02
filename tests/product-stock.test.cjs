@@ -12,6 +12,7 @@ const adapter=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/core/storage.js
 const webOrdersScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/web-orders.js'),'utf8');
 const inventoryScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/inventory.js'),'utf8');
 const warehouseReportingScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/warehouse-reporting.js'),'utf8');
+const analyticsScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/analytics.js'),'utf8');
 const hallBookingsScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/hall-bookings.js'),'utf8');
 const printerScript=fs.readFileSync(path.join(root,'PrilavokPOS/network-printer.js'),'utf8');
 const appSwift=fs.readFileSync(path.join(root,'PrilavokPOS/PrilavokPOSApp.swift'),'utf8');
@@ -22,7 +23,7 @@ function fixture(){
  const data=new Map(),messages=[],writes=[],fields={'pf-prep-station':{value:'kitchen'},'pf-prep-difficulty':{value:'1'},'pf-base-prep-minutes':{value:'5'}},events=[];
  const document={getElementById:id=>fields[id]||null,querySelector:()=>null,addEventListener:()=>{}};
  const c={console:{error:()=>{}},document,crypto:{randomUUID:()=> 'device-test'},setTimeout:()=>0,clearTimeout:()=>{},addEventListener:()=>{},removeEventListener:()=>{},AbortController,localStorage:{getItem:k=>data.has(k)?data.get(k):null,setItem:(k,v)=>{data.set(k,String(v));writes.push(k);},removeItem:k=>data.delete(k)},fetch:()=>{throw Error('Network is prohibited in this test');},setInterval:()=>{throw Error('Timer is prohibited in this test');}};
- c.window=c;vm.createContext(c);vm.runInContext(adapter,c);vm.runInContext(inline.replace(/loadAll\(\);\s*$/,''),c);vm.runInContext(webOrdersScript,c);vm.runInContext(inventoryScript,c);vm.runInContext(warehouseReportingScript,c);vm.runInContext(hallBookingsScript,c);
+ c.window=c;vm.createContext(c);vm.runInContext(adapter,c);vm.runInContext(inline.replace(/loadAll\(\);\s*$/,''),c);vm.runInContext(webOrdersScript,c);vm.runInContext(inventoryScript,c);vm.runInContext(warehouseReportingScript,c);vm.runInContext(analyticsScript,c);vm.runInContext(hallBookingsScript,c);
  c.flash=m=>messages.push(m);c.render=()=>{};c.showReceipt=()=>{};c.showPaymentReceipt=()=>{};c.closeModal=()=>{};c.applyTheme=()=>{};
  const state=vm.runInContext('state',c);
  c.__printerSettingsSnapshot=()=>({printers:[],posNotifications:{soundEnabled:true,sound:'default'}});c.__restorePrinterSettings=()=>true;
@@ -32,7 +33,7 @@ function fixture(){
  async function sale(payments){cart();await c.finalizePayment(payments||[{method:'cash',amount:10}]);return state.orders[0];}
  return {c,state,data,messages,writes,fields,events,cart,sale};
 }
-test('all production JavaScript modules parse',()=>{new vm.Script(inline);new vm.Script(adapter);new vm.Script(webOrdersScript);new vm.Script(inventoryScript);new vm.Script(warehouseReportingScript);new vm.Script(hallBookingsScript);new vm.Script(printerScript);});
+test('all production JavaScript modules parse',()=>{new vm.Script(inline);new vm.Script(adapter);new vm.Script(webOrdersScript);new vm.Script(inventoryScript);new vm.Script(warehouseReportingScript);new vm.Script(analyticsScript);new vm.Script(hallBookingsScript);new vm.Script(printerScript);});
 test('WEB orders module loads before startup and preserves its public API',()=>{
  const moduleTag='<script src="Web/js/features/web-orders.js"></script>',startupTag='<script>loadAll();</script>';
  assert.ok(html.indexOf(moduleTag)>=0);assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));
@@ -47,6 +48,25 @@ test('warehouse reporting module loads before startup and preserves its public A
  const moduleTag='<script src="Web/js/features/warehouse-reporting.js"></script>',startupTag='<script>loadAll();</script>';
  assert.ok(html.indexOf(moduleTag)>=0);assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));
  const f=fixture();for(const name of ['warehouseRange','warehouseReport','warehouseExportPayload','openWarehousePage','renderWarehousePage','warehouseSelectedPayload','generateWarehouseReport'])assert.equal(typeof f.c[name],'function',name);
+});
+test('analytics module loads before startup and preserves its public API',()=>{
+ const moduleTag='<script src="Web/js/features/analytics.js"></script>',startupTag='<script>loadAll();</script>';
+ assert.ok(html.indexOf(moduleTag)>=0);assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));
+ const f=fixture();for(const name of ['analyticsRange','setAnalyticsDate','setAnalyticsPreset','analyticsOrders','analyticsData','renderAnalyticsBars','inventoryCostValue','loadLoyaltyAnalytics','renderAnalyticsScreen'])assert.equal(typeof f.c[name],'function',name);
+});
+test('analytics keeps local payment, cost and grouping rules within the selected period',()=>{
+ const f=fixture(),inside=new Date(2026,9,1,12).getTime(),outside=new Date(2026,8,30,12).getTime();
+ f.state.analyticsFrom='2026-10-01';f.state.analyticsTo='2026-10-01';f.state.shifts=[{id:'s1',employeeName:'Анна',status:'closed'}];
+ f.state.orders=[
+  {id:'paid',timestamp:inside,shiftId:'s1',total:30,payments:[{method:'cash',amount:10},{method:'card',amount:20}],items:[{productId:'flour',name:'Мука',price:15,qty:2,cost:2}]},
+  {id:'returned',timestamp:inside,shiftId:'s1',total:99,method:'cash',returnedAt:inside+1,items:[{productId:'water',name:'Вода',price:99,qty:1,cost:1}]},
+  {id:'outside',timestamp:outside,shiftId:'s1',total:50,method:'card',items:[]}
+ ];
+ const writes=f.writes.length,d=f.c.analyticsData();assert.deepEqual(plain(d.orders.map(x=>x.id)),['paid']);assert.equal(d.revenue,30);assert.equal(d.cash,10);assert.equal(d.card,20);assert.equal(d.cost,4);assert.equal(d.profit,26);assert.equal(d.avg,30);assert.deepEqual(plain(d.employees),[{name:'Анна',value:30}]);assert.deepEqual(plain(d.categories),[{name:'Сырьё',revenue:30,qty:2}]);assert.deepEqual(plain(d.products),[{name:'Мука',revenue:30,qty:2}]);assert.equal(f.c.inventoryCostValue(),30);assert.equal(f.writes.length,writes);
+});
+test('loyalty analytics failure stays isolated from local receipt analytics',async()=>{
+ const f=fixture(),inside=new Date(2026,9,1,12).getTime();f.state.analyticsFrom='2026-10-01';f.state.analyticsTo='2026-10-01';f.state.orders=[{id:'paid',timestamp:inside,total:12,method:'cash',items:[]}];
+ await assert.doesNotReject(f.c.loadLoyaltyAnalytics('2026-10-01','2026-10-01'));assert.equal(f.state.loyaltyAnalytics.error,true);assert.equal(f.c.analyticsData().revenue,12);assert.equal(f.state.orders.length,1);
 });
 test('hall bookings module loads before startup and preserves its public API',()=>{
  const moduleTag='<script src="Web/js/features/hall-bookings.js"></script>',startupTag='<script>loadAll();</script>';
