@@ -12,7 +12,7 @@
 | R4 | Граница входящих WEB-заказов | Изолировать EventSource/ACK от manual POS→backend sync и закрепить границу тестами | R1 | planned | — |
 | R5 | Единый scene lifecycle | Создавать окно и POS-контроллер ровно в одном месте | R1 | automated acceptance complete; device deferred | [012 lifecycle](specs/012-single-scene-lifecycle/spec.md) |
 | R6 | Immutable stock ledger | Хранить новые складские движения как неизменяемые события, не выдумывая историю для старых данных | R1 | planned | — |
-| R7 | Регрессия native bridge и печати | Покрыть payload/routing/copies/comments/reprint автотестами; raster и LAN остаются physical checks | R1 | planned | — |
+| R7 | Регрессия native bridge и печати | Покрыть payload/routing/copies/comments/reprint автотестами; raster и LAN остаются physical checks | R1 | automated acceptance complete; device deferred | [015 printer regression](specs/015-native-printer-regression/spec.md) |
 | R8 | Постепенная модульная миграция | Выносить из `pos.html` по одному домену без изменения storage, UI и lifecycle | R1, R7 | planned | — |
 | R9 | Аудит кода и схемы БД | Удалять только доказанно неиспользуемое; каждую миграцию выполнять отдельно с rollback-планом | R1 | planned | — |
 | R10 | Локальный OCR приёмки | Apple Vision OCR → parser → catalog matching → редактируемый draft; без сети и без автопроводки | R1, R6 | planned | — |
