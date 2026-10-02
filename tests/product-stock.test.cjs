@@ -20,6 +20,7 @@ const cartPresentationScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/
 const cartCompositionScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/cart-composition.js'),'utf8');
 const parkedOrdersScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/parked-orders.js'),'utf8');
 const paymentScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/payment.js'),'utf8');
+const receiptsScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/receipts.js'),'utf8');
 const hallBookingsScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/hall-bookings.js'),'utf8');
 const printerScript=fs.readFileSync(path.join(root,'PrilavokPOS/network-printer.js'),'utf8');
 const appSwift=fs.readFileSync(path.join(root,'PrilavokPOS/PrilavokPOSApp.swift'),'utf8');
@@ -30,7 +31,7 @@ function fixture(){
  const data=new Map(),messages=[],writes=[],fields={'pf-prep-station':{value:'kitchen'},'pf-prep-difficulty':{value:'1'},'pf-base-prep-minutes':{value:'5'}},events=[];
  const document={getElementById:id=>fields[id]||null,querySelector:()=>null,addEventListener:()=>{}};
  const c={console:{error:()=>{}},document,crypto:{randomUUID:()=> 'device-test'},setTimeout:()=>0,clearTimeout:()=>{},addEventListener:()=>{},removeEventListener:()=>{},AbortController,localStorage:{getItem:k=>data.has(k)?data.get(k):null,setItem:(k,v)=>{data.set(k,String(v));writes.push(k);},removeItem:k=>data.delete(k)},fetch:()=>{throw Error('Network is prohibited in this test');},setInterval:()=>{throw Error('Timer is prohibited in this test');}};
- c.window=c;vm.createContext(c);vm.runInContext(adapter,c);vm.runInContext(inline.replace(/loadAll\(\);\s*$/,''),c);vm.runInContext(webOrdersScript,c);vm.runInContext(inventoryScript,c);vm.runInContext(warehouseReportingScript,c);vm.runInContext(analyticsScript,c);vm.runInContext(productCatalogScript,c);vm.runInContext(productCategoriesScript,c);vm.runInContext(posNavigationScript,c);vm.runInContext(cartPresentationScript,c);vm.runInContext(cartCompositionScript,c);vm.runInContext(parkedOrdersScript,c);vm.runInContext(paymentScript,c);vm.runInContext(hallBookingsScript,c);
+ c.window=c;vm.createContext(c);vm.runInContext(adapter,c);vm.runInContext(inline.replace(/loadAll\(\);\s*$/,''),c);vm.runInContext(webOrdersScript,c);vm.runInContext(inventoryScript,c);vm.runInContext(warehouseReportingScript,c);vm.runInContext(analyticsScript,c);vm.runInContext(productCatalogScript,c);vm.runInContext(productCategoriesScript,c);vm.runInContext(posNavigationScript,c);vm.runInContext(cartPresentationScript,c);vm.runInContext(cartCompositionScript,c);vm.runInContext(parkedOrdersScript,c);vm.runInContext(paymentScript,c);vm.runInContext(receiptsScript,c);vm.runInContext(hallBookingsScript,c);
  c.flash=m=>messages.push(m);c.render=()=>{};c.showReceipt=()=>{};c.showPaymentReceipt=()=>{};c.closeModal=()=>{};c.applyTheme=()=>{};
  const state=vm.runInContext('state',c);
  c.__printerSettingsSnapshot=()=>({printers:[],posNotifications:{soundEnabled:true,sound:'default'}});c.__restorePrinterSettings=()=>true;
@@ -40,7 +41,7 @@ function fixture(){
  async function sale(payments){cart();await c.finalizePayment(payments||[{method:'cash',amount:10}]);return state.orders[0];}
  return {c,state,data,messages,writes,fields,events,cart,sale};
 }
-test('all production JavaScript modules parse',()=>{new vm.Script(inline);new vm.Script(adapter);new vm.Script(webOrdersScript);new vm.Script(inventoryScript);new vm.Script(warehouseReportingScript);new vm.Script(analyticsScript);new vm.Script(productCatalogScript);new vm.Script(productCategoriesScript);new vm.Script(posNavigationScript);new vm.Script(cartPresentationScript);new vm.Script(cartCompositionScript);new vm.Script(parkedOrdersScript);new vm.Script(paymentScript);new vm.Script(hallBookingsScript);new vm.Script(printerScript);});
+test('all production JavaScript modules parse',()=>{new vm.Script(inline);new vm.Script(adapter);new vm.Script(webOrdersScript);new vm.Script(inventoryScript);new vm.Script(warehouseReportingScript);new vm.Script(analyticsScript);new vm.Script(productCatalogScript);new vm.Script(productCategoriesScript);new vm.Script(posNavigationScript);new vm.Script(cartPresentationScript);new vm.Script(cartCompositionScript);new vm.Script(parkedOrdersScript);new vm.Script(paymentScript);new vm.Script(receiptsScript);new vm.Script(hallBookingsScript);new vm.Script(printerScript);});
 test('WEB orders module loads before startup and preserves its public API',()=>{
  const moduleTag='<script src="Web/js/features/web-orders.js"></script>',startupTag='<script>loadAll();</script>';
  assert.ok(html.indexOf(moduleTag)>=0);assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));
@@ -107,6 +108,11 @@ test('payment module loads before startup and preserves its public API',()=>{
  const moduleTag='<script src="Web/js/features/payment.js"></script>',startupTag='<script>loadAll();</script>';
  assert.ok(html.indexOf(moduleTag)>=0);assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));assert.doesNotMatch(inline,/function finalizePayment\s*\(/);
  const f=fixture();for(const name of ['paymentCartLines','openPaymentModal','renderPaymentScreen','closePaymentPage','openSplitPayment','buildSplitPayments','validateSplitPaymentDraft','completeSplitPayment','beginPaymentWithLoyaltyGuard','confirmPaymentScreen','finalizePayment','receiptBodyHtml','sendOrderToPrint','showPaymentReceipt'])assert.equal(typeof f.c[name],'function',name);
+});
+test('receipts module loads after payment and before startup with its public API',()=>{
+ const paymentTag='<script src="Web/js/features/payment.js"></script>',moduleTag='<script src="Web/js/features/receipts.js"></script>',startupTag='<script>loadAll();</script>';
+ assert.ok(html.indexOf(moduleTag)>html.indexOf(paymentTag));assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));assert.doesNotMatch(inline,/function processFullReturn\s*\(/);
+ const f=fixture();for(const name of ['showReceipt','viewReceiptModal','restoreOrderStock','openReturnConfirm','processFullReturn','printReceipt','selectReceipt','renderReceiptsScreen'])assert.equal(typeof f.c[name],'function',name);
 });
 test('category create and rename preserve legacy layout, product and navigation references',()=>{
  const f=fixture();Object.assign(f.state,{categoryOrder:[],categoryColors:{},categorySymbols:{},categoryOnline:{},layoutTiles:[]});Object.assign(f.fields,{'cf-name':{value:'Напитки'},'cf-color':{value:'#DDEBFF'},'cf-symbol':{value:'НП'}});f.c._cmOnline=false;f.c.saveCategory(null);
@@ -568,6 +574,14 @@ test('return journal recovers stock, receipt and cash movement together',async()
  assert.ok(restarted.state.orders[0].returnedAt);near(restarted.c.getProduct('flour').stock,10);near(restarted.c.getProduct('water').stock,10);
  assert.equal(restarted.state.shifts[0].cashMovements.filter(x=>x.subtype==='refund').length,1);
 });
+test('cash, card and split returns keep exact drawer balance and shift report',async()=>{
+ for(const [payments,before,refundCash] of [[[{method:'cash',amount:10}],110,10],[[{method:'card',amount:10}],100,0],[[{method:'cash',amount:4},{method:'card',amount:6}],104,4]]){
+  const f=fixture(),order=await f.sale(payments);assert.equal(f.c.cashDrawerBalance(f.state.shifts[0]),before);
+  await f.c.processFullReturn(order.id);
+  const totals=f.c.shiftTotals('shift');assert.equal(totals.cash,0);assert.equal(totals.netMovements,refundCash?-refundCash:0);assert.equal(totals.refundCashMovements,refundCash);
+  assert.equal(f.c.cashDrawerBalance(f.state.shifts[0],totals),100);assert.equal(f.c.buildShiftReportPayload(f.state.shifts[0]).expectedCash,100);
+ }
+});
 test('deleted sold composite does not affect return of recorded ingredients',async()=>{
  const f=fixture(),order=await f.sale();f.state.products=f.state.products.filter(p=>p.id!=='pizza'&&p.id!=='dough');f.c.restoreOrderStock(order);near(f.c.getProduct('flour').stock,10);
 });
@@ -582,6 +596,17 @@ test('legacy receipt has no fabricated snapshot and retains legacy one-level ret
 test('invalid snapshot or missing target cannot partially change stock, cash or receipt',async()=>{
  for(const snapshot of [null,{version:2,items:[]},{version:1,items:[{productId:'flour',qty:0.2},{productId:'missing',qty:0.1}]},{version:1,items:[{productId:'flour',qty:-1}]},{version:1,items:[{productId:'flour',qty:1},{productId:'flour',qty:1}]}]){
   const f=fixture(),order=await f.sale();order.stockConsumption=snapshot;const before=JSON.stringify(f.state);await f.c.processFullReturn(order.id);assert.equal(JSON.stringify(f.state),before);assert.match(f.messages.at(-1),/Не удалось выполнить возврат/);
+ }
+});
+test('invalid return totals or cash parts cannot mutate stock, receipt or shift',async()=>{
+ for(const corrupt of [
+  order=>{order.total=Infinity},
+  order=>{order.payments=[{method:'cash',amount:NaN}]},
+  order=>{order.payments=[{method:'cash',amount:11},{method:'card',amount:-1}]}
+ ]){
+  const f=fixture(),order=await f.sale();corrupt(order);const before=JSON.stringify(f.state),writeCount=f.writes.length;
+  await f.c.processFullReturn(order.id);
+  assert.equal(JSON.stringify(f.state),before);assert.equal(f.writes.length,writeCount);assert.match(f.messages.at(-1),/Некорректн/);
  }
 });
 test('cycles, absent ingredients, empty recipe and invalid quantity fail safely',()=>{

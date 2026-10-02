@@ -498,7 +498,7 @@ async function finalizePayment(payments){
   if(Math.abs(paidTotal-total)>0.001){flash('Сумма платежей не совпадает с суммой чека');return;}
   const cashAmount=clean.filter(p=>p.method==='cash').reduce((s,p)=>s+p.amount,0);
   const deliveryFee=state.orderType==='Доставка'?Number(state.deliveryFee||0):0;
-  if(deliveryFee>0){const t=shiftTotals(shift.id);const available=Number(shift.openingCash||0)+Number(t.cash||0)+Number(t.netMovements||0)+cashAmount;if(deliveryFee>available+0.0001){flash('Недостаточно наличных в кассе для списания доставки');return;}}
+  if(deliveryFee>0){const t=shiftTotals(shift.id);const available=cashDrawerBalance(shift,t)+cashAmount;if(deliveryFee>available+0.0001){flash('Недостаточно наличных в кассе для списания доставки');return;}}
   if(!state.cart.length){flash('Заказ пуст');return;}
   let stockConsumption;
   try{ stockConsumption=checkedStockConsumption(state.cart); }

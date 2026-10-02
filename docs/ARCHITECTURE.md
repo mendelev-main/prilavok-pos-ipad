@@ -22,6 +22,7 @@ Swift/UIKit application
       ├─ Web/js/features/cart-composition.js: добавление, модификаторы, количество и удаление строк
       ├─ Web/js/features/parked-orders.js: атомарная парковка, восстановление и удаление заказов
       ├─ Web/js/features/payment.js: cash/card/split, durable draft, проведение и оплаченный чек
+      ├─ Web/js/features/receipts.js: история чеков, LAN reprint handoff и атомарный полный возврат
       ├─ Web/js/features/hall-bookings.js: карта зала, столы и локальные бронирования
       ├─ network-printer.js: JS-граница LAN-печати
       └─ notification-native.js: native notifications
@@ -54,8 +55,10 @@ critical storage journal. `warehouse-reporting.js` только читает л�
 прежнюю локальную сессию; parking/payment/receipt остаются отдельной критической границей.
 `parked-orders.js` проводит park, resume и delete через существующий critical storage journal;
 память меняется только после устойчивой локальной записи, а kitchen print запускается после park.
-`payment.js` сохраняет прежние cash/card/split screens, loyalty guard и атомарное проведение продажи;
-история чеков, возвраты и общая printer orchestration остаются отдельными границами.
+`payment.js` сохраняет прежние cash/card/split screens, loyalty guard и атомарное проведение продажи.
+`receipts.js` использует сохранённый при продаже снимок списания, проводит остатки/чек/кассу одним
+critical journal и передаёт повторную печать существующему LAN printer path. Физический баланс кассы
+считает наличный возврат один раз, хотя он остаётся отдельным движением для аудита.
 
 ## Данные и offline-first
 
