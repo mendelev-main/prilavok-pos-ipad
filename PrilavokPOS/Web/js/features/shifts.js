@@ -89,8 +89,8 @@ function renderShiftScreen(shift){
     openBlock = `
       <div class="card shift-summary-card">
         <div class="shift-summary-actions">
-          <button class="btn btn-success" style="width:auto;" onclick="openCashMovementModal('deposit')">Внести наличные</button>
-          <button class="btn btn-danger" style="width:auto;" onclick="openCashMovementModal('withdrawal')">Изъять наличные</button>
+          <button class="btn btn-success shift-summary-action" onclick="openCashMovementModal('deposit')">Внести наличные</button>
+          <button class="btn btn-danger shift-summary-action" onclick="openCashMovementModal('withdrawal')">Изъять наличные</button>
         </div>
 
         <div class="shift-summary-header">
@@ -120,41 +120,40 @@ function renderShiftScreen(shift){
 
           <div class="shift-summary-section">
             <div class="shift-summary-title">Выручка</div>
-            <div class="shift-summary-row total" style="margin-top:0;padding-top:0;border-top:0;"><span>Выручка</span><strong>${money(netRevenue)}</strong></div>
+            <div class="shift-summary-row total shift-revenue-total"><span>Выручка</span><strong>${money(netRevenue)}</strong></div>
             <div class="shift-summary-row"><span>Наличные</span><strong>${money(t.cash)}</strong></div>
             <div class="shift-summary-row"><span>Карта</span><strong>${money(t.card)}</strong></div>
           </div>
         </div>
 
-        ${t.movements.length ? `<div style="margin-top:16px;padding:16px 18px;background:var(--bg);border:1px solid var(--border);border-radius:16px;"><div style="font-weight:800;font-size:14px;margin-bottom:6px;">Движение средств</div>${t.movements.slice().reverse().map(m=>`<div class="list-row" style="padding:8px 0;"><div style="flex:1;"><div class="list-row-name">${m.type==='deposit'?'Внесение наличных':(m.subtype==='delivery'||m.note==='🚗 Доставка'?'🚗 Доставка':(m.subtype==='refund'||m.note==='↩️ Возврат чека'?'↩️ Возврат чека':'Изъятие наличных'))}</div><div class="list-row-sub">${fmtDate(m.timestamp)}${m.note?' · '+escapeHtml(m.note):''}</div></div><div class="badge">${m.type==='deposit'?'+':'−'}${money(m.amount)}</div></div>`).join('')}</div>` : ''}
+        ${t.movements.length ? `<div class="shift-movements-card"><div class="shift-movements-title">Движение средств</div>${t.movements.slice().reverse().map(m=>`<div class="list-row shift-movement-row"><div class="shift-row-main"><div class="list-row-name">${m.type==='deposit'?'Внесение наличных':(m.subtype==='delivery'||m.note==='🚗 Доставка'?'Доставка':(m.subtype==='refund'||m.note==='↩️ Возврат чека'?'Возврат чека':'Изъятие наличных'))}</div><div class="list-row-sub">${fmtDate(m.timestamp)}${m.note?' · '+escapeHtml(m.note):''}</div></div><div class="badge">${m.type==='deposit'?'+':'−'}${money(m.amount)}</div></div>`).join('')}</div>` : ''}
         <div class="shift-summary-footer">
-          <button class="btn btn-danger-outline" style="width:auto;padding:10px 18px;" onclick="openCloseShiftModal()">Закрыть смену</button>
+          <button class="btn btn-danger-outline shift-close-button" onclick="openCloseShiftModal()">Закрыть смену</button>
         </div>
       </div>`;  } else {
     openBlock = `
-      <div class="card" style="text-align:center;padding:36px 20px;">
-        <div style="font-weight:800;font-size:16px;margin-bottom:6px;">Смена закрыта</div>
-        <div class="center-note" style="padding:0 0 16px;">Откройте смену, чтобы начать принимать заказы.</div>
-        <button class="btn btn-primary" style="width:auto;padding:12px 24px;" onclick="openShiftModal()">Открыть смену</button>
+      <div class="card shift-closed-card">
+        <div class="shift-closed-title">Смена закрыта</div>
+        <div class="center-note shift-closed-note">Откройте смену, чтобы начать принимать заказы.</div>
+        <button class="btn btn-primary shift-open-button" onclick="openShiftModal()">Открыть смену</button>
       </div>`;
   }
   return `
   <div class="screen content-screen ${state.tab==='shift'?'active':''}">
     <div class="content-head"><div class="content-title">Кассовая смена</div></div>
     ${openBlock}
-    <div style="height:22px;"></div>
-    <div class="content-title" style="font-size:16px;margin-bottom:12px;">История смен</div>
+    <div class="content-title shift-history-title">История смен</div>
     <div class="card">
       ${history.length ? history.map(s=>{
         const t = shiftTotals(s.id);
         const diff = (s.countedCash||0) - cashDrawerBalance(s,t);
         return `
-        <div class="list-row" style="cursor:pointer;" onclick="viewShiftModal('${escapeAttr(s.id)}')">
-          <div style="flex:1;">
+        <div class="list-row shift-history-row" onclick="viewShiftModal('${escapeAttr(s.id)}')">
+          <div class="shift-row-main">
             <div class="list-row-name">${fmtDate(s.openedAt)} — ${fmtDate(s.closedAt)}</div>
             <div class="list-row-sub">${escapeHtml(s.employeeName||'Сотрудник не указан')} · Заказов: ${t.count} · Наличные ${money(t.cash)} · Карта ${money(t.card)}</div>
           </div>
-          <div class="badge" style="color:${Math.abs(diff)<0.01?'var(--muted)':'var(--danger)'};">Расхожд.: ${money(diff)}</div>
+          <div class="badge shift-difference-badge ${Math.abs(diff)<0.01?'is-balanced':'has-difference'}">Расхожд.: ${money(diff)}</div>
         </div>`;
       }).join('') : `<div class="center-note">Ещё нет закрытых смен</div>`}
     </div>
@@ -169,15 +168,15 @@ function openShiftModal(){
     <div class="field"><label>Сотрудник</label>
       ${employees.length ? `<select id="sf-employee" onchange="toggleShiftAdminPassword()"><option value="">Выберите сотрудника</option>${employees.map(e=>`<option value="${escapeAttr(e.id)}">${escapeHtml(employeeShortName(e.name))}${e.role==='admin'?' · АДМИНИСТРАТОР':''}</option>`).join('')}</select>` : `<div class="settings-note">Сначала добавьте сотрудников в Настройки → Сотрудники.</div>`}
     </div>
-    <div id="sf-admin-password-wrap" class="field" style="margin-top:12px;display:none;">
+    <div id="sf-admin-password-wrap" class="field shift-admin-password" hidden>
       <label>Пароль администратора</label>
       <input id="sf-admin-password" type="password" autocomplete="off" placeholder="Введите пароль">
-      <div class="settings-note" style="margin-top:6px;">Для открытия смены администратором требуется пароль.</div>
+      <div class="settings-note shift-admin-note">Для открытия смены администратором требуется пароль.</div>
     </div>
     <div class="field">
       <label>Наличные при открытии смены</label>
-      <div style="font-size:26px;font-weight:800;">${fullMoney(previousCash)}</div>
-      <div class="settings-note" style="margin-top:8px;">Проверьте Наличные в кассе. Сумма перенесена с прошлой смены</div>
+      <div class="shift-opening-cash">${fullMoney(previousCash)}</div>
+      <div class="settings-note shift-opening-note">Проверьте Наличные в кассе. Сумма перенесена с прошлой смены</div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal()">Отмена</button>
@@ -192,7 +191,7 @@ function toggleShiftAdminPassword(){
   if(!select || !wrap) return;
   const employee=state.employees.find(e=>e.id===select.value);
   const isAdmin=employee?.role==='admin';
-  wrap.style.display=isAdmin?'block':'none';
+  wrap.hidden=!isAdmin;
   if(!isAdmin && password) password.value='';
   if(isAdmin) setTimeout(()=>password?.focus(),50);
 }
@@ -269,7 +268,7 @@ function openCloseShiftModal(){
   showModal(`
     <div class="modal-title">Закрыть смену</div>
     <div class="field"><label>Ожидается в кассе (наличные)</label>
-      <div style="font-size:20px;font-weight:800;">${fullMoney(expected)}</div>
+      <div class="shift-expected-cash">${fullMoney(expected)}</div>
     </div>
     <div class="field"><label>Фактически пересчитано</label>
       <input type="number" id="sf-counted" inputmode="decimal" min="0" step="0.01" value="${expected}">
@@ -317,23 +316,23 @@ function viewShiftModal(shiftId){
   const report=buildShiftReportPayload(shift);
   showModal(`
     <div class="modal-title">Отчёт по смене</div>
-    <div class="list-row-sub" style="margin-bottom:14px;">${fmtDate(shift.openedAt)} — ${fmtDate(shift.closedAt)} · ${escapeHtml(shift.employeeName||'Сотрудник не указан')}</div>
+    <div class="list-row-sub shift-report-meta">${fmtDate(shift.openedAt)} — ${fmtDate(shift.closedAt)} · ${escapeHtml(shift.employeeName||'Сотрудник не указан')}</div>
     <div class="grid-3">
       <div class="stat-box"><div class="label">Заказов</div><div class="value">${t.count}</div></div>
       <div class="stat-box"><div class="label">Выручка</div><div class="value">${money(t.total)}</div></div>
       <div class="stat-box"><div class="label">Наличные</div><div class="value">${money(t.cash)}</div></div>
     </div>
-    <div class="grid-2" style="margin-top:12px;">
+    <div class="grid-2 shift-report-grid-spaced">
       <div class="stat-box"><div class="label">Карта</div><div class="value">${money(t.card)}</div></div>
-      <div class="stat-box"><div class="label">Расхождение</div><div class="value" style="color:${Math.abs(diff)<0.01?'var(--ink)':'var(--danger)'};">${money(diff)}</div></div>
+      <div class="stat-box"><div class="label">Расхождение</div><div class="value shift-difference-value ${Math.abs(diff)<0.01?'is-balanced':'has-difference'}">${money(diff)}</div></div>
     </div>
-    <div class="grid-2" style="margin-top:12px;">
+    <div class="grid-2 shift-report-grid-spaced">
       <div class="stat-box"><div class="label">Внесено наличных</div><div class="value">${money(t.deposits)}</div></div>
       <div class="stat-box"><div class="label">Изъято наличных</div><div class="value">${money(t.withdrawals)}</div></div>
     </div>
-    <div style="margin-top:16px;font-weight:800;">Движение наличных</div>
-    <div style="max-height:180px;overflow:auto;border-top:1px solid var(--border);margin-top:8px;">
-      ${t.movements.length ? t.movements.slice().sort((a,b)=>(a.timestamp||0)-(b.timestamp||0)).map(m=>`<div class="list-row"><div style="flex:1;"><div class="list-row-name">${m.type==='deposit'?'Внесение наличных':(m.subtype==='delivery'||m.note==='🚗 Доставка'?'🚗 Доставка':(m.subtype==='refund'||m.note==='↩️ Возврат чека'?'↩️ Возврат чека':'Изъятие наличных'))}</div><div class="list-row-sub">${fmtDate(m.timestamp)}${m.note?' · '+escapeHtml(m.note):''}</div></div><div class="badge">${m.type==='deposit'?'+':'−'}${money(m.amount)}</div></div>`).join('') : '<div class="center-note">Движения наличных не было</div>'}
+    <div class="shift-report-section-title">Движение наличных</div>
+    <div class="shift-report-movements">
+      ${t.movements.length ? t.movements.slice().sort((a,b)=>(a.timestamp||0)-(b.timestamp||0)).map(m=>`<div class="list-row shift-report-movement-row"><div class="shift-row-main"><div class="list-row-name">${m.type==='deposit'?'Внесение наличных':(m.subtype==='delivery'||m.note==='🚗 Доставка'?'Доставка':(m.subtype==='refund'||m.note==='↩️ Возврат чека'?'Возврат чека':'Изъятие наличных'))}</div><div class="list-row-sub">${fmtDate(m.timestamp)}${m.note?' · '+escapeHtml(m.note):''}</div></div><div class="badge">${m.type==='deposit'?'+':'−'}${money(m.amount)}</div></div>`).join('') : '<div class="center-note">Движения наличных не было</div>'}
     </div>
     <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Закрыть</button><button class="btn btn-primary" onclick="printShiftReport('${escapeAttr(shift.id)}')">Распечатать отчёт</button></div>
   `, true);

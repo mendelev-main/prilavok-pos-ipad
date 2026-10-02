@@ -187,3 +187,15 @@ test('payment surfaces use shared presentation and semantic visibility',()=>{
   assert.match(html,/\.receipt-payment-heading\{/);
   assert.match(html,/\.payment-keypad\[hidden\],\.split-keypad\[hidden\],\.payment-quick\[hidden\]\{display:none;/);
 });
+
+test('shift surfaces use shared presentation and semantic visibility',()=>{
+  const shifts=featureSourceByName.get('shifts.js');
+  assert.doesNotMatch(shifts,/style="/);
+  assert.doesNotMatch(shifts,/style\.display/);
+  assert.match(shifts,/id="sf-admin-password-wrap" class="field shift-admin-password" hidden/);
+  assert.match(shifts,/wrap\.hidden=!isAdmin/);
+  assert.match(shifts,/class="badge shift-difference-badge \$\{Math\.abs\(diff\)<0\.01\?'is-balanced':'has-difference'\}"/);
+  assert.match(html,/\.shift-movements-card\{/);
+  assert.match(html,/\.shift-admin-password\[hidden\]\{display:none;/);
+  assert.match(html,/\.shift-report-movements\{/);
+});
