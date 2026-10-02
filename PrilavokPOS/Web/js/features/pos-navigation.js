@@ -380,9 +380,9 @@ function onSearch(v){
   if(!grid)return;
   const q=state.search.trim().toLocaleLowerCase('ru');
   grid.querySelectorAll('.layout-tile').forEach(tile=>{
-    if(!q){tile.style.display='';return;}
-    if(tile.dataset.tileType!=='product'){tile.style.display='none';return;}
+    if(!q){tile.hidden=false;return;}
+    if(tile.dataset.tileType!=='product'){tile.hidden=true;return;}
     const p=getProduct(tile.dataset.id);
-    tile.style.display=p&&String(p.name||'').toLocaleLowerCase('ru').includes(q)?'':'none';
+    tile.hidden=!(p&&String(p.name||'').toLocaleLowerCase('ru').includes(q));
   });
 }

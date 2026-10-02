@@ -1419,6 +1419,17 @@ test('category UI exposes layout controls and folder contents without root tile 
  const f=navigationFixture();await f.c.savePosFolder();const html=f.c.renderPosScreen(f.c.currentShift());assert.match(html,/Создать папку/);assert.match(html,/data-tile-type="folder"/);assert.match(html,/category-edit-grid/);assert.ok(!html.includes('removeLayoutTile(undefined)'));
 });
 
+test('workspace search uses hidden state and restores every tile',()=>{
+ const f=fixture(),tiles=[
+  {dataset:{tileType:'product',id:'flour'},hidden:false},
+  {dataset:{tileType:'product',id:'water'},hidden:false},
+  {dataset:{tileType:'category',id:'Сырьё'},hidden:false}
+ ],grid={querySelectorAll:()=>tiles};
+ f.c.document.getElementById=id=>id==='sections-wrap'?grid:null;
+ f.c.onSearch('му');assert.deepEqual(tiles.map(tile=>tile.hidden),[false,true,true]);
+ f.c.onSearch('');assert.deepEqual(tiles.map(tile=>tile.hidden),[false,false,false]);
+});
+
 test('category drag drop delegates correct target and cancelled drag does not save',()=>{
  const f=navigationFixture();let call=null;f.c.reorderPosCategoryTile=(...args)=>{call=args;};f.c.gridMetrics=()=>({cols:4});const tile={dataset:{tileType:'product',id:'a'},releasePointerCapture:()=>{}},grid={querySelectorAll:()=>[]};
  const make=()=>({category:'Пицца',folder:'',tile,index:0,pointerId:1,dragging:true,target:{row:1,col:2},grid});f.c.dragTest=make();vm.runInContext('layoutDragState=dragTest',f.c);f.c.onLayoutPointerUp({pointerId:1,type:'pointerup',preventDefault:()=>{}});assert.deepEqual(call,['product','a',6]);

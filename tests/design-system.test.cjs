@@ -210,3 +210,26 @@ test('inventory surfaces use shared responsive presentation',()=>{
   assert.match(html,/\.inventory-work-actions\{/);
   assert.match(html,/@media\(max-width:700px\)\{\.inventory-frequency-grid\{grid-template-columns:1fr;/);
 });
+
+test('all remaining dynamic presentation has an explicit contract',()=>{
+  const inline=[];
+  for(const [name,source] of featureSourceByName){
+    for(const match of source.matchAll(/style="([^"]*)"/g))inline.push(`${name}:${match[1]}`);
+  }
+  assert.deepEqual(inline.sort(),[
+    'analytics.js:width:${Math.max(2,value/max*100)}%',
+    'analytics.js:width:${Math.max(2,x.value/max*100)}%',
+    "hall-bookings.js:left:${t.x}%;top:${t.y}%;transform:rotate(${Number(t.rotation||0)}deg)${state.selectedHallTableId===t.id?' scale(1.015)':''};",
+    "pos-navigation.js:${pos}",
+    'pos-navigation.js:--category-color:${categoryColor}',
+    "product-categories.js:--category-color:${state.categoryColors[c]||'#EEF1F5'}",
+    'product-categories.js:--category-color:${color}'
+  ].sort());
+  assert.doesNotMatch(production,/style\.cssText/);
+  assert.doesNotMatch(featureSourceByName.get('purchase-orders.js'),/\.style\.(?:position|opacity)/);
+  assert.doesNotMatch(featureSourceByName.get('pos-navigation.js'),/style\.display/);
+  assert.match(featureSourceByName.get('pos-navigation.js'),/tile\.hidden=!\(p&&String\(p\.name\|\|''\)\.toLocaleLowerCase\('ru'\)\.includes\(q\)\)/);
+  assert.match(html,/\.flash-toast\{/);
+  assert.match(html,/\.clipboard-copy-buffer\{/);
+  assert.match(html,/\.layout-tile\[hidden\]\{display:none;/);
+});

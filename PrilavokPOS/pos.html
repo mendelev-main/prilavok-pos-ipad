@@ -110,6 +110,8 @@
   .main{flex:1;min-height:0;min-width:0;overflow:hidden;}
   .screen{display:none;height:100%;width:100%;min-width:0;max-width:100%;}
   .screen.active{display:flex;}
+  .flash-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);max-width:calc(100vw - 32px);background:var(--navy);color:#fff;padding:12px 20px;border-radius:100px;font-weight:600;font-size:14px;line-height:1.35;text-align:center;z-index:999;box-shadow:0 8px 24px rgba(0,0,0,.25);pointer-events:none;}
+  .clipboard-copy-buffer{position:fixed;opacity:0;pointer-events:none;}
 
   /* ---- POS screen ---- */
   #screen-pos{gap:16px;padding:16px;min-width:0;overflow:hidden;}
@@ -182,6 +184,7 @@
   .layout-cell-highlight{position:absolute;pointer-events:none;border:2px dashed var(--accent);background:var(--accent-soft);border-radius:18px;z-index:0;transition:all .08s ease;}
   .category-edit-grid{position:relative;}.category-edit-grid .layout-tile{touch-action:none;}.navigation-action{position:relative;z-index:2;min-height:44px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-s);background:var(--surface);color:var(--ink);font-size:12px;align-self:flex-end;}
   .layout-tile{position:relative;min-width:0;z-index:1;}
+  .layout-tile[hidden]{display:none;}
   .layout-tile.drag-placeholder{visibility:hidden;}
   .layout-drag-clone{
     position:fixed;z-index:9999;pointer-events:none;width:var(--drag-w);height:var(--drag-h);
@@ -2405,8 +2408,9 @@ function productCategoryKey(p){ return (p.category||'').trim() || 'Без кат
 
 function flash(msg){
   const el = document.createElement('div');
+  el.className = 'flash-toast';
+  el.setAttribute('role','status');
   el.textContent = msg;
-  el.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1B1F2A;color:#fff;padding:12px 20px;border-radius:100px;font-weight:600;font-size:14px;z-index:999;box-shadow:0 8px 24px rgba(0,0,0,.25);';
   document.body.appendChild(el);
   setTimeout(()=>el.remove(), 1800);
 }

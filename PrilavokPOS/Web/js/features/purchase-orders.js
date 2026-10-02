@@ -226,7 +226,7 @@ async function copyPurchaseOrder(id){
   const order=state.purchaseOrders.find(o=>o.id===id);if(!order)return;
   const text=purchaseOrderText(order);
   try{await navigator.clipboard.writeText(text);}
-  catch(e){const ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();}
+  catch(e){const ta=document.createElement('textarea');ta.value=text;ta.className='clipboard-copy-buffer';document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();}
   flash('Текст заказа скопирован');
 }
 function sharePurchaseOrder(id){
