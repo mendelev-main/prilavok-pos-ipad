@@ -340,10 +340,13 @@
   .cart-row.swipe-delete .cart-row-content{transform:translateX(-100%);transition:transform .22s cubic-bezier(.55,0,1,.45);}
   @media (hover:none) and (pointer:coarse){.cart-row-swipe-bg{display:flex;}}
   .cart-row-top{display:flex;justify-content:space-between;gap:8px;margin-bottom:3px;}
-  .cart-row-name{font-weight:700;font-size:14px;line-height:1.3;min-width:0;}
+  .cart-row-name{font-weight:700;font-size:14px;line-height:1.35;min-width:0;overflow-wrap:anywhere;}
   .cart-row-title-line{display:flex;align-items:baseline;justify-content:space-between;gap:10px;}
   .cart-row-title-line .cart-row-linetotal{flex:none;font-weight:800;white-space:nowrap;}
-  .cart-row-sub{font-size:12px;color:var(--muted);margin-top:2px;}
+  .cart-row-sub{font-size:12px;color:var(--muted);margin-top:2px;line-height:1.45;overflow-wrap:anywhere;}
+  .cart-row-main{width:100%;min-width:0;}
+  .cart-row-detail{color:var(--ink);margin-top:5px;}
+  .cart-order-comment{color:var(--ink);margin-top:6px;}
   .cart-row-remove{color:var(--muted);font-size:18px;padding:2px 4px;flex-shrink:0;}
   .cart-row-bottom{display:flex;justify-content:space-between;align-items:center;}
   .cart-row-bottom-compact{justify-content:flex-end;margin-top:2px;}
@@ -372,10 +375,16 @@
   }
   .cart-row-linetotal{font-weight:800;font-size:14.5px;}
   .cart-foot{padding:16px 20px 20px;border-top:1px solid var(--border);}
-  .total-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
+  .total-row{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px;}
   .total-row .label{font-size:14.5px;color:var(--muted);font-weight:600;}
-  .total-row .value{font-size:26px;font-weight:800;}
-  .cart-actions{display:flex;gap:8px;}
+  .total-row .value{font-size:26px;font-weight:800;text-align:right;}
+  .cart-total-meta{margin-bottom:10px;}
+  .cart-total-meta .label,.cart-total-meta .value{font-size:14px;line-height:1.4;}
+  .cart-actions{display:flex;gap:8px;}.cart-actions .btn{min-width:0;}
+  .cart-actions-primary{margin-top:8px;}
+  .delivery-total-field{margin-top:12px;}
+  .delivery-total-value{font-size:24px;font-weight:800;line-height:1.25;overflow-wrap:anywhere;}
+  .modifier-selection-total{font-size:22px;font-weight:800;line-height:1.3;margin-top:14px;overflow-wrap:anywhere;}
   .btn{
     padding:14px 12px;border-radius:var(--radius-m);font-weight:700;font-size:14.5px;text-align:center;flex:1;
     transition:opacity .15s,transform .08s;

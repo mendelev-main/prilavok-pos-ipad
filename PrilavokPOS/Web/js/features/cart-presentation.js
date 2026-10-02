@@ -4,11 +4,11 @@ function renderCartPanel(shift){
       <div class="cart-row-swipe-bg"><div class="cart-swipe-delete-action"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v5"/><path d="M14 11v5"/></svg><span>Удалить</span></div></div>
       <div class="cart-row-content">
       <div class="cart-row-top">
-        <div style="width:100%;min-width:0;">
+        <div class="cart-row-main">
           <div class="cart-row-title-line"><div class="cart-row-name">${escapeHtml(i.name)}</div><div class="cart-row-linetotal">${money(itemTotal(i))}</div></div>
           <div class="cart-row-sub">${money(i.price)} / шт · ×${i.qty}${i.discountId ? ' · '+escapeHtml((state.discounts.find(d=>d.id===i.discountId)||{}).name||'Скидка') : ''}</div>
-          ${(i.selectedModifiers||[]).length?`<div class="cart-row-sub" style="color:var(--ink);margin-top:5px;">↳ ${(i.selectedModifiers||[]).map(m=>escapeHtml(m.name)).join(' · ')}</div>`:''}
-          ${i.comment ? `<div class="cart-row-sub" style="color:var(--ink);margin-top:5px;"><strong>Комментарий:</strong> ${escapeHtml(i.comment)}</div>` : ''}
+          ${(i.selectedModifiers||[]).length?`<div class="cart-row-sub cart-row-detail">↳ ${(i.selectedModifiers||[]).map(m=>escapeHtml(m.name)).join(' · ')}</div>`:''}
+          ${i.comment ? `<div class="cart-row-sub cart-row-detail"><strong>Комментарий:</strong> ${escapeHtml(i.comment)}</div>` : ''}
         </div>
       </div>
       </div>
@@ -24,18 +24,18 @@ function renderCartPanel(shift){
     <div class="cart-head"><span class="cart-order-title">Текущий заказ <span class="cart-position-count">— ${state.cart.reduce((s,i)=>s+i.qty,0)} поз.</span></span><div class="cart-head-actions"><span id="cart-add-feedback" class="cart-add-feedback">Добавлено</span><button class="cart-customer-button ${state.customer?.id?'selected':''}" onclick="openOrderCustomer()" aria-label="${state.customer?.id?'Изменить клиента заказа':'Выбрать клиента'}" title="${escapeAttr(state.customer?.name||'Выбрать клиента')}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg></button></div></div>
     <div class="order-meta">
       <button class="order-type-btn" onclick="openOrderSettings()">${state.orderLabel?'<b>'+escapeHtml(state.orderLabel)+'</b> · ':''}${escapeHtml(state.orderType)}${state.customer.name||state.customer.phone?' · '+escapeHtml(state.customer.name||state.customer.phone):''}</button>
-      ${state.orderComment?`<div class="cart-row-sub" style="color:var(--ink);margin-top:6px;"><strong>Комментарий:</strong> ${escapeHtml(state.orderComment)}</div>`:''}
+      ${state.orderComment?`<div class="cart-row-sub cart-order-comment"><strong>Комментарий:</strong> ${escapeHtml(state.orderComment)}</div>`:''}
     </div>
     <div class="cart-items">${rows}</div>
     <div class="cart-foot">
-      ${state.orderType==='Доставка' ? `<div class="total-row" style="font-size:14px;"><span class="label">🚗 Доставка</span><span class="value">${hasDeliveryTariff()?fullMoney(deliveryFee):'Выберите тариф'}</span></div>` : ''}
-      ${loyaltyRewardDiscount()>0?`<div class="total-row" style="font-size:14px;"><span class="label">🎁 Программа лояльности</span><span class="value">−${fullMoney(loyaltyRewardDiscount())}</span></div>`:''}
+      ${state.orderType==='Доставка' ? `<div class="total-row cart-total-meta"><span class="label">Доставка</span><span class="value">${hasDeliveryTariff()?fullMoney(deliveryFee):'Выберите тариф'}</span></div>` : ''}
+      ${loyaltyRewardDiscount()>0?`<div class="total-row cart-total-meta"><span class="label">Программа лояльности</span><span class="value">−${fullMoney(loyaltyRewardDiscount())}</span></div>`:''}
       <div class="total-row"><span class="label">Итого</span><span class="value">${fullMoney(total)}</span></div>
       <div class="cart-actions">
         <button class="btn btn-secondary" ${hasItems?'':'disabled'} onclick="parkOrder()">Отложить</button>
         ${hasItems&&state.currentOrderSource==='web'&&state.currentWebOrderId&&state.currentWebOrderStatus!=='ready'?'<button class="btn btn-primary" onclick="markCurrentWebOrderReady()">Заказ готов</button>':''}
       </div>
-      <div class="cart-actions" style="margin-top:8px;">
+      <div class="cart-actions cart-actions-primary">
         <button class="btn btn-primary" ${hasItems&&shift?'':'disabled'} onclick="openPaymentModal()">Оплатить</button>
       </div>
     </div>
@@ -110,7 +110,7 @@ function openOrderSettings(){
       <div class="field"><label>Стоимость доставки</label>
         ${state.deliveryRates.length ? `<div class="radio-row">${state.deliveryRates.map(r=>`<button class="radio-opt ${state.deliveryTariffSelected&&Number(state.deliveryFee||0)===Number(r.amount)?'selected':''}" onclick="selectDeliveryFee(${Number(r.amount)||0})">${escapeHtml(r.name)} · ${money(r.amount)}</button>`).join('')}</div>` : `<div class="settings-note">Стоимость доставки пока не настроена. Добавьте варианты во вкладке Настройки.</div>`}
       </div>
-      <div class="field" style="margin-top:12px;"><label>Итого заказа</label><div style="font-size:24px;font-weight:800;">${fullMoney(cartTotal())}</div></div>`:''}
+      <div class="field delivery-total-field"><label>Итого заказа</label><div class="delivery-total-value">${fullMoney(cartTotal())}</div></div>`:''}
     <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button class="btn btn-primary" onclick="saveOrderSettings()">Сохранить</button></div>`);
 }
 function setOrderType(t){ if(state.orderType!==t)state.deliveryTariffSelected=false;state.orderType=t; if(t!=='Доставка') state.deliveryFee=0; saveCurrentOrderSession(); render(); openOrderSettings(); }

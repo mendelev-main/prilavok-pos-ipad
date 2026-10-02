@@ -180,7 +180,7 @@ Success, warning и info пока не выделены в корневые то
 | DS-07 | Типографика | Исправлено в spec 048: используются только загруженные веса 400–800 | контролируется автоматическим тестом |
 | DS-08 | Тёмная тема | Исправлено в spec 048: `.btn-primary` и `.btn-cash` используют `--accent-ink` | проверить контраст на физическом iPad |
 | DS-09 | Иконки | Исправлено в spec 049: standalone actions используют общий CSS icon set и accessible labels; emoji удалены из управляющей подачи | inline SVG верхней панели остаются частью того же stroke-style |
-| DS-10 | Inline styles | После spec 057 осталось 152 inline style-атрибута; `pos.html` очищен полностью, а динамические шаблоны ранее обработанных доменов закреплены regression-тестами | продолжать только по отдельным feature-модулям, начиная с cart presentation |
+| DS-10 | Inline styles | После spec 058 осталось 142 inline style-атрибута; `pos.html`, cart presentation и cart composition очищены полностью, а динамические шаблоны ранее обработанных доменов закреплены regression-тестами | продолжать только по отдельным feature-модулям; критические receipts/payment/shifts/inventory вести раздельно |
 | DS-11 | WEB switch accessibility | Исправлено в spec 048: button switches передают роль, имя и текущее состояние; native checkbox доступен для focus | контролируется автоматическим тестом |
 | DS-12 | Шрифт offline | Исправлено в spec 049: Manrope variable font и OFL license включены в `Web` bundle, Google Fonts удалён | наличие ресурса контролируется automated design checks |
 

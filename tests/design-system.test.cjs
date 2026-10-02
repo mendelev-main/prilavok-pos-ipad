@@ -134,3 +134,14 @@ test('system and network settings contain no inline presentation',()=>{
   assert.match(html,/\.telegram-token-row\{/);
   assert.match(html,/\.appearance-theme-options\{/);
 });
+
+test('cart presentation uses readable shared classes',()=>{
+  const presentation=featureSourceByName.get('cart-presentation.js');
+  const composition=featureSourceByName.get('cart-composition.js');
+  assert.doesNotMatch(presentation,/style="/);
+  assert.doesNotMatch(composition,/style="/);
+  assert.doesNotMatch(presentation,/🚗|🎁/);
+  assert.match(html,/\.cart-row-detail\{/);
+  assert.match(html,/\.cart-total-meta\{/);
+  assert.match(html,/\.modifier-selection-total\{/);
+});
