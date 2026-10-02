@@ -165,3 +165,12 @@ test('warehouse report modal uses shared presentation classes',()=>{
   assert.match(warehouse,/Формирование отчёта[\s\S]+class="modal-actions"/);
   assert.match(html,/\.warehouse-report-options\{/);
 });
+
+test('receipt history and returns use shared responsive presentation',()=>{
+  const receipts=featureSourceByName.get('receipts.js');
+  assert.doesNotMatch(receipts,/style="/);
+  assert.match(receipts,/class="list-row receipts-list-row \$\{o\.id===selected\?\.id\?'selected':''\} \$\{o\.returnedAt\?'returned':''\}"/);
+  assert.match(receipts,/class="receipt-return-amount"/);
+  assert.match(html,/\.receipts-layout\{/);
+  assert.match(html,/@media\(max-width:900px\)\{\.receipts-layout\{grid-template-columns:1fr;/);
+});

@@ -1,0 +1,8 @@
+# Implementation Plan
+
+1. Добавить regression contract presentation чеков.
+2. Перенести статические стили истории, деталей и возврата в именованные классы.
+3. Представить selected/returned как условные классы.
+4. Добавить адаптивную одноколоночную раскладку для узкой поверхности.
+5. Выполнить light/dark и wide/narrow smoke-check.
+6. Выполнить полные tests и simulator build.

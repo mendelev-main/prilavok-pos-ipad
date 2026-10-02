@@ -9,7 +9,7 @@ function viewReceiptModal(orderId){
     <div id="receipt-body">${receiptBodyHtml(order)}</div>
     <div class="receipt-modal-actions">
       <button class="btn receipt-action receipt-action-print" onclick="printReceipt('${order.id}')">Печать</button>
-      ${order.returnedAt ? `<div class="receipt-action receipt-return-sticker" style="display:flex;align-items:center;justify-content:center;">Возврат</div>` : `<button type="button" class="btn receipt-action receipt-action-return" onclick="window.openReturnConfirm('${escapeAttr(order.id)}')">Вернуть</button>`}
+      ${order.returnedAt ? `<div class="receipt-action receipt-return-sticker">Возврат</div>` : `<button type="button" class="btn receipt-action receipt-action-return" onclick="window.openReturnConfirm('${escapeAttr(order.id)}')">Вернуть</button>`}
       <button class="btn receipt-action receipt-action-close" onclick="closeModal()">Закрыть</button>
     </div>
   `);
@@ -57,9 +57,9 @@ function openReturnConfirm(orderId){
   const total=Number(order.total||0);
   showModal(`
     <div class="modal-title">Возврат товара</div>
-    <div class="settings-note" style="margin-bottom:14px;">Будет выполнен полный возврат чека. Все товары вернутся на склад, а покупателю будет возвращена сумма <b>${fullMoney(total)}</b>.</div>
-    <div class="field"><label>Чек</label><div style="font-size:16px;font-weight:800;">${fmtDate(order.timestamp)} · ${order.method==='cash'?'Наличные':order.method==='card'?'Карта':'Наличные + карта'}</div></div>
-    <div class="field"><label>К возврату</label><div style="font-size:26px;font-weight:800;">${fullMoney(total)}</div></div>
+    <div class="settings-note receipt-return-note">Будет выполнен полный возврат чека. Все товары вернутся на склад, а покупателю будет возвращена сумма <b>${fullMoney(total)}</b>.</div>
+    <div class="field"><label>Чек</label><div class="receipt-return-meta">${fmtDate(order.timestamp)} · ${order.method==='cash'?'Наличные':order.method==='card'?'Карта':'Наличные + карта'}</div></div>
+    <div class="field"><label>К возврату</label><div class="receipt-return-amount">${fullMoney(total)}</div></div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal()">Отмена</button>
       <button class="btn btn-danger" onclick="window.processFullReturn('${escapeAttr(order.id)}')">Вернуть ${fullMoney(total)}</button>
@@ -110,7 +110,7 @@ async function processFullReturn(orderId){
     setTimeout(()=>showModal(`
       <div class="modal-title">Возврат выполнен</div>
       <div class="settings-note">Товары возвращены на остатки. ${refundCash>0?'Наличная часть списана из текущей кассовой смены как «Возврат чека».':''}${(order.method==='card'||order.method==='split')?' Карточная часть возвращается через банковский терминал.':''}</div>
-      <div class="field"><label>Сумма возврата</label><div style="font-size:26px;font-weight:800;">${fullMoney(total)}</div></div>
+      <div class="field"><label>Сумма возврата</label><div class="receipt-return-amount">${fullMoney(total)}</div></div>
       <div class="modal-actions"><button type="button" class="btn btn-secondary" onclick="viewReceiptModal('${escapeAttr(committedOrder.id)}')">Открыть чек</button><button type="button" class="btn btn-primary" onclick="closeModal()">Готово</button></div>`),50);
   }catch(e){
     console.error('processFullReturn error',e);
@@ -148,11 +148,11 @@ function renderReceiptsScreen(){
   return `
   <div class="screen content-screen ${state.tab==='receipts'?'active':''}">
     <div class="content-head"><div class="content-title">Чеки</div></div>
-    <div style="display:grid;grid-template-columns:minmax(320px,.82fr) minmax(440px,1.18fr);gap:16px;min-height:0;flex:1;">
-      <div class="card" id="receipts-list" style="min-height:0;overflow:auto;">
+    <div class="receipts-layout">
+      <div class="card receipts-list" id="receipts-list">
         ${list.length ? list.map(o=>`
-          <div class="list-row" style="cursor:pointer;border-radius:14px;margin:3px 0;${o.id===selected?.id?'background:var(--accent-soft);border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);':''}${o.returnedAt?'opacity:.72;':''}" onclick="selectReceipt('${escapeAttr(o.id)}')">
-            <div style="flex:1;min-width:0;">
+          <div class="list-row receipts-list-row ${o.id===selected?.id?'selected':''} ${o.returnedAt?'returned':''}" onclick="selectReceipt('${escapeAttr(o.id)}')">
+            <div class="receipts-list-main">
               <div class="list-row-name">${o.items.reduce((sum,i)=>sum+i.qty,0)} поз. · ${fullMoney(o.total)}</div>
               <div class="list-row-sub">${fmtDate(o.timestamp)} · ${o.method==='cash'?'Наличные':o.method==='card'?'Карта':'Наличные + карта'} · ${escapeHtml(o.orderType||'На месте')}${o.returnedAt?' · возвращён '+fmtDate(o.returnedAt):''}</div>
             </div>
@@ -160,13 +160,13 @@ function renderReceiptsScreen(){
           </div>
         `).join('') : `<div class="center-note">Чеков пока нет — они появятся здесь после первой оплаты.</div>`}
       </div>
-      <div class="card" style="min-height:0;overflow:hidden;display:flex;flex-direction:column;">
+      <div class="card receipt-detail-card">
         ${selected ? `
-          <div style="font-size:20px;font-weight:800;margin-bottom:14px;flex:0 0 auto;">Чек ${escapeHtml(selected.receiptDisplayNumber||'')}</div>
-          <div id="receipt-body" style="flex:1;min-height:0;overflow:auto;padding-right:4px;">${receiptBodyHtml(selected)}</div>
-          <div class="receipt-modal-actions" style="margin-top:18px;grid-template-columns:1fr 1fr;width:100%;flex:0 0 auto;">
-            <button class="btn receipt-action receipt-action-print" style="width:100%;" onclick="printReceipt('${escapeAttr(selected.id)}')">Печать</button>
-            ${selected.returnedAt ? `<div class="receipt-action receipt-return-sticker" style="display:flex;align-items:center;justify-content:center;width:100%;">Возврат</div>` : `<button type="button" class="btn receipt-action receipt-action-return" style="width:100%;" onclick="window.openReturnConfirm('${escapeAttr(selected.id)}')">Вернуть</button>`}
+          <div class="receipt-detail-title">Чек ${escapeHtml(selected.receiptDisplayNumber||'')}</div>
+          <div id="receipt-body" class="receipt-detail-body">${receiptBodyHtml(selected)}</div>
+          <div class="receipt-modal-actions receipt-detail-actions">
+            <button class="btn receipt-action receipt-action-print receipt-detail-action" onclick="printReceipt('${escapeAttr(selected.id)}')">Печать</button>
+            ${selected.returnedAt ? `<div class="receipt-action receipt-return-sticker receipt-detail-action">Возврат</div>` : `<button type="button" class="btn receipt-action receipt-action-return receipt-detail-action" onclick="window.openReturnConfirm('${escapeAttr(selected.id)}')">Вернуть</button>`}
           </div>
         ` : `<div class="center-note">Выберите чек слева.</div>`}
       </div>
