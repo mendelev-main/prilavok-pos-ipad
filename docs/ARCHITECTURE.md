@@ -12,6 +12,7 @@ Swift/UIKit application
       ├─ PrilavokPOS/pos.html: UI и основная business logic
       ├─ Web/js/core/storage.js: storage adapter
       ├─ Web/js/features/web-orders.js: входящие WEB-заказы, local-first acceptance и ACK/recovery
+      ├─ Web/js/features/inventory.js: график, черновик, фиксация и завершение инвентаризации
       ├─ network-printer.js: JS-граница LAN-печати
       └─ notification-native.js: native notifications
 
@@ -26,8 +27,9 @@ NetworkPrinterManager.swift
 ```
 
 Большая часть JS пока остаётся в `pos.html`. Модули в `PrilavokPOS/Web` подключаются постепенно по
-одному домену. Первый feature-модуль `web-orders.js` загружается после основного runtime и до
-`loadAll()`, сохраняя прежний глобальный API для inline-обработчиков.
+одному домену. `web-orders.js` и `inventory.js` загружаются после основного runtime и до `loadAll()`,
+сохраняя прежний глобальный API для inline-обработчиков. Инвентаризация продолжает использовать
+общий critical storage journal для атомарной фиксации остатков и завершения документа.
 
 ## Данные и offline-first
 
