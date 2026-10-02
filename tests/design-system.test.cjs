@@ -175,9 +175,14 @@ test('warehouse report modal uses shared presentation classes',()=>{
 test('receipt history and returns use shared responsive presentation',()=>{
   const receipts=featureSourceByName.get('receipts.js');
   assert.doesNotMatch(receipts,/style="/);
-  assert.match(receipts,/class="list-row receipts-list-row \$\{o\.id===selected\?\.id\?'selected':''\} \$\{o\.returnedAt\?'returned':''\}"/);
+  assert.match(receipts,/type="button" class="receipts-list-row \$\{o\.id===selected\?\.id\?'selected':''\} \$\{o\.returnedAt\?'returned':''\}"/);
+  const historyMarkup=receipts.slice(receipts.indexOf('function renderReceiptsScreen'));
+  assert.doesNotMatch(historyMarkup,/o\.items\.reduce/);
+  assert.doesNotMatch(historyMarkup,/o\.items\.map/);
   assert.match(receipts,/class="receipt-return-amount"/);
   assert.match(html,/\.receipts-layout\{/);
+  assert.match(html,/\.receipts-list-panel\{/);
+  assert.match(html,/\.receipts-list-row\.selected\{[^}]*border-color:var\(--accent\)/);
   assert.match(html,/@media\(max-width:900px\)\{\.receipts-layout\{grid-template-columns:1fr;/);
 });
 

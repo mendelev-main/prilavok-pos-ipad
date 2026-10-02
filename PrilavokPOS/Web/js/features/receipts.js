@@ -149,17 +149,27 @@ function renderReceiptsScreen(){
   <div class="screen content-screen ${state.tab==='receipts'?'active':''}">
     <div class="content-head"><div class="content-title">Чеки</div></div>
     <div class="receipts-layout">
-      <div class="card receipts-list" id="receipts-list">
-        ${list.length ? list.map(o=>`
-          <div class="list-row receipts-list-row ${o.id===selected?.id?'selected':''} ${o.returnedAt?'returned':''}" onclick="selectReceipt('${escapeAttr(o.id)}')">
-            <div class="receipts-list-main">
-              <div class="list-row-name">${o.items.reduce((sum,i)=>sum+i.qty,0)} поз. · ${fullMoney(o.total)}</div>
-              <div class="list-row-sub">${fmtDate(o.timestamp)} · ${o.method==='cash'?'Наличные':o.method==='card'?'Карта':'Наличные + карта'} · ${escapeHtml(o.orderType||'На месте')}${o.returnedAt?' · возвращён '+fmtDate(o.returnedAt):''}</div>
-            </div>
-            ${o.returnedAt ? '<span class="receipt-return-sticker">Возврат</span>' : `<span class="badge">${o.items.map(i=>i.name).join(', ').slice(0,40)}${o.items.map(i=>i.name).join(', ').length>40?'…':''}</span>`}
-          </div>
-        `).join('') : `<div class="center-note">Чеков пока нет — они появятся здесь после первой оплаты.</div>`}
-      </div>
+      <aside class="card receipts-list-panel">
+        <div class="receipts-list-header">
+          <div class="receipts-list-heading">История чеков</div>
+          <div class="receipts-list-count">Показано: ${list.length}</div>
+        </div>
+        <div class="receipts-list" id="receipts-list">
+          ${list.length ? list.map(o=>`
+            <button type="button" class="receipts-list-row ${o.id===selected?.id?'selected':''} ${o.returnedAt?'returned':''}" aria-pressed="${o.id===selected?.id?'true':'false'}" onclick="selectReceipt('${escapeAttr(o.id)}')">
+              <span class="receipts-list-topline">
+                <span class="receipts-list-number">Чек ${escapeHtml(o.receiptDisplayNumber||'')}</span>
+                <span class="receipts-list-amount">${fullMoney(o.total)}</span>
+              </span>
+              <span class="receipts-list-meta">${fmtDate(o.timestamp)} · ${o.method==='cash'?'Наличные':o.method==='card'?'Карта':'Наличные + карта'}</span>
+              <span class="receipts-list-statusline">
+                <span class="receipts-order-type">${escapeHtml(o.orderType||'На месте')}</span>
+                ${o.returnedAt ? '<span class="receipt-return-sticker">Возврат</span>' : ''}
+              </span>
+            </button>
+          `).join('') : `<div class="center-note receipts-list-empty">Чеков пока нет — они появятся здесь после первой оплаты.</div>`}
+        </div>
+      </aside>
       <div class="card receipt-detail-card">
         ${selected ? `
           <div class="receipt-detail-title">Чек ${escapeHtml(selected.receiptDisplayNumber||'')}</div>
