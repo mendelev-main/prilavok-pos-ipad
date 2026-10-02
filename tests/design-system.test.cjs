@@ -158,3 +158,10 @@ test('employee and product editor forms use shared presentation classes',()=>{
   assert.match(productEditor,/class="product-note-input"/);
   assert.match(html,/\.product-note-input\{/);
 });
+
+test('warehouse report modal uses shared presentation classes',()=>{
+  const warehouse=featureSourceByName.get('warehouse-reporting.js');
+  assert.doesNotMatch(warehouse,/style="/);
+  assert.match(warehouse,/Формирование отчёта[\s\S]+class="modal-actions"/);
+  assert.match(html,/\.warehouse-report-options\{/);
+});
