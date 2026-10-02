@@ -38,5 +38,8 @@
 - Production Supabase migration `event_driven_availability` применена; один активный POS подтверждён,
   RLS включён на всех трёх новых таблицах. Security advisor выдаёт только ожидаемый informational
   `RLS enabled, no policy`: таблицы закрыты для `anon`/`authenticated`, service role работает с bypass.
+- Backend commit `d3c4e19` развёрнут Railway: `/health` и `/api/menu` отвечают 200, menu содержит
+  availability-поля, snapshot endpoint без device key отвечает 401. До первого snapshot все 86 WEB-
+  товаров безопасно имеют `availability_known=false`.
 - Физическая проверка реальной оплаты, первого snapshot и обновления WEB-остатка остаётся итоговым
-  live acceptance после выкладки backend и установки свежего iPad build.
+  live acceptance после установки свежего iPad build; подключённое устройство в конце этапа не найдено.
