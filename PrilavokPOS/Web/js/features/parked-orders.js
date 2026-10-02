@@ -17,7 +17,7 @@ function parkOrder(){
   if(!String(state.orderLabel||'').trim()){
     showModal(`
       <div class="modal-title">Подпись чека</div>
-      <div class="settings-note" style="margin-bottom:14px;">Добавьте подпись, чтобы потом было проще найти этот чек в отложенных.</div>
+      <div class="settings-note park-order-note">Добавьте подпись, чтобы потом было проще найти этот чек в отложенных.</div>
       <div class="field">
         <label>Подпись</label>
         <input id="park-order-label" type="text" placeholder="Например: Стол 4 или Александр" autocomplete="off" onkeydown="if(event.key==='Enter')confirmParkOrderLabel()">
@@ -77,13 +77,13 @@ function openParkedModal(){
   const list=state.parked.slice().sort((a,b)=>b.createdAt-a.createdAt);
   showModal(`<div class="modal-title">Отложенные чеки</div>${list.length?list.map(o=>`
     <div class="list-row">
-      <div style="flex:1;"><div class="list-row-name">${escapeHtml(o.orderLabel||'Без подписи')}</div>
+      <div class="parked-order-main"><div class="list-row-name">${escapeHtml(o.orderLabel||'Без подписи')}</div>
       <div class="list-row-sub">${o.items.reduce((sum,i)=>sum+i.qty,0)} поз. · ${fullMoney(o.total)} · ${escapeHtml(o.orderType||'На месте')} · ${fmtDate(o.createdAt)}</div>
-      ${o.comment?`<div class="list-row-sub" style="color:var(--ink);margin-top:4px;"><strong>Комментарий:</strong> ${escapeHtml(o.comment)}</div>`:''}</div>
-      <button class="btn btn-outline" style="flex:none;padding:9px 14px;" onclick="resumeParked('${o.id}')">Открыть</button>
+      ${o.comment?`<div class="list-row-sub parked-order-comment"><strong>Комментарий:</strong> ${escapeHtml(o.comment)}</div>`:''}</div>
+      <button class="btn btn-outline parked-order-open" onclick="resumeParked('${o.id}')">Открыть</button>
       <button class="icon-btn danger" aria-label="Удалить отложенный заказ" onclick="deleteParked('${o.id}')"><span class="ui-icon ui-icon-close" aria-hidden="true"></span></button>
     </div>`).join(''):`<div class="center-note">Нет отложенных чеков</div>`}
-    <div class="modal-actions"><button class="btn btn-secondary" style="width:100%;" onclick="closeModal()">Закрыть</button></div>`);
+    <div class="modal-actions"><button class="btn btn-secondary modal-full-width-action" onclick="closeModal()">Закрыть</button></div>`);
 }
 async function resumeParked(id){
   if(state.cart.length){flash('Сначала завершите текущий заказ');return false;}

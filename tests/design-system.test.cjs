@@ -114,3 +114,14 @@ test('loyalty and analytics isolate dynamic chart presentation',()=>{
   assert.match(html,/\.analytics-section-gap\{/);
   assert.match(html,/\.hbar-value-hidden\{/);
 });
+
+test('WEB events and parked orders use shared presentation classes',()=>{
+  const webOrders=featureSourceByName.get('web-orders.js');
+  const parkedOrders=featureSourceByName.get('parked-orders.js');
+  assert.doesNotMatch(webOrders,/style="/);
+  assert.doesNotMatch(parkedOrders,/style="/);
+  assert.match(html,/\.web-event-row\{/);
+  assert.match(html,/\.web-recovery-note\{/);
+  assert.match(html,/\.parked-order-main\{/);
+  assert.match(html,/\.parked-order-comment\{/);
+});
