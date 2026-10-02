@@ -50,7 +50,7 @@ function planProductImport(entries){
   return {add,skipped};
 }
 function openProductImport(){
-  showModal(`<h2>Импорт товаров</h2><p>Добавить товары, цены и совпадающие категории из CSV.</p><p class="pe-note">Остатки и состав заполните вручную. Пустые и изменяемые цены нужно назначить после импорта. Существующие товары сохранятся.</p><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button class="btn btn-primary" onclick="chooseProductCSV()">Выбрать CSV</button></div><button class="btn btn-outline" style="margin-top:16px;width:100%" onclick="closeModal();importBackup()">Восстановить резервную копию JSON</button>`);
+  showModal(`<h2>Импорт товаров</h2><p>Добавить товары, цены и совпадающие категории из CSV.</p><p class="pe-note">Остатки и состав заполните вручную. Пустые и изменяемые цены нужно назначить после импорта. Существующие товары сохранятся.</p><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button class="btn btn-primary" onclick="chooseProductCSV()">Выбрать CSV</button></div><button class="btn btn-outline product-import-backup" onclick="closeModal();importBackup()">Восстановить резервную копию JSON</button>`);
 }
 function chooseProductCSV(){
   const input=document.createElement('input');input.type='file';input.accept='.csv,text/csv';
@@ -60,7 +60,7 @@ function chooseProductCSV(){
 function previewProductImport(){
   const plan=planProductImport(window._productImportEntries||[]);
   window._productImportPreview=JSON.stringify(plan.add);
-  showModal(`<h2>Проверка импорта</h2><p>Добавить: <b>${plan.add.length}</b> · Уже есть или повторяются: <b>${plan.skipped.length}</b></p><p class="pe-note">Цены берутся из файла. Пустая или изменяемая цена — 0 до ручного заполнения. Себестоимость и остаток — 0; публикация в WEB выключена. Единицы и состав не назначены.</p><div style="max-height:45vh;overflow:auto">${plan.add.map(p=>`<div style="padding:12px 0;border-bottom:1px solid var(--border)"><b>${escapeHtml(p.name)}</b><div class="pe-note">${escapeHtml(p.category||'Без категории')} · ${p.price===null?'Цена не задана — заполните вручную':money(p.price)}</div></div>`).join('')}${plan.skipped.length?`<details><summary>Пропущенные товары</summary>${plan.skipped.map(n=>`<p>${escapeHtml(n)}</p>`).join('')}</details>`:''}</div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button id="product-import-confirm" class="btn btn-primary" ${plan.add.length?'':'disabled'} onclick="confirmProductImport()">Добавить товары</button></div>`,true);
+  showModal(`<h2>Проверка импорта</h2><p>Добавить: <b>${plan.add.length}</b> · Уже есть или повторяются: <b>${plan.skipped.length}</b></p><p class="pe-note">Цены берутся из файла. Пустая или изменяемая цена — 0 до ручного заполнения. Себестоимость и остаток — 0; публикация в WEB выключена. Единицы и состав не назначены.</p><div class="product-import-preview">${plan.add.map(p=>`<div class="product-import-row"><b>${escapeHtml(p.name)}</b><div class="pe-note">${escapeHtml(p.category||'Без категории')} · ${p.price===null?'Цена не задана — заполните вручную':money(p.price)}</div></div>`).join('')}${plan.skipped.length?`<details><summary>Пропущенные товары</summary>${plan.skipped.map(n=>`<p>${escapeHtml(n)}</p>`).join('')}</details>`:''}</div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button id="product-import-confirm" class="btn btn-primary" ${plan.add.length?'':'disabled'} onclick="confirmProductImport()">Добавить товары</button></div>`,true);
 }
 async function confirmProductImport(){
   if(window._productImportBusy)return;
@@ -122,7 +122,7 @@ function renderProductsScreen(){
     const typeLabel = p.type==='composite'?'Составной':'Простой';
     const stockLabel = avail===Infinity ? 'Не учитывается' : stockQtyText(avail)+' '+unitLabel(stockUnit(p))+(p.type==='simple' && p.minStock!=null && avail<=p.minStock?' · низкий':'');
     return `
-    <div class="products-table-row" data-product-search="${escapeAttr(productSearchText(p.name)+' '+productSearchText(productCategoryKey(p)))}" style="${productMatchesSearch(p,query)?'':'display:none'}" role="button" tabindex="0" onclick="openProductModal(${productInlineArg(p.id)})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openProductModal(${productInlineArg(p.id)})}" aria-label="Открыть товар ${escapeAttr(p.name)}">
+    <div class="products-table-row" data-product-search="${escapeAttr(productSearchText(p.name)+' '+productSearchText(productCategoryKey(p)))}" ${productMatchesSearch(p,query)?'':'hidden'} role="button" tabindex="0" onclick="openProductModal(${productInlineArg(p.id)})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openProductModal(${productInlineArg(p.id)})}" aria-label="Открыть товар ${escapeAttr(p.name)}">
       <div class="products-table-main">
         <div class="products-table-name">${escapeHtml(p.name)}</div>
         <div class="products-table-sub">${escapeHtml(productCategoryKey(p))}</div>
@@ -144,27 +144,27 @@ function renderProductsScreen(){
   <div class="screen content-screen ${state.tab==='products'?'active':''}">
     <div class="content-head">
       <div class="content-title">Товары</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button class="btn btn-secondary" style="width:auto;padding:12px 16px;" onclick="openProductImport()">Импорт</button>
-        <button class="btn btn-secondary" style="width:auto;padding:12px 16px;" onclick="openCategoriesModal()">Категории</button>
-        <button class="btn btn-primary" style="width:auto;padding:12px 20px;" onclick="openProductModal(null)">Добавить товар</button>
+      <div class="products-head-actions">
+        <button class="btn btn-secondary products-head-action" onclick="openProductImport()">Импорт</button>
+        <button class="btn btn-secondary products-head-action" onclick="openCategoriesModal()">Категории</button>
+        <button class="btn btn-primary products-head-action products-add-action" onclick="openProductModal(null)">Добавить товар</button>
       </div>
     </div>
-    <div class="card" style="margin-bottom:12px;">
-      <div class="field" style="margin:0;">
+    <div class="card products-search-card">
+      <div class="field products-search-field">
         <label>Поиск товаров</label>
-        <div style="position:relative;">
-          <input id="products-search" type="search" value="${escapeAttr(state.productsSearch||'')}" placeholder="Название или категория" oninput="filterProductsScreen()" onsearch="filterProductsScreen()" style="width:100%;box-sizing:border-box;padding-right:42px;">
-          <button type="button" class="icon-btn" onclick="clearProductsSearch()" aria-label="Очистить поиск" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);display:${query?'flex':'none'};"><span class="ui-icon ui-icon-close" aria-hidden="true"></span></button>
+        <div class="products-search-wrap">
+          <input id="products-search" class="products-search-input" type="search" value="${escapeAttr(state.productsSearch||'')}" placeholder="Название или категория" oninput="filterProductsScreen()" onsearch="filterProductsScreen()">
+          <button type="button" class="icon-btn products-search-clear" onclick="clearProductsSearch()" aria-label="Очистить поиск" ${query?'':'hidden'}><span class="ui-icon ui-icon-close" aria-hidden="true"></span></button>
         </div>
       </div>
     </div>
     <div class="card">
-      <div class="section-mini-head"><div style="font-weight:800;font-size:16px;">Товары</div><span class="badge">${query?filteredProducts.length+' / ':''}${state.products.length}</span></div>
-      <div id="products-search-table" class="products-table" style="${filteredProducts.length?'':'display:none'}">
+      <div class="section-mini-head"><div class="products-section-title">Товары</div><span class="badge">${query?filteredProducts.length+' / ':''}${state.products.length}</span></div>
+      <div id="products-search-table" class="products-table" ${filteredProducts.length?'':'hidden'}>
         <div class="products-table-head">${[['name','Товар'],['category','Категория'],['type','Тип'],['price','Цена'],['cost','Себестоимость'],['web','WEB'],['stock','Остаток']].map(([key,label])=>productSortHeader(key,label)).join('')}</div>
         ${rows}
-      </div><div id="products-search-empty" class="center-note" style="${filteredProducts.length?'display:none':''}">${state.products.length?'По вашему запросу товары не найдены.':'Пока нет товаров. Добавьте первый.'}</div>
+      </div><div id="products-search-empty" class="center-note products-search-empty" ${filteredProducts.length?'hidden':''}>${state.products.length?'По вашему запросу товары не найдены.':'Пока нет товаров. Добавьте первый.'}</div>
     </div>
   </div>`;
 }
@@ -180,16 +180,16 @@ function filterProductsScreen(){
   rows.forEach(row=>{
     const text=row.dataset.productSearch;
     const show=!query || text.includes(query);
-    row.style.display=show?'':'none';
+    row.hidden=!show;
     if(show) visible++;
   });
   const table=document.getElementById('products-search-table'),empty=document.getElementById('products-search-empty');
-  if(table)table.style.display=visible?'':'none';
-  if(empty)empty.style.display=visible?'none':'';
+  if(table)table.hidden=!visible;
+  if(empty)empty.hidden=!!visible;
   const badge=card.querySelector('.section-mini-head .badge');
   if(badge) badge.textContent=query?`${visible} / ${state.products.length}`:String(state.products.length);
   const clear=card.querySelector('[aria-label="Очистить поиск"]');
-  if(clear) clear.style.display=query?'flex':'none';
+  if(clear) clear.hidden=!query;
 }
 function clearProductsSearch(){
   state.productsSearch='';

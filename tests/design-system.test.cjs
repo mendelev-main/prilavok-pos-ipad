@@ -63,3 +63,14 @@ test('supply history and detail presentation use shared semantic classes',()=>{
   assert.match(html,/\.purchase-status\.received\{background:var\(--success-soft\)/);
   assert.match(html,/\.purchase-status\.shortage\{background:var\(--danger-soft\)/);
 });
+
+test('catalog and workspace navigation isolate dynamic presentation',()=>{
+  const catalog=featureSourceByName.get('product-catalog.js');
+  const navigation=featureSourceByName.get('pos-navigation.js');
+  assert.doesNotMatch(catalog,/style="/);
+  assert.match(catalog,/row\.hidden=!show/);
+  const dynamicStyles=[...navigation.matchAll(/style="([^"]*)"/g)].map(match=>match[1]);
+  assert.deepEqual(dynamicStyles,['${pos}','--category-color:${categoryColor}']);
+  assert.match(html,/\.products-search-clear\[hidden\]/);
+  assert.match(html,/\.pos-folder-modal\[data-columns="4"\]/);
+});

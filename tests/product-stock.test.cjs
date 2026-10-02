@@ -1320,9 +1320,9 @@ test('live product search updates rows, counts and empty state then restores all
  const f=fixture();const rows=[{dataset:{productSearch:'маргарита пицца'},style:{}},{dataset:{productSearch:'чай горячие напитки'},style:{}}],badge={},clear={style:{}},table={style:{}},empty={style:{}};
  const card={querySelectorAll:selector=>{assert.equal(selector,'.products-table-row');return rows;},querySelector:selector=>selector.includes('badge')?badge:clear};
  f.fields['products-search']={value:'пицца',closest:()=>card,focus:()=>{}};f.fields['products-search-table']=table;f.fields['products-search-empty']=empty;f.c.render=()=>{throw Error('must preserve input focus');};
- f.c.filterProductsScreen();assert.equal(rows[0].style.display,'');assert.equal(rows[1].style.display,'none');assert.equal(badge.textContent,'1 / 4');
- f.fields['products-search'].value='ничего';f.c.filterProductsScreen();assert.equal(empty.style.display,'');assert.equal(table.style.display,'none');
- f.c.clearProductsSearch();assert.ok(rows.every(r=>r.style.display===''));assert.equal(empty.style.display,'none');assert.equal(table.style.display,'');assert.equal(clear.style.display,'none');
+ f.c.filterProductsScreen();assert.equal(rows[0].hidden,false);assert.equal(rows[1].hidden,true);assert.equal(badge.textContent,'1 / 4');
+ f.fields['products-search'].value='ничего';f.c.filterProductsScreen();assert.equal(empty.hidden,false);assert.equal(table.hidden,true);
+ f.c.clearProductsSearch();assert.ok(rows.every(r=>r.hidden===false));assert.equal(empty.hidden,true);assert.equal(table.hidden,false);assert.equal(clear.hidden,true);
 });
 test('rendered filtered product screen retains hidden rows for subsequent broader searches',()=>{
  const f=fixture();f.state.productsSearch='мука';const html=f.c.renderProductsScreen();assert.equal((html.match(/data-product-search=/g)||[]).length,4);assert.match(html,/id="products-search-empty"/);assert.match(html,/Название или категория/);

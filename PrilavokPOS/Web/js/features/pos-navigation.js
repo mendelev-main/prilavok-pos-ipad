@@ -52,8 +52,8 @@ function renderPosFolderModal(){
   const items=posCategoryItems(context.category),folder=items.find(i=>i.type==='folder'&&i.id===context.id);
   if(!folder||state.posPath!==context.category){closeModal();return;}
   const editing=state.editMode,products=items.filter(i=>i.type==='product'&&i.parentId===folder.id).map(i=>getProduct(i.id)).filter(Boolean);
-  const columns=Math.max(1,Math.min(4,products.length)),width=Math.max(320,columns*220+(columns-1)*12+52);
-  document.getElementById('modal-root').innerHTML=`<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><section class="modal pos-folder-modal" data-columns="${columns}" style="--folder-columns:${columns};--folder-width:${width}px" role="dialog" aria-modal="true" aria-label="${escapeAttr(folder.name)}"><header><h2>${escapeHtml(folder.name)}</h2><button class="btn btn-outline" onclick="closeModal()">Закрыть</button></header><div class="pos-folder-grid ${editing?'category-edit-grid':''}" id="pos-folder-grid">${products.map((p,index)=>{const avail=availableStock(p);return `<div class="layout-tile" data-tile-type="product" data-id="${escapeAttr(p.id)}" data-index="${index}"><div class="pcard ${!editing&&avail<=0?'disabled':''}" role="button" tabindex="0" aria-label="${escapeAttr(p.name)}">${editing?`<button class="navigation-action" onclick="event.stopPropagation();openPosTileMove(${escapeAttr(JSON.stringify(p.id))})">Переместить</button>`:''}${renderProductTileSymbol(p)}<div class="pcard-name">${escapeHtml(p.name)}</div><div class="pcard-bottom"><div><div class="pcard-price">${money(p.price)}</div><div class="pcard-stock">${avail===Infinity?'Остаток: ∞':'Остаток: '+stockQtyText(avail)+' '+unitLabel(stockUnit(p))}</div></div></div></div></div>`;}).join('')||'<p class="pe-note" style="grid-column:1/-1">В папке пока нет товаров.</p>'}</div></section></div>`;
+  const columns=Math.max(1,Math.min(4,products.length));
+  document.getElementById('modal-root').innerHTML=`<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><section class="modal pos-folder-modal" data-columns="${columns}" role="dialog" aria-modal="true" aria-label="${escapeAttr(folder.name)}"><header><h2>${escapeHtml(folder.name)}</h2><button class="btn btn-outline" onclick="closeModal()">Закрыть</button></header><div class="pos-folder-grid ${editing?'category-edit-grid':''}" id="pos-folder-grid">${products.map((p,index)=>{const avail=availableStock(p);return `<div class="layout-tile" data-tile-type="product" data-id="${escapeAttr(p.id)}" data-index="${index}"><div class="pcard ${!editing&&avail<=0?'disabled':''}" role="button" tabindex="0" aria-label="${escapeAttr(p.name)}">${editing?`<button class="navigation-action" onclick="event.stopPropagation();openPosTileMove(${escapeAttr(JSON.stringify(p.id))})">Переместить</button>`:''}${renderProductTileSymbol(p)}<div class="pcard-name">${escapeHtml(p.name)}</div><div class="pcard-bottom"><div><div class="pcard-price">${money(p.price)}</div><div class="pcard-stock">${avail===Infinity?'Остаток: ∞':'Остаток: '+stockQtyText(avail)+' '+unitLabel(stockUnit(p))}</div></div></div></div></div>`;}).join('')||'<p class="pe-note pos-folder-empty">В папке пока нет товаров.</p>'}</div></section></div>`;
   const grid=document.getElementById('pos-folder-grid');
   grid.addEventListener('click',handlePosGridClick);
   grid.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&!e.target.closest('button')){e.preventDefault();handlePosGridClick(e);}});
@@ -62,7 +62,7 @@ function renderPosFolderModal(){
 function openPosFolderEditor(id=''){
   if(!state.editMode||!state.posPath)return;
   const folder=posCategoryItems(state.posPath).find(i=>i.type==='folder'&&i.id===id);
-  showModal(`<div class="modal-title">${folder?'Изменить папку':'Новая папка'}</div><div class="field"><label>Название</label><input id="pos-folder-name" maxlength="80" value="${escapeAttr(folder?.name||'')}"></div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button class="btn btn-primary" onclick="savePosFolder(${escapeAttr(JSON.stringify(id))})">Сохранить</button></div>${folder?`<button class="btn btn-danger-outline" style="margin-top:12px;width:100%" onclick="requestRemovePosFolder(${escapeAttr(JSON.stringify(id))})">Удалить папку</button>`:''}`);
+  showModal(`<div class="modal-title">${folder?'Изменить папку':'Новая папка'}</div><div class="field"><label>Название</label><input id="pos-folder-name" maxlength="80" value="${escapeAttr(folder?.name||'')}"></div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button class="btn btn-primary" onclick="savePosFolder(${escapeAttr(JSON.stringify(id))})">Сохранить</button></div>${folder?`<button class="btn btn-danger-outline pos-folder-delete" onclick="requestRemovePosFolder(${escapeAttr(JSON.stringify(id))})">Удалить папку</button>`:''}`);
 }
 async function savePosFolder(id=''){
   if(!state.editMode||!state.posPath)return;
@@ -153,12 +153,12 @@ function renderPosScreen(shift){
   }
 
   const tileHtml = tiles.map((t, index)=>{
-    const pos = !currentCategory ? tilePositionStyle(t.tile) : '';
-    if(t.type==='folder')return `<div class="layout-tile category-tile folder-tile" data-tile-type="folder" data-id="${escapeAttr(t.id)}" data-index="${index}"><div class="pcard ${editing?'edit-tile':''}" role="button" tabindex="0" style="background:var(--accent-soft)">${editing?`<button class="navigation-action" onclick="event.stopPropagation();openPosFolderEditor(${escapeAttr(JSON.stringify(t.id))})">Изменить</button>`:''}<div class="pcard-name">${escapeHtml(t.name)}</div></div></div>`;
+    const pos = !currentCategory ? tilePositionStyle(t.tile) : '',posAttr=pos?` style="${pos}"`:'';
+    if(t.type==='folder')return `<div class="layout-tile category-tile folder-tile" data-tile-type="folder" data-id="${escapeAttr(t.id)}" data-index="${index}"><div class="pcard ${editing?'edit-tile':''}" role="button" tabindex="0">${editing?`<button class="navigation-action" onclick="event.stopPropagation();openPosFolderEditor(${escapeAttr(JSON.stringify(t.id))})">Изменить</button>`:''}<div class="pcard-name">${escapeHtml(t.name)}</div></div></div>`;
     if(t.type==='category'){
       const categoryColor = state.categoryColors[t.id] || '#EEF1F5';
-      return `<div class="layout-tile category-tile" data-tile-type="category" data-id="${escapeAttr(t.id)}" data-index="${t.index ?? index}" style="${pos}">
-        <div class="pcard ${editing?'edit-tile':''}" data-action="category" role="button" tabindex="0" style="--category-color:${categoryColor};background:${categoryColor};">
+      return `<div class="layout-tile category-tile" data-tile-type="category" data-id="${escapeAttr(t.id)}" data-index="${t.index ?? index}"${posAttr}>
+        <div class="pcard ${editing?'edit-tile':''}" data-action="category" role="button" tabindex="0" style="--category-color:${categoryColor}">
           ${editing&&!currentCategory?`<button type="button" class="tile-remove" onclick="event.stopPropagation();removeLayoutTile(${t.index})">×</button>`:''}
           ${state.categorySymbols[t.id]?`<div class="tile-symbol">${escapeHtml(state.categorySymbols[t.id])}</div>`:''}
           <div class="pcard-name">${escapeHtml(t.id)}</div>
@@ -169,7 +169,7 @@ function renderPosScreen(shift){
     const p=t.product;
     const avail=availableStock(p);
     const disabled=avail<=0;
-    return `<div class="layout-tile" data-tile-type="product" data-id="${p.id}" data-index="${t.index ?? index}" style="${pos}">
+    return `<div class="layout-tile" data-tile-type="product" data-id="${p.id}" data-index="${t.index ?? index}"${posAttr}>
       <div class="pcard ${disabled&&!editing?'disabled':''} ${editing?'edit-tile':''}" data-action="product" role="button" tabindex="0">
         ${editing&&!currentCategory?`<button type="button" class="tile-remove" onclick="event.stopPropagation();removeLayoutTile(${t.index})">×</button>`:''}
         ${editing&&currentCategory?`<button class="navigation-action" onclick="event.stopPropagation();openPosTileMove(${escapeAttr(JSON.stringify(p.id))})">Переместить</button>`:''}
@@ -197,11 +197,11 @@ function renderPosScreen(shift){
           <button class="park-btn" onclick="openParkedModal()" ${editing?'disabled':''}>Отложенные ${parkCount?`<span class="park-badge">${parkCount}</span>`:''}</button>
         </div>
       </div>
-      <div class="product-grid ${editing ? (currentCategory?'category-edit-grid':'layout-edit-grid') : ''}" id="sections-wrap" style="overflow-y:auto;flex:1;align-content:start;">
-        ${tileHtml || `<div class="empty-hint" style="grid-column:1/-1;">${currentCategory?'В этой категории пока нет товаров.':'Рабочая зона пуста. Нажмите «Раскладка», чтобы добавить плитки.'}</div>`}
+      <div class="product-grid pos-workspace-grid ${editing ? (currentCategory?'category-edit-grid':'layout-edit-grid') : ''}" id="sections-wrap">
+        ${tileHtml || `<div class="empty-hint pos-grid-empty">${currentCategory?'В этой категории пока нет товаров.':'Рабочая зона пуста. Нажмите «Раскладка», чтобы добавить плитки.'}</div>`}
       </div>
-      ${editing&&currentCategory&&!state.posFolder?`<button class="btn btn-primary" style="flex:0 0 auto" onclick="openPosFolderEditor()">Создать папку</button>`:''}
-      ${editing && !currentCategory ? `<div style="display:flex;gap:8px;flex-shrink:0;"><button class="btn btn-primary" onclick="openLayoutEditor()">＋ Изменить содержимое</button></div>` : ''}
+      ${editing&&currentCategory&&!state.posFolder?`<button class="btn btn-primary pos-create-folder" onclick="openPosFolderEditor()">Создать папку</button>`:''}
+      ${editing && !currentCategory ? `<div class="pos-layout-actions"><button class="btn btn-primary" onclick="openLayoutEditor()">＋ Изменить содержимое</button></div>` : ''}
     </div>
     ${renderCartPanel(shift)}
   </div>`;
@@ -247,11 +247,11 @@ function openLayoutEditor(){
   const products=state.products.slice().sort((a,b)=>a.name.localeCompare(b.name,'ru'));
   const cats=state.categoryOrder.slice();
   showModal(`<div class="modal-title">Настройка рабочей зоны</div>
-    <div class="center-note" style="text-align:left;margin:0 0 12px;">Нажмите «＋», чтобы добавить плитку. После добавления можно закрыть окно и расставить плитки по сетке.</div>
+    <div class="center-note layout-editor-note">Нажмите «＋», чтобы добавить плитку. После добавления можно закрыть окно и расставить плитки по сетке.</div>
     <div class="layout-list">
-      <div style="font-weight:800;padding:4px 0;">Категории</div>
+      <div class="layout-editor-heading">Категории</div>
       ${cats.map(c=>`<div class="layout-add-row"><div class="name">${escapeHtml(c)}<div class="sub">Открывает товары категории</div></div><button type="button" class="layout-add-btn" data-layout-add-type="category" data-layout-add-id="${escapeAttr(c)}">＋</button></div>`).join('') || '<div class="center-note">Категорий пока нет.</div>'}
-      <div style="font-weight:800;padding:10px 0 4px;">Товары</div>
+      <div class="layout-editor-heading products">Товары</div>
       ${products.map(p=>`<div class="layout-add-row"><div class="name">${escapeHtml(p.name)}<div class="sub">${escapeHtml(productCategoryKey(p))} · ${money(p.price)}</div></div><button type="button" class="layout-add-btn" data-layout-add-type="product" data-layout-add-id="${escapeAttr(p.id)}">＋</button></div>`).join('') || '<div class="center-note">Товаров пока нет.</div>'}
     </div>
     <div class="modal-actions"><button type="button" class="btn btn-primary" id="layout-editor-done">Готово</button></div>`, true);
