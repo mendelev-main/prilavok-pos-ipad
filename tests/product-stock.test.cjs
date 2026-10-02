@@ -18,6 +18,7 @@ const productCategoriesScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js
 const posNavigationScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/pos-navigation.js'),'utf8');
 const cartPresentationScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/cart-presentation.js'),'utf8');
 const cartCompositionScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/cart-composition.js'),'utf8');
+const parkedOrdersScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/parked-orders.js'),'utf8');
 const hallBookingsScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/hall-bookings.js'),'utf8');
 const printerScript=fs.readFileSync(path.join(root,'PrilavokPOS/network-printer.js'),'utf8');
 const appSwift=fs.readFileSync(path.join(root,'PrilavokPOS/PrilavokPOSApp.swift'),'utf8');
@@ -28,7 +29,7 @@ function fixture(){
  const data=new Map(),messages=[],writes=[],fields={'pf-prep-station':{value:'kitchen'},'pf-prep-difficulty':{value:'1'},'pf-base-prep-minutes':{value:'5'}},events=[];
  const document={getElementById:id=>fields[id]||null,querySelector:()=>null,addEventListener:()=>{}};
  const c={console:{error:()=>{}},document,crypto:{randomUUID:()=> 'device-test'},setTimeout:()=>0,clearTimeout:()=>{},addEventListener:()=>{},removeEventListener:()=>{},AbortController,localStorage:{getItem:k=>data.has(k)?data.get(k):null,setItem:(k,v)=>{data.set(k,String(v));writes.push(k);},removeItem:k=>data.delete(k)},fetch:()=>{throw Error('Network is prohibited in this test');},setInterval:()=>{throw Error('Timer is prohibited in this test');}};
- c.window=c;vm.createContext(c);vm.runInContext(adapter,c);vm.runInContext(inline.replace(/loadAll\(\);\s*$/,''),c);vm.runInContext(webOrdersScript,c);vm.runInContext(inventoryScript,c);vm.runInContext(warehouseReportingScript,c);vm.runInContext(analyticsScript,c);vm.runInContext(productCatalogScript,c);vm.runInContext(productCategoriesScript,c);vm.runInContext(posNavigationScript,c);vm.runInContext(cartPresentationScript,c);vm.runInContext(cartCompositionScript,c);vm.runInContext(hallBookingsScript,c);
+ c.window=c;vm.createContext(c);vm.runInContext(adapter,c);vm.runInContext(inline.replace(/loadAll\(\);\s*$/,''),c);vm.runInContext(webOrdersScript,c);vm.runInContext(inventoryScript,c);vm.runInContext(warehouseReportingScript,c);vm.runInContext(analyticsScript,c);vm.runInContext(productCatalogScript,c);vm.runInContext(productCategoriesScript,c);vm.runInContext(posNavigationScript,c);vm.runInContext(cartPresentationScript,c);vm.runInContext(cartCompositionScript,c);vm.runInContext(parkedOrdersScript,c);vm.runInContext(hallBookingsScript,c);
  c.flash=m=>messages.push(m);c.render=()=>{};c.showReceipt=()=>{};c.showPaymentReceipt=()=>{};c.closeModal=()=>{};c.applyTheme=()=>{};
  const state=vm.runInContext('state',c);
  c.__printerSettingsSnapshot=()=>({printers:[],posNotifications:{soundEnabled:true,sound:'default'}});c.__restorePrinterSettings=()=>true;
@@ -38,7 +39,7 @@ function fixture(){
  async function sale(payments){cart();await c.finalizePayment(payments||[{method:'cash',amount:10}]);return state.orders[0];}
  return {c,state,data,messages,writes,fields,events,cart,sale};
 }
-test('all production JavaScript modules parse',()=>{new vm.Script(inline);new vm.Script(adapter);new vm.Script(webOrdersScript);new vm.Script(inventoryScript);new vm.Script(warehouseReportingScript);new vm.Script(analyticsScript);new vm.Script(productCatalogScript);new vm.Script(productCategoriesScript);new vm.Script(posNavigationScript);new vm.Script(cartPresentationScript);new vm.Script(cartCompositionScript);new vm.Script(hallBookingsScript);new vm.Script(printerScript);});
+test('all production JavaScript modules parse',()=>{new vm.Script(inline);new vm.Script(adapter);new vm.Script(webOrdersScript);new vm.Script(inventoryScript);new vm.Script(warehouseReportingScript);new vm.Script(analyticsScript);new vm.Script(productCatalogScript);new vm.Script(productCategoriesScript);new vm.Script(posNavigationScript);new vm.Script(cartPresentationScript);new vm.Script(cartCompositionScript);new vm.Script(parkedOrdersScript);new vm.Script(hallBookingsScript);new vm.Script(printerScript);});
 test('WEB orders module loads before startup and preserves its public API',()=>{
  const moduleTag='<script src="Web/js/features/web-orders.js"></script>',startupTag='<script>loadAll();</script>';
  assert.ok(html.indexOf(moduleTag)>=0);assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));
@@ -95,6 +96,11 @@ test('cart row click is safe before any touch gesture',()=>{
 test('manual cart price accepts comma, rounds cents and persists the legacy line',()=>{
  const f=fixture();f.fields['manual-sale-price']={value:'12,345',focus:()=>{}};f.c._manualPriceContext={productId:'flour',mods:[]};f.c.confirmManualPrice();
  assert.equal(f.state.cart.length,1);assert.equal(f.state.cart[0].basePrice,12.35);assert.equal(f.state.cart[0].price,12.35);assert.equal(f.state.cart[0].manualPrice,true);assert.equal(JSON.parse(f.data.get('prilavok_currentOrderSession')).items[0].basePrice,12.35);
+});
+test('parked orders module loads before startup and preserves its public API',()=>{
+ const moduleTag='<script src="Web/js/features/parked-orders.js"></script>',startupTag='<script>loadAll();</script>';
+ assert.ok(html.indexOf(moduleTag)>=0);assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));
+ const f=fixture();for(const name of ['kitchenPrintLineKey','kitchenPrintedSnapshot','kitchenPrintDelta','parkOrder','confirmParkOrderLabel','parkOrderNow','openParkedModal','resumeParked','deleteParked'])assert.equal(typeof f.c[name],'function',name);
 });
 test('category create and rename preserve legacy layout, product and navigation references',()=>{
  const f=fixture();Object.assign(f.state,{categoryOrder:[],categoryColors:{},categorySymbols:{},categoryOnline:{},layoutTiles:[]});Object.assign(f.fields,{'cf-name':{value:'Напитки'},'cf-color':{value:'#DDEBFF'},'cf-symbol':{value:'НП'}});f.c._cmOnline=false;f.c.saveCategory(null);
@@ -262,6 +268,17 @@ test('double parking action commits once',async()=>{
  f.c.commitCriticalStorage=async(...args)=>{calls++;await gate;return commit(...args)};
  const first=f.c.parkOrderNow(),second=await f.c.parkOrderNow();
  assert.equal(second,false);assert.equal(calls,1);release();assert.equal(await first,true);assert.equal(f.state.parked.length,1);
+});
+
+test('parked deletion persists before removing the row from memory',async()=>{
+ const f=fixture();f.state.parked=[{id:'keep',items:[]},{id:'remove',items:[]}];f.data.set('prilavok_parked',JSON.stringify(plain(f.state.parked)));f.c.openParkedModal=()=>{};
+ assert.equal(await f.c.deleteParked('remove'),true);assert.deepEqual(plain(f.state.parked.map(x=>x.id)),['keep']);assert.deepEqual(JSON.parse(f.data.get('prilavok_parked')).map(x=>x.id),['keep']);assert.equal(JSON.parse(f.data.get('prilavok_criticalStorageJournal')),null);
+});
+
+test('parked deletion storage failure retains memory and persisted order',async()=>{
+ const f=fixture();f.state.parked=[{id:'keep',items:[]},{id:'remove',items:[]}];f.data.set('prilavok_parked',JSON.stringify(plain(f.state.parked)));const before=JSON.stringify(f.state.parked),originalSet=f.c.localStorage.setItem;
+ f.c.localStorage.setItem=(key,value)=>{if(key==='prilavok_criticalStorageJournal')throw Error('injected journal failure');originalSet(key,value)};
+ assert.equal(await f.c.deleteParked('remove'),false);assert.equal(JSON.stringify(f.state.parked),before);assert.deepEqual(JSON.parse(f.data.get('prilavok_parked')).map(x=>x.id),['keep','remove']);assert.match(f.messages.at(-1),/Чек не удалён/);
 });
 
 test('opening shift failure keeps state closed and sends no report',async()=>{

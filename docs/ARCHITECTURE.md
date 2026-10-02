@@ -20,6 +20,7 @@ Swift/UIKit application
       ├─ Web/js/features/pos-navigation.js: папки, плитки и раскладка рабочей зоны
       ├─ Web/js/features/cart-presentation.js: текущий заказ, скидки и параметры доставки
       ├─ Web/js/features/cart-composition.js: добавление, модификаторы, количество и удаление строк
+      ├─ Web/js/features/parked-orders.js: атомарная парковка, восстановление и удаление заказов
       ├─ Web/js/features/hall-bookings.js: карта зала, столы и локальные бронирования
       ├─ network-printer.js: JS-граница LAN-печати
       └─ notification-native.js: native notifications
@@ -50,6 +51,8 @@ critical storage journal. `warehouse-reporting.js` только читает л�
 проверка остатков, парковка, оплата, проведение чека и печать остаются в основном runtime.
 `cart-composition.js` формирует строки заказа только после aggregate stock validation и сохраняет
 прежнюю локальную сессию; parking/payment/receipt остаются отдельной критической границей.
+`parked-orders.js` проводит park, resume и delete через существующий critical storage journal;
+память меняется только после устойчивой локальной записи, а kitchen print запускается после park.
 
 ## Данные и offline-first
 
