@@ -84,3 +84,12 @@ test('product configuration and categories isolate dynamic presentation',()=>{
   assert.match(html,/\.configuration-access-note\{/);
   assert.match(html,/\.category-swatch\{/);
 });
+
+test('bookings isolate dynamic hall geometry from static presentation',()=>{
+  const bookings=featureSourceByName.get('hall-bookings.js');
+  const dynamicStyles=[...bookings.matchAll(/style="([^"]*)"/g)].map(match=>match[1]);
+  assert.deepEqual(dynamicStyles,["left:${t.x}%;top:${t.y}%;transform:rotate(${Number(t.rotation||0)}deg)${state.selectedHallTableId===t.id?' scale(1.015)':''};"]);
+  assert.match(html,/\.hall-rotation-actions\{/);
+  assert.match(html,/\.booking-card-actions\{/);
+  assert.match(html,/\.booking-filters\.single-column\{/);
+});

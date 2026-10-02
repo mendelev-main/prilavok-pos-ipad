@@ -44,7 +44,7 @@ function createHallTable(shape){
 function addHallTable(shape){ openCreateHallTableModal(shape); }
 function deleteHallTable(id){
   const t=state.hallTables.find(x=>x.id===id); if(!t) return;
-  showModal(`<div class="modal-title">Удалить ${escapeHtml(hallTableLabel(t))}?</div><div class="settings-note">Все бронирования этого стола также будут удалены.</div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button class="btn" style="background:var(--danger-soft);color:var(--danger);border:1px solid var(--danger);" onclick="confirmDeleteHallTable('${id}')">Удалить</button></div>`);
+  showModal(`<div class="modal-title">Удалить ${escapeHtml(hallTableLabel(t))}?</div><div class="settings-note">Все бронирования этого стола также будут удалены.</div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button class="btn booking-danger" onclick="confirmDeleteHallTable('${id}')">Удалить</button></div>`);
 }
 function confirmDeleteHallTable(id){
   state.hallTables=state.hallTables.filter(t=>t.id!==id); state.bookings=state.bookings.filter(b=>b.tableId!==id); if(state.selectedHallTableId===id) state.selectedHallTableId=null; saveHall(); saveBookings(); closeModal(); render();
@@ -66,11 +66,11 @@ function openHallTableEditModal(id){
   showModal(`<div class="modal-title">Редактирование стола</div>
     <div class="settings-note">Измените название, ориентацию или удалите стол.</div>
     <div class="field"><label>Название стола</label><input id="edit-hall-table-name" value="${escapeAttr(hallTableLabel(t))}" maxlength="30" autofocus></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+    <div class="hall-rotation-actions">
       <button class="btn btn-secondary" onclick="rotateHallTable('${id}',-90)">↶ Повернуть</button>
       <button class="btn btn-secondary" onclick="rotateHallTable('${id}',90)">↷ Повернуть</button>
     </div>
-    <button class="btn booking-danger" style="width:100%;margin-top:10px;" onclick="deleteHallTable('${id}')">Удалить стол</button>
+    <button class="btn booking-danger hall-full-width-action" onclick="deleteHallTable('${id}')">Удалить стол</button>
     <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Отмена</button><button class="btn btn-primary" onclick="saveHallTableEdits('${id}')">Сохранить</button></div>`);
 }
 function selectHallTable(id){
@@ -98,14 +98,14 @@ function finishHallEditMode(){
 }
 function openHallEditMenu(){
   showModal(`<div class="modal-title">Редактирование карты</div>
-    <div class="settings-note" style="margin-bottom:14px;">Добавьте стол или включите режим редактирования. В обычном режиме столы не перемещаются.</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+    <div class="settings-note hall-edit-note">Добавьте стол или включите режим редактирования. В обычном режиме столы не перемещаются.</div>
+    <div class="hall-shape-actions">
       <button class="btn" onclick="addHallTable('square')">＋ Квадратный стол</button>
       <button class="btn" onclick="addHallTable('rectangle')">＋ Прямоугольный стол</button>
     </div>
     ${state.hallEditMode
-      ? `<button class="btn btn-secondary" style="width:100%;margin-top:10px;" onclick="finishHallEditMode()">Завершить редактирование</button>`
-      : `<button class="btn btn-secondary" style="width:100%;margin-top:10px;" onclick="enableHallEditMode()">Редактировать карту</button>`}`);
+      ? `<button class="btn btn-secondary hall-full-width-action" onclick="finishHallEditMode()">Завершить редактирование</button>`
+      : `<button class="btn btn-secondary hall-full-width-action" onclick="enableHallEditMode()">Редактировать карту</button>`}`);
 }
 function setBookingDate(v){ state.bookingDate=v; render(); }
 function setBookingTime(v){ state.bookingTime=v||'19:00'; refreshBookingTimeSummary(); }
@@ -242,7 +242,7 @@ function hallPointerEnd(e){
 function renderBookingCard(b,t){
   const st=new Date(b.startAt), en=new Date(b.endAt);
   const time=`${st.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}–${en.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}`;
-  return `<div class="booking-card" onclick="editBooking('${b.id}')"><div class="booking-card-top"><div class="booking-card-name">${escapeHtml(b.guestName)}</div><span class="booking-badge">${escapeHtml(hallTableLabel(t))}</span></div><div class="booking-card-meta">${time} · ${Number(b.guests||1)} ${Number(b.guests||1)===1?'гость':'гостей'}${b.phone?' · '+escapeHtml(b.phone):''}</div>${b.note?`<div class="booking-card-note">${escapeHtml(b.note)}</div>`:''}<div style="display:flex;justify-content:flex-end;margin-top:8px;"><button class="btn booking-danger" style="min-height:34px;padding:7px 10px;font-size:11px;" onclick="event.stopPropagation();cancelBooking('${b.id}')">Отменить</button></div></div>`;
+  return `<div class="booking-card" onclick="editBooking('${b.id}')"><div class="booking-card-top"><div class="booking-card-name">${escapeHtml(b.guestName)}</div><span class="booking-badge">${escapeHtml(hallTableLabel(t))}</span></div><div class="booking-card-meta">${time} · ${Number(b.guests||1)} ${Number(b.guests||1)===1?'гость':'гостей'}${b.phone?' · '+escapeHtml(b.phone):''}</div>${b.note?`<div class="booking-card-note">${escapeHtml(b.note)}</div>`:''}<div class="booking-card-actions"><button class="btn booking-danger booking-cancel-button" onclick="event.stopPropagation();cancelBooking('${b.id}')">Отменить</button></div></div>`;
 }
 function renderBookingsScreen(){
   ensureBookingDate();
@@ -262,12 +262,12 @@ function renderBookingsScreen(){
       </div>
       <div class="bookings-side-card">
         <div class="booking-side-head"><div class="booking-side-title">Карточка стола</div><div class="booking-side-sub">Выберите дату — карта и список броней обновятся автоматически.</div>${selected?`<div class="booking-selected-table"><strong>${escapeHtml(hallTableLabel(selected))}</strong><span class="booking-mini">${selected.shape==='square'?'Квадратный':'Прямоугольный'}</span></div>`:''}</div>
-        <div class="booking-filters" style="grid-template-columns:1fr;">
+        <div class="booking-filters single-column">
           <div class="booking-field"><label>Дата</label><div class="booking-date-wrap"><input type="date" value="${date}" onchange="setBookingDate(this.value)"></div></div>
         </div>
         ${selected?`<div class="booking-check"><span class="booking-check-label">${escapeHtml(date)} · броней: ${selectedBookings.length}</span><span class="booking-status ${busy?'busy':'free'}">${busy?'ЕСТЬ БРОНЬ':'СВОБОДЕН'}</span></div>`:''}
         <div class="booking-list">${selected? (selectedBookings.length?selectedBookings.map(b=>renderBookingCard(b,selected)).join(''):'<div class="booking-list-empty">На выбранную дату у этого стола броней нет.</div>'):'<div class="booking-list-empty">Выберите стол на карте.</div>'}</div>
-        <div class="booking-side-actions">${selected?`<button class="bookings-tool booking-primary" onclick="startBookingForSelected()">Забронировать</button><div class="booking-mini" style="display:flex;align-items:center;justify-content:center;">${selectedBookings.length} ${selectedBookings.length===1?'бронь':'брони'} на дату</div>`:`<button class="bookings-tool booking-primary" disabled>Забронировать</button><div></div>`}</div>
+        <div class="booking-side-actions">${selected?`<button class="bookings-tool booking-primary" onclick="startBookingForSelected()">Забронировать</button><div class="booking-mini booking-count-summary">${selectedBookings.length} ${selectedBookings.length===1?'бронь':'брони'} на дату</div>`:`<button class="bookings-tool booking-primary" disabled>Забронировать</button><div></div>`}</div>
       </div>
     </div>
   </div>`;
