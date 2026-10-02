@@ -39,6 +39,19 @@
 3. Update iPad and run the existing manual menu synchronization once.
 4. Verify one menu-only product on `/menu/` and its absence on the online-order page.
 
+## Production deployment
+
+Verified on 2026-10-02:
+
+- Railway is serving backend commit `5ac56d6`.
+- Supabase migration `20261002230000_product_online_channels.sql` was applied successfully.
+- At migration verification time the catalog contained 213 products: all 213 retained
+  `visible_in_menu = true`, 96 retained `available_online = true`, and no new flag was `NULL`.
+- Production `/health` returned HTTP 200.
+- Production `/api/menu` returned 96 orderable products.
+- Production `/api/menu?surface=menu` returned 198 active menu products.
+- The different endpoint counts confirm that menu visibility and order availability are filtered independently.
+
 ## Deferred physical acceptance
 
 On iPad: save both toggle combinations, enter a long description, restart the app, perform manual sync,
