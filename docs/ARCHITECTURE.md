@@ -15,6 +15,7 @@ Swift/UIKit application
       ├─ Web/js/features/employees.js: сотрудники, локальные роли и защищённое сохранение
       ├─ Web/js/features/loyalty.js: клиенты, подарки, начисление/reversal и администрирование
       ├─ Web/js/features/product-configuration.js: единицы, рецептуры и редактор модификаторов
+      ├─ Web/js/features/product-editor.js: lifecycle, dirty-state и разметка карточки товара
       ├─ Web/js/features/suppliers.js: справочник поставщиков и связи с товарами
       ├─ Web/js/features/purchase-orders.js: заказы поставщикам и их локальная история
       ├─ Web/js/features/receiving-ui.js: экран, история и редактор документа приёмки
@@ -84,6 +85,9 @@ inline actions сериализуются как JSON и затем экрани
 разблокировкой складских полей карточки. Он не записывает storage и не выполняет сеть: прежний
 `saveProduct` остаётся границей commit, а photo path остаётся в основном runtime. Product ID в
 редакторе и выборе модификаторов сериализуются как JSON и экранируются для HTML-атрибута.
+`product-editor.js` владеет открытием, закрытием, dirty-state, навигацией, summary и основной
+разметкой карточки. Сохранение товара, WEB-флаг и обработка фото остаются в основном runtime. Строки
+каталога передают product ID в open/keyboard/WEB actions через JSON serialization и attribute escaping.
 `suppliers.js` владеет справочником поставщиков и их связями с простыми товарами. CRUD сначала
 записывает полный снимок прежнего `prilavok_suppliers`, а затем публикует его в памяти. Исторические
 заказы и приёмки сохраняют собственные `supplierId`/`supplierName` и при удалении справочника не

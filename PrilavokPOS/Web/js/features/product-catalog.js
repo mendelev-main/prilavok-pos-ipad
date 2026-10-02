@@ -122,7 +122,7 @@ function renderProductsScreen(){
     const typeLabel = p.type==='composite'?'Составной':'Простой';
     const stockLabel = avail===Infinity ? 'Не учитывается' : stockQtyText(avail)+' '+unitLabel(stockUnit(p))+(p.type==='simple' && p.minStock!=null && avail<=p.minStock?' · низкий':'');
     return `
-    <div class="products-table-row" data-product-search="${escapeAttr(productSearchText(p.name)+' '+productSearchText(productCategoryKey(p)))}" style="${productMatchesSearch(p,query)?'':'display:none'}" role="button" tabindex="0" onclick="openProductModal('${p.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openProductModal('${p.id}')}" aria-label="Открыть товар ${escapeAttr(p.name)}">
+    <div class="products-table-row" data-product-search="${escapeAttr(productSearchText(p.name)+' '+productSearchText(productCategoryKey(p)))}" style="${productMatchesSearch(p,query)?'':'display:none'}" role="button" tabindex="0" onclick="openProductModal(${productInlineArg(p.id)})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openProductModal(${productInlineArg(p.id)})}" aria-label="Открыть товар ${escapeAttr(p.name)}">
       <div class="products-table-main">
         <div class="products-table-name">${escapeHtml(p.name)}</div>
         <div class="products-table-sub">${escapeHtml(productCategoryKey(p))}</div>
@@ -135,7 +135,7 @@ function renderProductsScreen(){
       <div class="products-table-cell"><span class="badge ${p.type==='composite'?'type-composite':''}">${typeLabel}</span></div>
       <div class="products-table-cell">${money(p.price)}</div>
       <div class="products-table-cell">${money(compositeCost(p))}</div>
-      <div class="products-table-cell products-web-cell"><button type="button" class="web-switch ${p.availableOnline!==false?'on':''}" onclick="event.stopPropagation();toggleProductOnline('${p.id}')" title="Публиковать в WEB"><span></span><b>WEB</b></button></div>
+      <div class="products-table-cell products-web-cell"><button type="button" class="web-switch ${p.availableOnline!==false?'on':''}" onclick="event.stopPropagation();toggleProductOnline(${productInlineArg(p.id)})" title="Публиковать в WEB"><span></span><b>WEB</b></button></div>
       <div class="products-table-cell products-stock">${p.noStockTracking?'—':stockLabel}</div>
     </div>`;
   }).join('');

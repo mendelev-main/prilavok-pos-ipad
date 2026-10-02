@@ -376,6 +376,20 @@ attribute escaping для трёх путей выбора. Regression test ис
 специально сформированным ID и проверяет точную передачу значения без выполнения внедрённого кода.
 Unit/recipe/modifier runtime выделен без изменения product JSON или границы `saveProduct`.
 
+### A003-F25 — product ID мог разорвать действия строки каталога
+
+**Статус**: Code-confirmed на baseline `5623b39`; исправлено в spec 043.
+**Код**: `PrilavokPOS/Web/js/features/product-catalog.js`; editor shell теперь в
+`PrilavokPOS/Web/js/features/product-editor.js`.
+
+Строка товара вставляла ID в одинарные JavaScript-строки для открытия по касанию, открытия с
+клавиатуры и WEB-переключателя. Совместимый строковый ID с кавычкой мог изменить обработчик после
+декодирования HTML-атрибута.
+
+**Решение**: [spec 043](../043-product-editor-shell/spec.md) переводит все три действия на
+`productInlineArg`. Regression test декодирует и исполняет созданные handlers со специально
+сформированным ID, проверяя исходное значение и отсутствие выполнения внедрённого кода.
+
 ## Подтверждённо защищённые критические пути
 
 - Оплата cash/card/split, списание вложенных рецептур и создание чека объединены critical journal.
