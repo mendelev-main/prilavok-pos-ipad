@@ -970,6 +970,15 @@ test('availability schedule waits ten minutes on launch/resume; no network event
  f.c.document.hidden=true;listeners.visibilitychange();assert.equal(jobs.length,1);f.c.document.hidden=false;listeners.visibilitychange();assert.equal(jobs.length,2);assert.equal(sent,0);await jobs[1].cb();assert.equal(sent,1);assert.equal(jobs[2].ms,600000);
 });
 function webAcceptFixture(){const f=fixture();f.state.network={backendUrl:'https://test',deviceKey:'test'};f.state.webEvents=[{id:'web-1',external_id:'WEB-1',total:10,order_items:[{external_product_id:'pizza',product_name:'Пицца',quantity:1,price:10}]}];return f;}
+test('incoming WEB EventSource persists orders without invoking catalog or availability upload',()=>{
+ const f=fixture(),sources=[];f.state.network={backendUrl:'https://test/',deviceKey:'secret key'};let fetches=0;f.c.fetch=async()=>{fetches++;throw Error('outgoing request is forbidden')};f.c.EventSource=class{constructor(url){this.url=url;sources.push(this)}close(){this.closed=true}};
+ f.c.startWebOrderEvents();assert.equal(sources[0].url,'https://test/api/orders/events?deviceKey=secret%20key');sources[0].onmessage({data:JSON.stringify({type:'orders',orders:[{id:'web-2',external_id:'WEB-2',status:'new',total:12,order_items:[]}]})});assert.equal(fetches,0);assert.equal(f.state.webEvents[0].id,'web-2');assert.equal(JSON.parse(f.data.get('prilavok_webEvents'))[0].id,'web-2');
+ f.c.startWebOrderEvents();assert.equal(sources[0].closed,true);assert.equal(sources.length,2);
+});
+test('catalog endpoint is called only by explicit manual menu synchronization',async()=>{
+ const f=fixture();Object.assign(f.fields,{'network-backend-url':{value:'https://backend.test/'},'network-device-name':{value:'Касса'}});f.c.currentShiftEmployeeIsAdmin=()=>true;let request,availability=0;f.c.publishAvailability=async()=>{availability++;return true};f.c.fetch=async(url,options)=>{request={url,options};return {ok:true,json:async()=>({categories:2,products:4})}};
+ assert.equal((html.match(/\/api\/menu\/sync/g)||[]).length,1);f.c.buildMenuSyncPayload();assert.equal(request,undefined);await f.c.syncMenuToBackend();assert.equal(request.url,'https://backend.test/api/menu/sync');assert.equal(request.options.method,'POST');assert.equal(JSON.parse(request.options.body).products.length,f.state.products.length);assert.equal(availability,1);assert.match(f.c.renderNetworkScreen(),/onclick="syncMenuToBackend\(\)"/);
+});
 test('WEB acceptance checks aggregate ingredient availability before any network request',async()=>{
  const f=webAcceptFixture();f.c.getProduct('flour').stock=.3;f.state.webEvents[0].order_items.push({external_product_id:'flour',product_name:'Мука',quantity:.2,price:2});await f.c.acceptWebOrder('web-1','15m');assert.equal(f.state.parked.length,0);assert.match(f.messages.join(' '),/Недостаточно остатка/);
 });
