@@ -18,6 +18,7 @@ Swift/UIKit application
       ├─ Web/js/features/product-photo.js: picker, preview, resize и native photo callbacks
       ├─ Web/js/features/product-persistence.js: local-first сохранение товара и WEB-признак
       ├─ Web/js/features/product-editor.js: lifecycle, dirty-state и разметка карточки товара
+      ├─ Web/js/features/availability.js: событийная публикация сохранённых остатков для WEB
       ├─ Web/js/features/suppliers.js: справочник поставщиков и связи с товарами
       ├─ Web/js/features/purchase-orders.js: заказы поставщикам и их локальная история
       ├─ Web/js/features/receiving-ui.js: экран, история и редактор документа приёмки
@@ -98,6 +99,12 @@ inline actions сериализуются как JSON и затем экрани
 `product-editor.js` владеет открытием, закрытием, dirty-state, навигацией, summary и основной
 разметкой карточки. Строки
 каталога передают product ID в open/keyboard/WEB actions через JSON serialization и attribute escaping.
+`availability.js` формирует прежний полный snapshot из устойчиво сохранённых `products`, сохраняет
+монотонную revision и отправляет его после успешной оплаты, возврата, приёмки, фиксации/
+завершения инвентаризации или сохранения товара. Эти операции не ожидают сеть. Триггер во время
+активного запроса приводит к следующей отправке самого нового сохранённого snapshot. Таймера,
+startup/foreground/visibility/online trigger и автоматического retry нет; после offline-сбоя новая
+попытка появится при следующем складском изменении или ручной синхронизации меню.
 `suppliers.js` владеет справочником поставщиков и их связями с простыми товарами. CRUD сначала
 записывает полный снимок прежнего `prilavok_suppliers`, а затем публикует его в памяти. Исторические
 заказы и приёмки сохраняют собственные `supplierId`/`supplierName` и при удалении справочника не
@@ -149,7 +156,7 @@ journal. Отсутствующие optional collections старых верси
 
 - Основное направление: POS → Backend → Web / Mini App.
 - Полная публикация меню — только явной кнопкой в сетевых настройках.
-- Согласованные узкие каналы: доступность остатков, operational snapshot/heartbeat/outbox, входящие WEB-события и ACK/retry, loyalty retry, Telegram-отчёты.
+- Согласованные узкие каналы: событийная доступность остатков после local commit, operational snapshot/heartbeat/outbox, входящие WEB-события и ACK/retry, loyalty retry, Telegram-отчёты.
 - Ни один сетевой канал не должен блокировать локальную продажу.
 - Backend URL по умолчанию — `https://project-dubrovno.up.railway.app`; сохранённая на iPad конфигурация имеет приоритет.
 

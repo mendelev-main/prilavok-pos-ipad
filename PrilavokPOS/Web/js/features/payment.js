@@ -528,6 +528,7 @@ async function finalizePayment(payments){
   catch(e){flash('Оплата не завершена: '+(e?.message||e));return}
   finally{criticalOperationBusy=false}
   state.products=nextProducts;state.orders=nextOrders;state.shifts=nextShifts;
+  void publishAvailability();
   resetCurrentOrderState();state.paymentPage='receipt';state._splitPayments=[];state._splitCount=0;state._splitPaymentTotalCents=null;
   closeModal();showPaymentReceipt(order);void publishPaidOrderLoyalty(order);setTimeout(()=>{if(typeof window.printCompletedOrder==='function')window.printCompletedOrder(order);else if(state.printer?.autoPrint)sendOrderToPrint(order);window.__currentOrderKitchenPrinted=false},250);
 }

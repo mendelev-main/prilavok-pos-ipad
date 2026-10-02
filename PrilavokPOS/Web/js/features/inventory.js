@@ -64,7 +64,7 @@ async function fixInventoryItem(id){
  try{await commitCriticalStorage('inventory-fix',{products:nextProducts,inventoryDraft:nextDraft})}
  catch(e){flash('Остаток не зафиксирован: '+(e?.message||e));return false}
  finally{criticalOperationBusy=false}
- state.products=nextProducts;state.inventoryDraft=nextDraft;render();flash('Остаток зафиксирован');return true;
+ state.products=nextProducts;state.inventoryDraft=nextDraft;void publishAvailability();render();flash('Остаток зафиксирован');return true;
 }
 function requestCancelInventory(){
  if(!state.inventoryDraft)return;
@@ -119,7 +119,7 @@ async function confirmCompleteInventory(){
  try{await commitCriticalStorage('inventory-complete',{products:nextProducts,inventoryHistory:nextHistory,inventoryConfig:nextConfig,inventoryDraft:null})}
  catch(e){flash('Инвентаризация не завершена: '+(e?.message||e));return false}
  finally{criticalOperationBusy=false}
- state.products=nextProducts;state.inventoryHistory=nextHistory;state.inventoryConfig=nextConfig;state.inventoryDraft=null;state.tab='pos';closeModal();render();flash('Инвентаризация завершена');return true;
+ state.products=nextProducts;state.inventoryHistory=nextHistory;state.inventoryConfig=nextConfig;state.inventoryDraft=null;void publishAvailability();state.tab='pos';closeModal();render();flash('Инвентаризация завершена');return true;
 }
 function renderInventoryScreen(){
  const c=state.inventoryConfig||{};if(!['weekly','monthly','quarterly'].includes(c.frequency))c.frequency='monthly';

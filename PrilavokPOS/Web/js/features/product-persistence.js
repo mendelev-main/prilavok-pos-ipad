@@ -74,7 +74,7 @@ async function saveProduct(editingId){
     if(window._pmRemoveImage){delete p.localImageId;delete p.imageUploadPending}
     if(editingId && JSON.stringify(getProduct(editingId))!==originalProduct)throw new Error('Товар изменился во время сохранения. Откройте карточку заново');
     const nextProducts=storageSnapshot(state.products);if(editingId)nextProducts[nextProducts.findIndex(x=>x.id===editingId)]=p;else nextProducts.push(p);
-    await window.PrilavokCore.Storage.set('products',nextProducts);state.products=nextProducts;window._pmLocalImageId=null;syncCategoryOrder();
+    await window.PrilavokCore.Storage.set('products',nextProducts);state.products=nextProducts;window._pmLocalImageId=null;syncCategoryOrder();void publishAvailability();
     if(previousLocalImageId && (window._pmRemoveImage || (selectedLocalImageId&&selectedLocalImageId!==previousLocalImageId)))window.webkit?.messageHandlers?.photoPicker?.postMessage({action:'remove',id:previousLocalImageId});
     let imageData=window._pmImageData;
     if(!imageData&&p.imageUploadPending&&p.localImageId)imageData=await readNativeProductImage(p.localImageId);

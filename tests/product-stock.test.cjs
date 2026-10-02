@@ -16,6 +16,7 @@ const productConfigurationScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web
 const productPhotoScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/product-photo.js'),'utf8');
 const productPersistenceScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/product-persistence.js'),'utf8');
 const productEditorScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/product-editor.js'),'utf8');
+const availabilityScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/availability.js'),'utf8');
 const suppliersScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/suppliers.js'),'utf8');
 const purchaseOrdersScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/purchase-orders.js'),'utf8');
 const receivingUiScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/receiving-ui.js'),'utf8');
@@ -44,7 +45,7 @@ function fixture(){
  const data=new Map(),messages=[],writes=[],fields={'pf-prep-station':{value:'kitchen'},'pf-prep-difficulty':{value:'1'},'pf-base-prep-minutes':{value:'5'}},events=[];
  const document={getElementById:id=>fields[id]||null,querySelector:()=>null,addEventListener:()=>{}};
  const c={console:{error:()=>{}},document,crypto:{randomUUID:()=> 'device-test'},setTimeout:()=>0,clearTimeout:()=>{},addEventListener:()=>{},removeEventListener:()=>{},AbortController,localStorage:{getItem:k=>data.has(k)?data.get(k):null,setItem:(k,v)=>{data.set(k,String(v));writes.push(k);},removeItem:k=>data.delete(k)},fetch:()=>{throw Error('Network is prohibited in this test');},setInterval:()=>{throw Error('Timer is prohibited in this test');}};
- c.window=c;vm.createContext(c);vm.runInContext(adapter,c);vm.runInContext(inline.replace(/loadAll\(\);\s*$/,''),c);vm.runInContext(shiftsScript,c);vm.runInContext(employeesScript,c);vm.runInContext(loyaltyScript,c);vm.runInContext(productConfigurationScript,c);vm.runInContext(productPhotoScript,c);vm.runInContext(productPersistenceScript,c);vm.runInContext(productEditorScript,c);vm.runInContext(suppliersScript,c);vm.runInContext(purchaseOrdersScript,c);vm.runInContext(receivingUiScript,c);vm.runInContext(receivingDraftsScript,c);vm.runInContext(receivingScript,c);vm.runInContext(webOrdersScript,c);vm.runInContext(inventoryScript,c);vm.runInContext(warehouseReportingScript,c);vm.runInContext(analyticsScript,c);vm.runInContext(productCatalogScript,c);vm.runInContext(productCategoriesScript,c);vm.runInContext(posNavigationScript,c);vm.runInContext(cartPresentationScript,c);vm.runInContext(cartCompositionScript,c);vm.runInContext(parkedOrdersScript,c);vm.runInContext(paymentScript,c);vm.runInContext(receiptsScript,c);vm.runInContext(hallBookingsScript,c);vm.runInContext(backupScript,c);
+ c.window=c;vm.createContext(c);vm.runInContext(adapter,c);vm.runInContext(inline.replace(/loadAll\(\);\s*$/,''),c);vm.runInContext(shiftsScript,c);vm.runInContext(employeesScript,c);vm.runInContext(loyaltyScript,c);vm.runInContext(productConfigurationScript,c);vm.runInContext(productPhotoScript,c);vm.runInContext(productPersistenceScript,c);vm.runInContext(productEditorScript,c);vm.runInContext(availabilityScript,c);vm.runInContext(suppliersScript,c);vm.runInContext(purchaseOrdersScript,c);vm.runInContext(receivingUiScript,c);vm.runInContext(receivingDraftsScript,c);vm.runInContext(receivingScript,c);vm.runInContext(webOrdersScript,c);vm.runInContext(inventoryScript,c);vm.runInContext(warehouseReportingScript,c);vm.runInContext(analyticsScript,c);vm.runInContext(productCatalogScript,c);vm.runInContext(productCategoriesScript,c);vm.runInContext(posNavigationScript,c);vm.runInContext(cartPresentationScript,c);vm.runInContext(cartCompositionScript,c);vm.runInContext(parkedOrdersScript,c);vm.runInContext(paymentScript,c);vm.runInContext(receiptsScript,c);vm.runInContext(hallBookingsScript,c);vm.runInContext(backupScript,c);
  c.flash=m=>messages.push(m);c.render=()=>{};c.showReceipt=()=>{};c.showPaymentReceipt=()=>{};c.closeModal=()=>{};c.applyTheme=()=>{};
  const state=vm.runInContext('state',c);
  c.__printerSettingsSnapshot=()=>({printers:[],posNotifications:{soundEnabled:true,sound:'default'}});c.__restorePrinterSettings=()=>true;
@@ -54,7 +55,7 @@ function fixture(){
  async function sale(payments){cart();await c.finalizePayment(payments||[{method:'cash',amount:10}]);return state.orders[0];}
  return {c,state,data,messages,writes,fields,events,cart,sale};
 }
-test('all production JavaScript modules parse',()=>{new vm.Script(inline);new vm.Script(adapter);new vm.Script(shiftsScript);new vm.Script(employeesScript);new vm.Script(loyaltyScript);new vm.Script(productConfigurationScript);new vm.Script(productPhotoScript);new vm.Script(productPersistenceScript);new vm.Script(productEditorScript);new vm.Script(suppliersScript);new vm.Script(purchaseOrdersScript);new vm.Script(receivingUiScript);new vm.Script(receivingDraftsScript);new vm.Script(receivingScript);new vm.Script(webOrdersScript);new vm.Script(inventoryScript);new vm.Script(warehouseReportingScript);new vm.Script(analyticsScript);new vm.Script(productCatalogScript);new vm.Script(productCategoriesScript);new vm.Script(posNavigationScript);new vm.Script(cartPresentationScript);new vm.Script(cartCompositionScript);new vm.Script(parkedOrdersScript);new vm.Script(paymentScript);new vm.Script(receiptsScript);new vm.Script(hallBookingsScript);new vm.Script(backupScript);new vm.Script(printerScript);});
+test('all production JavaScript modules parse',()=>{new vm.Script(inline);new vm.Script(adapter);new vm.Script(shiftsScript);new vm.Script(employeesScript);new vm.Script(loyaltyScript);new vm.Script(productConfigurationScript);new vm.Script(productPhotoScript);new vm.Script(productPersistenceScript);new vm.Script(productEditorScript);new vm.Script(availabilityScript);new vm.Script(suppliersScript);new vm.Script(purchaseOrdersScript);new vm.Script(receivingUiScript);new vm.Script(receivingDraftsScript);new vm.Script(receivingScript);new vm.Script(webOrdersScript);new vm.Script(inventoryScript);new vm.Script(warehouseReportingScript);new vm.Script(analyticsScript);new vm.Script(productCatalogScript);new vm.Script(productCategoriesScript);new vm.Script(posNavigationScript);new vm.Script(cartPresentationScript);new vm.Script(cartCompositionScript);new vm.Script(parkedOrdersScript);new vm.Script(paymentScript);new vm.Script(receiptsScript);new vm.Script(hallBookingsScript);new vm.Script(backupScript);new vm.Script(printerScript);});
 test('shifts module loads before dependent features and preserves its public API',()=>{
  const moduleTag='<script src="Web/js/features/shifts.js"></script>',paymentTag='<script src="Web/js/features/payment.js"></script>',startupTag='<script>loadAll();</script>';
  assert.ok(html.indexOf(moduleTag)>=0);assert.ok(html.indexOf(paymentTag)>html.indexOf(moduleTag));assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));assert.doesNotMatch(inline,/function submitCloseShift\s*\(/);
@@ -129,6 +130,12 @@ test('product editor module loads after configuration and before catalog with it
  const configurationTag='<script src="Web/js/features/product-configuration.js"></script>',moduleTag='<script src="Web/js/features/product-editor.js"></script>',catalogTag='<script src="Web/js/features/product-catalog.js"></script>',startupTag='<script>loadAll();</script>';
  assert.ok(html.indexOf(moduleTag)>html.indexOf(configurationTag));assert.ok(html.indexOf(catalogTag)>html.indexOf(moduleTag));assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));assert.doesNotMatch(inline,/function openProductModal\s*\(/);assert.doesNotMatch(inline,/function renderProductModal\s*\(/);
  const f=fixture();for(const name of ['openProductModal','productEditorSnapshot','productEditorDirty','finishProductEditor','requestCloseProductEditor','saveProductEditor','selectProductEditorSection','renderProductUsage','updateProductEditorSummary','renderProductModal'])assert.equal(typeof f.c[name],'function',name);
+});
+test('availability module loads before stock mutation features and owns its public API',()=>{
+ const editorTag='<script src="Web/js/features/product-editor.js"></script>',moduleTag='<script src="Web/js/features/availability.js"></script>',receivingTag='<script src="Web/js/features/receiving.js"></script>',paymentTag='<script src="Web/js/features/payment.js"></script>',startupTag='<script>loadAll();</script>';
+ assert.ok(html.indexOf(moduleTag)>html.indexOf(editorTag));assert.ok(html.indexOf(receivingTag)>html.indexOf(moduleTag));assert.ok(html.indexOf(paymentTag)>html.indexOf(moduleTag));assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));
+ assert.doesNotMatch(inline,/function publishAvailability\s*\(/);assert.doesNotMatch(inline,/startAvailabilitySchedule|AVAILABILITY_INTERVAL/);
+ const f=fixture();for(const name of ['buildAvailabilityItems','publishAvailability','onAvailabilityAppState'])assert.equal(typeof f.c[name],'function',name);assert.equal(typeof f.c.startAvailabilitySchedule,'undefined');
 });
 test('catalog row actions preserve compatible product IDs as inert arguments',()=>{
  const f=fixture(),decode=value=>value.replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&'),id="catalog\"');injected();//";let injected=0,opened,toggled,stopped=0,prevented=0;
@@ -320,6 +327,13 @@ test('sale writes nested stock snapshot through real adapter; same receipt survi
  const next=fixture();for(const [k,v] of f.data)next.data.set(k,v);await next.c.loadAll();
  assert.deepEqual(plain(next.state.orders[0].stockConsumption),saved[0].stockConsumption);
  assert.ok(f.writes.every(k=>k.startsWith('prilavok_')));
+});
+test('payment publishes availability only after local commit and never waits for its network request',async()=>{
+ const f=fixture();f.cart();let releaseCommit,availabilityCalls=0;const gate=new Promise(resolve=>{releaseCommit=resolve}),realCommit=f.c.commitCriticalStorage;
+ f.c.commitCriticalStorage=async(...args)=>{await gate;return realCommit(...args)};
+ f.c.publishAvailability=()=>{availabilityCalls++;return new Promise(()=>{})};
+ const payment=f.c.finalizePayment([{method:'cash',amount:10}]);await Promise.resolve();assert.equal(availabilityCalls,0);assert.equal(f.state.orders.length,0);
+ releaseCommit();await payment;assert.equal(availabilityCalls,1);assert.equal(f.state.orders.length,1);assert.equal(JSON.parse(f.data.get('prilavok_orders')).length,1);
 });
 test('cash, card and split payments create one receipt and retain payment data',async()=>{
  for(const payments of [[{method:'cash',amount:10,cashGiven:20,change:10}],[{method:'card',amount:10}],[{method:'cash',amount:4,cashGiven:5,change:1},{method:'card',amount:6}]]){
@@ -545,9 +559,9 @@ test('inventory fix failure leaves product and draft unchanged',async()=>{
 });
 
 test('inventory fix persists product and draft together',async()=>{
- const f=fixture();f.state.inventoryDraft={id:'inventory',type:'scheduled',items:[{productId:'flour',name:'Мука',unit:'kg',expected:10,actual:3}]};
+ const f=fixture();let availability=0;f.c.publishAvailability=()=>{availability++;return Promise.resolve(true)};f.state.inventoryDraft={id:'inventory',type:'scheduled',items:[{productId:'flour',name:'Мука',unit:'kg',expected:10,actual:3}]};
  assert.equal(await f.c.fixInventoryItem('flour'),true);assert.equal(f.c.getProduct('flour').stock,3);assert.equal(f.state.inventoryDraft.items[0].difference,-7);assert.ok(f.state.inventoryDraft.items[0].fixedAt);
- assert.equal(JSON.parse(f.data.get('prilavok_products')).find(x=>x.id==='flour').stock,3);assert.equal(JSON.parse(f.data.get('prilavok_inventoryDraft')).items[0].difference,-7);
+ assert.equal(JSON.parse(f.data.get('prilavok_products')).find(x=>x.id==='flour').stock,3);assert.equal(JSON.parse(f.data.get('prilavok_inventoryDraft')).items[0].difference,-7);assert.equal(availability,1);
 });
 
 test('interrupted inventory fix recovers stock and fixed draft together',async()=>{
@@ -564,9 +578,9 @@ test('inventory completion failure keeps history, config and draft unchanged',as
 });
 
 test('inventory completion commits stock, history, config and draft together',async()=>{
- const f=fixture();f.c.getProduct('flour').stock=3;f.state.inventoryHistory=[];f.state.inventoryConfig={enabled:true,frequency:'monthly',productIds:['flour'],lastCompletedAt:null};f.state.inventoryDraft={id:'inventory',type:'scheduled',items:[{productId:'flour',name:'Мука',unit:'kg',expected:10,actual:3,difference:-7,fixedAt:1}]};
+ const f=fixture();let availability=0;f.c.publishAvailability=()=>{availability++;return Promise.resolve(true)};f.c.getProduct('flour').stock=3;f.state.inventoryHistory=[];f.state.inventoryConfig={enabled:true,frequency:'monthly',productIds:['flour'],lastCompletedAt:null};f.state.inventoryDraft={id:'inventory',type:'scheduled',items:[{productId:'flour',name:'Мука',unit:'kg',expected:10,actual:3,difference:-7,fixedAt:1}]};
  assert.equal(await f.c.confirmCompleteInventory(),true);assert.equal(f.state.inventoryDraft,null);assert.equal(f.state.inventoryHistory.length,1);assert.ok(f.state.inventoryConfig.lastCompletedAt);assert.equal(f.state.tab,'pos');
- assert.equal(JSON.parse(f.data.get('prilavok_inventoryHistory')).length,1);assert.equal(JSON.parse(f.data.get('prilavok_inventoryDraft')),null);assert.equal(JSON.parse(f.data.get('prilavok_products')).find(x=>x.id==='flour').stock,3);
+ assert.equal(JSON.parse(f.data.get('prilavok_inventoryHistory')).length,1);assert.equal(JSON.parse(f.data.get('prilavok_inventoryDraft')),null);assert.equal(JSON.parse(f.data.get('prilavok_products')).find(x=>x.id==='flour').stock,3);assert.equal(availability,1);
 });
 
 test('interrupted inventory completion recovers every related key',async()=>{
@@ -712,9 +726,9 @@ test('fractional consumption permits exact stock, never consumes a material shor
  missing.c.getProduct('flour').stock=0;assert.throws(()=>missing.c.checkedStockConsumption([{productId:'flour',qty:1e-20}]),/Недостаточно/);
 });
 test('return uses sold recipe after edit and ignores current tracking flag',async()=>{
- const f=fixture(),order=await f.sale();f.c.getProduct('dough').components[0].qty=0.8;f.c.getProduct('flour').noStockTracking=true;
+ const f=fixture();let availability=0;f.c.publishAvailability=()=>{availability++;return Promise.resolve(true)};const order=await f.sale();availability=0;f.c.getProduct('dough').components[0].qty=0.8;f.c.getProduct('flour').noStockTracking=true;
  await f.c.processFullReturn(order.id);near(f.c.getProduct('flour').stock,10);near(f.c.getProduct('water').stock,10);assert.ok(f.state.orders[0].returnedAt);
- const first=JSON.stringify(f.state);await f.c.processFullReturn(order.id);assert.equal(JSON.stringify(f.state),first,'second return cannot add stock or cash twice');
+ assert.equal(availability,1);const first=JSON.stringify(f.state);await f.c.processFullReturn(order.id);assert.equal(JSON.stringify(f.state),first,'second return cannot add stock or cash twice');assert.equal(availability,1);
 });
 test('return journal recovers stock, receipt and cash movement together',async()=>{
  const f=fixture(),order=await f.sale();const originalSet=f.c.localStorage.setItem;let failed=false;
@@ -881,10 +895,10 @@ test('product storage failure prevents photo upload and leaves state unchanged',
  assert.equal(await f.c.saveProduct('flour'),undefined);assert.equal(JSON.stringify(f.state.products),before);assert.equal(uploads,0);assert.match(f.messages.at(-1),/storage full/);
 });
 test('ordinary product save uses original local key and preserves extra fields',async()=>{
- const f=editorFixture();f.c.getProduct('flour').futureField={keep:true};
+ const f=editorFixture();let availability=0;f.c.publishAvailability=()=>{availability++;return Promise.resolve(true)};f.c.getProduct('flour').futureField={keep:true};
  assert.equal(await f.c.saveProduct('flour'),true);assert.equal(f.c.getProduct('flour').id,'flour');assert.deepEqual(plain(f.c.getProduct('flour').futureField),{keep:true});
  assert.equal(JSON.parse(f.data.get('prilavok_products')).find(p=>p.id==='flour').name,'Мука новая');
- assert.equal(f.state.products.length,4);
+ assert.equal(f.state.products.length,4);assert.equal(availability,1);
 });
 test('usage shows direct and nested recipe links and escapes product names',()=>{
  const f=editorFixture();f.c.getProduct('dough').name='<Тесто>';const result=f.c.renderProductUsage('flour');
@@ -1061,9 +1075,9 @@ function invoiceFixture(){
  f.c._receivingPending={orderId:'purchase',draft:{invoiceNumber:'ТТН-001',invoiceDate:'2026-09-14',supplierId:'supplier',lines:[{productId:'flour',qtyInput:'3',unit:'',totalInput:'60'}]}};return f;
 }
 test('confirmation applies current weighted cost once and persists TTN history',async()=>{
- const f=invoiceFixture();Object.assign(f.c.getProduct('flour'),{stock:2,cost:10});
+ const f=invoiceFixture();let availability=0;f.c.publishAvailability=()=>{availability++;return Promise.resolve(true)};Object.assign(f.c.getProduct('flour'),{stock:2,cost:10});
  await f.c.applyReceivingDocument();near(f.c.getProduct('flour').stock,5);near(f.c.getProduct('flour').cost,16);assert.equal(f.state.receivings.length,1);assert.equal(f.state.receivings[0].invoiceNumber,'ТТН-001');assert.equal(f.state.purchaseOrders[0].status,'received');
- await f.c.applyReceivingDocument();assert.equal(f.state.receivings.length,1);near(f.c.getProduct('flour').stock,5);assert.ok(f.data.has('prilavok_receivings'));
+ assert.equal(availability,1);await f.c.applyReceivingDocument();assert.equal(f.state.receivings.length,1);near(f.c.getProduct('flour').stock,5);assert.ok(f.data.has('prilavok_receivings'));assert.equal(availability,1);
 });
 test('receiving refuses to start while another critical operation is saving',async()=>{
  const f=invoiceFixture(),before=JSON.stringify({products:f.state.products,purchaseOrders:f.state.purchaseOrders,receivings:f.state.receivings});vm.runInContext('criticalOperationBusy=true',f.c);
@@ -1447,7 +1461,7 @@ test('availability timeout or network failure leaves POS state and products unto
  const f=fixture();f.state.loaded=true;await f.c.saveKey('products',f.state.products);await f.c.saveKey('network',{backendUrl:'https://test',deviceKey:'test'});
  const before=JSON.stringify(f.state);f.c.fetch=async()=>{throw Error('offline')};assert.equal(await f.c.publishAvailability(),false);assert.equal(JSON.stringify(f.state),before);assert.equal(JSON.parse(f.data.get('prilavok_products'))[0].stock,10);
 });
-test('availability revision increases across restart and backwards clock; unchanged stock has heartbeat',async()=>{
+test('availability revision increases across restart and backwards clock',async()=>{
  const f=fixture();f.state.loaded=true;await f.c.saveKey('products',f.state.products);await f.c.saveKey('network',{backendUrl:'https://test',deviceKey:'test'});await f.c.saveKey('webAvailabilityRevision',Date.now()+100000);
  const revisions=[];f.c.fetch=async(_,o)=>{revisions.push(JSON.parse(o.body).revision);return {ok:true}};await f.c.publishAvailability();await f.c.publishAvailability();assert.equal(revisions.length,2);assert.equal(revisions[1],revisions[0]+1);
 });
@@ -1455,10 +1469,17 @@ test('availability distinguishes untracked, zero and broken recipes',()=>{
  const f=fixture();f.state.products.push({id:'untracked',type:'simple',noStockTracking:true},{id:'broken',type:'composite',components:[{productId:'missing',qty:1}]});f.c.getProduct('flour').stock=-1;
  const items=f.c.buildAvailabilityItems(f.state.products);assert.equal(items.find(i=>i.externalId==='untracked').quantity,null);assert.equal(items.find(i=>i.externalId==='flour').quantity,0);assert.equal(items.find(i=>i.externalId==='broken').quantity,0);
 });
-test('availability schedule waits ten minutes on launch/resume; no network event trigger',async()=>{
- const f=fixture();const jobs=[],listeners={};f.c.setTimeout=(cb,ms)=>{jobs.push({cb,ms});return jobs.length};f.c.clearTimeout=()=>{};f.c.document.addEventListener=(event,cb)=>{listeners[event]=cb};let sent=0;f.c.publishAvailability=async()=>{sent++};
- f.c.startAvailabilitySchedule();assert.equal(jobs[0].ms,600000);assert.equal(sent,0);assert.deepEqual(Object.keys(listeners),['visibilitychange']);
- f.c.document.hidden=true;listeners.visibilitychange();assert.equal(jobs.length,1);f.c.document.hidden=false;listeners.visibilitychange();assert.equal(jobs.length,2);assert.equal(sent,0);await jobs[1].cb();assert.equal(sent,1);assert.equal(jobs[2].ms,600000);
+test('availability has no launch, foreground, visibility or network trigger',async()=>{
+ const f=fixture();f.state.loaded=true;await f.c.saveKey('products',f.state.products);await f.c.saveKey('network',{backendUrl:'https://test',deviceKey:'test'});let calls=0;f.c.fetch=async()=>{calls++;return {ok:true}};
+ f.c.onAvailabilityAppState(false);f.c.onAvailabilityAppState(true);assert.equal(calls,0);
+ assert.doesNotMatch(inline,/startAvailabilitySchedule|AVAILABILITY_INTERVAL/);assert.doesNotMatch(availabilityScript,/addEventListener\s*\(\s*['"](?:online|visibilitychange)/);
+});
+test('availability coalesces an overlapping mutation and sends the newest persisted stock',async()=>{
+ const f=fixture();f.state.loaded=true;await f.c.saveKey('products',f.state.products);await f.c.saveKey('network',{backendUrl:'https://test',deviceKey:'test'});
+ const bodies=[];let releaseFirst;const firstGate=new Promise(resolve=>{releaseFirst=resolve});f.c.fetch=async(_url,options)=>{bodies.push(JSON.parse(options.body));if(bodies.length===1)await firstGate;return {ok:true}};
+ const first=f.c.publishAvailability();for(let i=0;i<12&&bodies.length===0;i++)await Promise.resolve();assert.equal(bodies.length,1);
+ const next=plain(f.state.products);next.find(p=>p.id==='flour').stock=4;await f.c.saveKey('products',next);const second=f.c.publishAvailability();releaseFirst();assert.equal(await first,true);assert.equal(await second,true);
+ assert.equal(bodies.length,2);assert.equal(bodies[1].items.find(item=>item.externalId==='flour').quantity,4);assert.ok(bodies[1].revision>bodies[0].revision);
 });
 function webAcceptFixture(){const f=fixture();f.state.network={backendUrl:'https://test',deviceKey:'test'};f.state.webEvents=[{id:'web-1',external_id:'WEB-1',total:10,order_items:[{external_product_id:'pizza',product_name:'Пицца',quantity:1,price:10}]}];return f;}
 test('incoming WEB EventSource persists orders without invoking catalog or availability upload',()=>{

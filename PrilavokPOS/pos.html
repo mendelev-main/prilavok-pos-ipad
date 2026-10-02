@@ -1293,7 +1293,6 @@ async function loadAll(){
   render();
   if(hasPaidSplitPayment())setTimeout(()=>openPaymentModal(),0);
   startWebOrderEvents();
-  startAvailabilitySchedule();
   queueOperationalSnapshot();
   void flushOperationalOutbox();
   startOperationalSchedule();
@@ -1700,44 +1699,6 @@ async function testBackendConnection(){
   }
 }
 
-// Authorized exception: availability only, every ten minutes in a visible POS.
-const AVAILABILITY_INTERVAL=10*60*1000;
-let availabilityTimer=null,availabilityBusy=false,availabilityController=null,availabilityListening=false;
-function buildAvailabilityItems(products){
-  const byId=new Map(products.map(p=>[p.id,p]));
-  return products.map(p=>{
-    const qty=availableStock(p,id=>byId.get(id));
-    return {externalId:String(p.id),quantity:qty===Infinity?null:(Number.isFinite(qty)?Math.max(0,qty):0)};
-  }).sort((a,b)=>a.externalId.localeCompare(b.externalId));
-}
-async function publishAvailability(){
-  if(availabilityBusy||document.hidden||window._availabilityAppActive===false||!state.loaded||storageBroken)return false;
-  availabilityBusy=true;
-  let timeout;
-  try{
-    let failed=false;const onError=()=>{failed=true;};const storage=window.PrilavokCore.Storage;
-    // Derive from completed storage writes, never from an unsaved editor or state.
-    const [products,network,previous]=await Promise.all([storage.get('products',null,onError),storage.get('network',null,onError),storage.get('webAvailabilityRevision',0,onError)]);
-    if(failed||!Array.isArray(products)||!network?.backendUrl||!network.deviceKey)return false;
-    if(!Number.isSafeInteger(previous)||previous<0)return false;
-    const items=buildAvailabilityItems(products);
-    const revision=Math.max(Date.now(),previous+1);
-    if(!Number.isSafeInteger(revision))return false;
-    await storage.set('webAvailabilityRevision',revision);
-    if(document.hidden||window._availabilityAppActive===false)return false;
-    availabilityController=new AbortController();timeout=setTimeout(()=>availabilityController?.abort(),30000);
-    const r=await fetch(network.backendUrl.replace(/\/+$/,'')+'/api/availability/snapshot',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Key':network.deviceKey},body:JSON.stringify({version:1,revision,sampledAt:new Date().toISOString(),items}),cache:'no-store',signal:availabilityController.signal});
-    return r.ok;
-  }catch(e){return false;}
-  finally{clearTimeout(timeout);availabilityController=null;availabilityBusy=false;}
-}
-function onAvailabilityAppState(active){
-  window._availabilityAppActive=active;
-  if(!active){clearTimeout(availabilityTimer);availabilityTimer=null;availabilityController?.abort();}
-  else if(state.loaded)startAvailabilitySchedule();
-}
-
-
 window.onTelegramResult=function(result){
   if(result?.ok){ flash(result.message||'Telegram подключён'); if(state.tab==='network'){ const el=document.getElementById('telegram-status'); if(el) el.textContent=result.message||'Telegram подключён.'; } }
   else { flash(result?.message||'Не удалось подключиться к Telegram'); const el=document.getElementById('telegram-status'); if(el) el.textContent=result?.message||'Не удалось подключиться к Telegram.'; }
@@ -1905,18 +1866,6 @@ function deleteDiscount(id){
   saveKey('discounts',state.discounts); render();
 }
 
-
-function startAvailabilitySchedule(){
-  clearTimeout(availabilityTimer);availabilityTimer=null;
-  if(!availabilityListening){
-    document.addEventListener('visibilitychange',()=>{
-      if(document.hidden){clearTimeout(availabilityTimer);availabilityTimer=null;availabilityController?.abort();}
-      else startAvailabilitySchedule();
-    });availabilityListening=true;
-  }
-  if(document.hidden||window._availabilityAppActive===false)return;
-  availabilityTimer=setTimeout(async()=>{await publishAvailability();startAvailabilitySchedule();},AVAILABILITY_INTERVAL);
-}
 
 function buildMenuSyncPayload(){
   const categoryNames=[];
@@ -2348,6 +2297,7 @@ document.addEventListener('touchmove',function(e){
 <script src="Web/js/features/product-photo.js"></script>
 <script src="Web/js/features/product-persistence.js"></script>
 <script src="Web/js/features/product-editor.js"></script>
+<script src="Web/js/features/availability.js"></script>
 <script src="Web/js/features/suppliers.js"></script>
 <script src="Web/js/features/purchase-orders.js"></script>
 <script src="Web/js/features/receiving-ui.js"></script>

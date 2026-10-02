@@ -102,6 +102,7 @@ async function processFullReturn(orderId){
     try{await commitCriticalStorage('return',{products:nextProducts,orders:nextOrders,shifts:nextShifts})}
     finally{criticalOperationBusy=false}
     state.products=nextProducts;state.orders=nextOrders;state.shifts=nextShifts;
+    void publishAvailability();
     const committedOrder=state.orders.find(o=>String(o.id)===String(orderId));
     if(committedOrder.customer?.id)void settleReturnedOrderLoyalty(committedOrder);
     closeModal();

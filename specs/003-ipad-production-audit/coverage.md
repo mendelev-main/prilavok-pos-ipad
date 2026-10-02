@@ -19,7 +19,7 @@
 | Навигация POS | category/folder layout, drag/drop, legacy normalization | Node tests | PASS |
 | WEB-заказы | SSE normalization, local-first accept, ACK/retry, ETA | Node tests + review | PASS; A003-F14 legacy edge |
 | Лояльность | search, rewards, offline sale, ordered retry/reversal, safe backend IDs/names, module boundary | tests + review | PASS after specs 008/041; A003-F06/F23 fixed |
-| Availability/outbox | 10-minute schedule, timeout, revision, persisted source | Node tests | PASS |
+| Availability/outbox | event-driven post-commit triggers, coalescing, timeout, revision, persisted source; no timer/lifecycle/network trigger | Node tests | PASS after spec 046 |
 | Network boundaries | fetch timeouts, retry, background/foreground | static review | A003-F06, F07, F14 |
 | LAN-печать | bridge payload, NWConnection lifecycle, parallel state | Swift review | A003-F08; device test required |
 | Native lifecycle | AppDelegate/SceneDelegate, handlers, callbacks | Swift review + analyzer | A003-F09, F12 |
