@@ -967,6 +967,13 @@ function supplierFixture(){
  const f=fixture();f.state.employees=[{id:'admin',name:'Администратор',role:'admin'}];f.state.shifts=[{id:'shift',status:'open',openingCash:100,employeeId:'admin'}];f.state.suppliers=[];f.state.purchaseOrders=[{id:'history',supplierId:'supplier',supplierName:'Старое имя',status:'received'}];f.state.receivings=[{id:'receipt',supplierId:'supplier',supplierName:'Старое имя'}];
  Object.assign(f.fields,{'sf-name':{value:'Поставщик'},'supplier-save-confirm':{disabled:false},'supplier-delete-confirm':{disabled:false}});f.c.document.querySelectorAll=selector=>selector==='.supplier-product-check:checked'?[{value:'flour'},{value:'water'}]:[];return f;
 }
+test('supplier product search toggles rows and empty state through hidden',()=>{
+ const f=fixture(),rows=[{dataset:{search:'мука сырьё'},hidden:false},{dataset:{search:'эспрессо напитки'},hidden:false}],empty={hidden:true};
+ f.c.document.querySelectorAll=selector=>selector==='#supplier-product-list .supplier-product-option'?rows:[];f.fields['supplier-product-search-empty']=empty;
+ f.c.filterSupplierProducts('напитки');assert.equal(rows[0].hidden,true);assert.equal(rows[1].hidden,false);assert.equal(empty.hidden,true);
+ f.c.filterSupplierProducts('десерт');assert.equal(rows[0].hidden,true);assert.equal(rows[1].hidden,true);assert.equal(empty.hidden,false);
+ f.c.filterSupplierProducts('');assert.equal(rows[0].hidden,false);assert.equal(rows[1].hidden,false);assert.equal(empty.hidden,true);
+});
 test('supplier create and edit persist before publishing while retaining legacy fields',async()=>{
  const f=supplierFixture();let closed=0,rendered=0;f.c.closeModal=()=>closed++;f.c.render=()=>rendered++;
  assert.equal(await f.c.saveSupplier(),true);assert.equal(f.state.suppliers.length,1);assert.deepEqual(plain(f.state.suppliers[0].productIds),['flour','water']);assert.deepEqual(f.writes,['prilavok_suppliers']);assert.equal(closed,1);assert.equal(rendered,1);

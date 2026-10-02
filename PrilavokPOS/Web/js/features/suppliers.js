@@ -9,16 +9,16 @@ function openSupplierModal(id=''){
       <label>Название поставщика</label>
       <input id="sf-name" type="text" value="${escapeAttr(supplier?.name||'')}" placeholder="Например, ООО Поставщик">
     </div>
-    <div style="font-weight:800;margin:14px 0 8px;">Товары на поставщике</div>
-    <div class="settings-note" style="margin-bottom:10px;">Выберите товары, которые обычно закупаются у этого поставщика. В приёмке они будут показываться первыми.</div>
-    <div class="field" style="margin-bottom:10px;"><input id="supplier-product-search" type="search" placeholder="Поиск товара или категории" autocomplete="off" oninput="filterSupplierProducts(this.value)"></div>
-    <div id="supplier-product-list" style="max-height:360px;overflow:auto;border:1px solid var(--border);border-radius:12px;padding:6px;">
-      ${products.length ? products.map(p=>`<label class="supplier-product-option" data-search="${escapeAttr((p.name+' '+(p.category||'')).toLocaleLowerCase('ru'))}" style="display:flex;align-items:center;gap:10px;padding:10px 8px;border-bottom:1px solid var(--border);cursor:pointer;">
-        <input class="supplier-product-check" type="checkbox" value="${escapeAttr(p.id)}" ${selected.has(p.id)?'checked':''} style="width:20px;height:20px;">
-        <span style="flex:1;min-width:0;">${escapeHtml(p.name)}</span>
+    <div class="supplier-section-title">Товары на поставщике</div>
+    <div class="settings-note supplier-products-note">Выберите товары, которые обычно закупаются у этого поставщика. В приёмке они будут показываться первыми.</div>
+    <div class="field supplier-search-field"><input id="supplier-product-search" type="search" placeholder="Поиск товара или категории" autocomplete="off" oninput="filterSupplierProducts(this.value)"></div>
+    <div id="supplier-product-list" class="supplier-product-list">
+      ${products.length ? products.map(p=>`<label class="supplier-product-option" data-search="${escapeAttr((p.name+' '+(p.category||'')).toLocaleLowerCase('ru'))}">
+        <input class="supplier-product-check" type="checkbox" value="${escapeAttr(p.id)}" ${selected.has(p.id)?'checked':''}>
+        <span class="supplier-product-name">${escapeHtml(p.name)}</span>
         <span class="list-row-sub">${escapeHtml(p.category||'Без категории')}</span>
       </label>`).join('') : `<div class="center-note">Сначала создайте простые товары.</div>`}
-      <div id="supplier-product-search-empty" class="center-note" style="display:none;">Товары не найдены.</div>
+      <div id="supplier-product-search-empty" class="center-note" hidden>Товары не найдены.</div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal()">Отмена</button>
@@ -30,8 +30,8 @@ function filterSupplierProducts(value){
   const query=String(value||'').trim().toLocaleLowerCase('ru');
   const options=[...document.querySelectorAll('#supplier-product-list .supplier-product-option')];
   let visible=0;
-  options.forEach(row=>{const show=!query||(row.dataset.search||'').includes(query);row.style.display=show?'flex':'none';if(show)visible++;});
-  const empty=document.getElementById('supplier-product-search-empty');if(empty)empty.style.display=options.length&&!visible?'block':'none';
+  options.forEach(row=>{const show=!query||(row.dataset.search||'').includes(query);row.hidden=!show;if(show)visible++;});
+  const empty=document.getElementById('supplier-product-search-empty');if(empty)empty.hidden=!(options.length&&!visible);
 }
 
 function deleteSupplier(id){
@@ -43,7 +43,7 @@ function deleteSupplier(id){
   if(!supplier) return;
   showModal(`
     <div class="modal-title">Удаление поставщика</div>
-    <div class="center-note" style="padding:8px 0 14px;">Удалить поставщика «${escapeHtml(supplier.name)}» из списка?</div>
+    <div class="center-note supplier-delete-note">Удалить поставщика «${escapeHtml(supplier.name)}» из списка?</div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal()">Отмена</button>
       <button id="supplier-delete-confirm" class="btn btn-danger" onclick="confirmDeleteSupplier('${escapeAttr(id)}')">Удалить</button>

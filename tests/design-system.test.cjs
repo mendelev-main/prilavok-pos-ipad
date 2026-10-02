@@ -93,3 +93,13 @@ test('bookings isolate dynamic hall geometry from static presentation',()=>{
   assert.match(html,/\.booking-card-actions\{/);
   assert.match(html,/\.booking-filters\.single-column\{/);
 });
+
+test('settings and suppliers use shared presentation classes',()=>{
+  const suppliers=featureSourceByName.get('suppliers.js');
+  assert.doesNotMatch(suppliers,/style="/);
+  assert.match(suppliers,/class="supplier-product-list"/);
+  assert.match(suppliers,/row\.hidden=!show/);
+  assert.match(html,/\.settings-nav-card\{/);
+  assert.match(html,/\.settings-section-title\{/);
+  assert.match(html,/\.supplier-product-option\[hidden\]/);
+});

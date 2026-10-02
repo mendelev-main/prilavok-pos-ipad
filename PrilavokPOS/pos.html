@@ -676,6 +676,26 @@
   :root[data-theme='dark'] .settings-quick-btn,:root[data-theme='dark'] .settings-plus-btn{background:var(--surface);border-color:var(--border);}
   .settings-grid{display:grid;min-width:0;max-width:100%;grid-template-columns:minmax(0,1.2fr) minmax(280px,.8fr);gap:16px;}
   .settings-card{background:var(--surface);border-radius:var(--radius-l);box-shadow:var(--shadow);padding:20px;}
+  .settings-nav-card{text-align:left;cursor:pointer;font:inherit;color:inherit;border:0;}
+  .settings-card-title,.settings-section-title{font-size:16px;font-weight:800;}
+  .settings-card-description{margin-top:6px;}
+  .settings-content-head{align-items:center;}
+  .settings-head-main{display:flex;align-items:center;gap:12px;}
+  .settings-back-button{width:auto;padding:10px 16px;}
+  .settings-version{font-size:12px;font-weight:700;color:var(--muted);white-space:nowrap;}
+  .settings-list{margin-top:14px;}
+  .settings-list-main{flex:1;min-width:0;}
+  .settings-inline-button{width:auto;padding:8px 12px;}
+  .settings-admin-note{font-size:15px;line-height:1.5;}
+  .supplier-section-title{font-weight:800;margin:14px 0 8px;}
+  .supplier-products-note,.supplier-search-field{margin-bottom:10px;}
+  .supplier-product-list{max-height:360px;overflow:auto;border:1px solid var(--border);border-radius:12px;padding:6px;}
+  .supplier-product-option{display:flex;align-items:center;gap:10px;padding:10px 8px;border-bottom:1px solid var(--border);cursor:pointer;}
+  .supplier-product-option:last-of-type{border-bottom:0;}
+  .supplier-product-option[hidden]{display:none;}
+  .supplier-product-check{width:20px;height:20px;}
+  .supplier-product-name{flex:1;min-width:0;}
+  .supplier-delete-note{padding:8px 0 14px;}
   .setting-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 0;border-bottom:1px solid var(--border);}
   .setting-row:last-child{border-bottom:none;}
   .setting-title{font-weight:800;font-size:14px;}
@@ -1797,32 +1817,32 @@ function openCompanyDetailsModal(){
 /* Loyalty administration runtime: Web/js/features/loyalty.js */
 function renderAdminPanel(){
   return `
-    <div class="content-head" style="align-items:center;">
-      <div style="display:flex;align-items:center;gap:12px;">
-        <button class="btn btn-secondary" style="width:auto;padding:10px 16px;" onclick="closeAdminPanel()">← Назад</button>
+    <div class="content-head settings-content-head">
+      <div class="settings-head-main">
+        <button class="btn btn-secondary settings-back-button" onclick="closeAdminPanel()">← Назад</button>
         <div class="content-title">Панель администратора</div>
       </div>
     </div>
     <div class="settings-grid">
-      <button class="settings-card" style="text-align:left;cursor:pointer;font:inherit;color:inherit;" onclick="openLoyaltyAdminScreen()">
-        <div style="font-size:16px;font-weight:800;">Программа лояльности</div>
-        <div class="setting-sub" style="margin-top:6px;">Программы, правила начисления, подарки и база клиентов.</div>
+      <button class="settings-card settings-nav-card" onclick="openLoyaltyAdminScreen()">
+        <div class="settings-card-title">Программа лояльности</div>
+        <div class="setting-sub settings-card-description">Программы, правила начисления, подарки и база клиентов.</div>
       </button>
-      <button class="settings-card" style="text-align:left;cursor:pointer;font:inherit;color:inherit;" onclick="setTab('network')">
-        <div style="font-size:16px;font-weight:800;">Сетевые настройки</div>
-        <div class="setting-sub" style="margin-top:6px;">Синхронизация, подключение принтера и сетевые конфигурации.</div>
+      <button class="settings-card settings-nav-card" onclick="setTab('network')">
+        <div class="settings-card-title">Сетевые настройки</div>
+        <div class="setting-sub settings-card-description">Синхронизация, подключение принтера и сетевые конфигурации.</div>
       </button>
-      <button class="settings-card" style="text-align:left;cursor:pointer;font:inherit;color:inherit;" onclick="openCompanyDetailsModal()">
-        <div style="font-size:16px;font-weight:800;">Реквизиты организации</div>
-        <div class="setting-sub" style="margin-top:6px;">Название заведения, юридическое лицо, адрес и адрес доставки.</div>
+      <button class="settings-card settings-nav-card" onclick="openCompanyDetailsModal()">
+        <div class="settings-card-title">Реквизиты организации</div>
+        <div class="setting-sub settings-card-description">Название заведения, юридическое лицо, адрес и адрес доставки.</div>
       </button>
-      <button class="settings-card" style="text-align:left;cursor:pointer;font:inherit;color:inherit;" onclick="setTab('inventory')">
-        <div style="font-size:16px;font-weight:800;">Инвентаризация</div>
-        <div class="setting-sub" style="margin-top:6px;">График пересчёта, список товаров, проведение и история.</div>
+      <button class="settings-card settings-nav-card" onclick="setTab('inventory')">
+        <div class="settings-card-title">Инвентаризация</div>
+        <div class="setting-sub settings-card-description">График пересчёта, список товаров, проведение и история.</div>
       </button>
-      <button class="settings-card" style="text-align:left;cursor:pointer;font:inherit;color:inherit;" onclick="openWarehousePage()">
-        <div style="font-size:16px;font-weight:800;">Складской учёт</div>
-        <div class="setting-sub" style="margin-top:6px;">Остатки, движение товаров, поставщики и складские отчёты.</div>
+      <button class="settings-card settings-nav-card" onclick="openWarehousePage()">
+        <div class="settings-card-title">Складской учёт</div>
+        <div class="setting-sub settings-card-description">Остатки, движение товаров, поставщики и складские отчёты.</div>
       </button>
     </div>`;
 }
@@ -1839,7 +1859,7 @@ function renderSettingsScreen(){
   <div class="screen content-screen ${state.tab==='settings'?'active':''}">
     <div class="content-head">
       <div class="content-title">Настройки</div>
-      <div style="font-size:12px;font-weight:700;color:var(--muted);white-space:nowrap;">Версия __MPOS_VERSION__</div>
+      <div class="settings-version">Версия __MPOS_VERSION__</div>
       <div class="settings-theme-toggle" title="Светлая / тёмная тема">
         <span class="theme-icon sun" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42"></path></svg></span>
         <label class="theme-switch" aria-label="Переключить тему">
@@ -1853,31 +1873,31 @@ function renderSettingsScreen(){
     <button class="btn btn-outline settings-main-action" onclick="setTab('products')">Товары</button>
     <div class="settings-grid">
       <div class="settings-card">
-        <div class="settings-section-head"><div style="font-size:16px;font-weight:800;">Сотрудники</div><button class="settings-plus-btn" title="Добавить сотрудника" aria-label="Добавить сотрудника" onclick="openEmployeeModal()"><span class="ui-icon ui-icon-add" aria-hidden="true"></span></button></div>
+        <div class="settings-section-head"><div class="settings-section-title">Сотрудники</div><button class="settings-plus-btn" title="Добавить сотрудника" aria-label="Добавить сотрудника" onclick="openEmployeeModal()"><span class="ui-icon ui-icon-add" aria-hidden="true"></span></button></div>
         <div class="setting-sub">Сотрудники выбираются при открытии кассовой смены. Введите ФИО и номер телефона.</div>
-        <div style="margin-top:14px;">${state.employees.length ? state.employees.slice().sort((a,b)=>a.name.localeCompare(b.name,'ru')).map(e=>`<div class="employee-settings-row"><div class="employee-settings-person"><div class="list-row-name" title="${escapeAttr(e.name)}">${escapeHtml(employeeDisplayName(e.name))}</div><div class="list-row-sub">${escapeHtml(e.phone||'Телефон не указан')}</div></div><div class="employee-settings-role">${e.role==='admin'?'<span class="admin-badge">АДМИНИСТРАТОР</span>':''}</div><button class="btn btn-secondary employee-settings-edit" onclick="openEmployeeModal(${escapeAttr(JSON.stringify(e.id))})">Изменить</button>${e.role==='admin'?`<button class="icon-btn employee-settings-action" aria-label="Информация об администраторе" onclick="showEmployeeAdminInfo(${escapeAttr(JSON.stringify(e.id))})"><span class="ui-icon ui-icon-info" aria-hidden="true"></span></button>`:`<button class="icon-btn danger employee-settings-action" aria-label="Удалить сотрудника" onclick="deleteEmployee(${escapeAttr(JSON.stringify(e.id))})"><span class="ui-icon ui-icon-close" aria-hidden="true"></span></button>`}</div>`).join('') : '<div class="center-note">Сотрудников пока нет.</div>'}</div>
+        <div class="settings-list">${state.employees.length ? state.employees.slice().sort((a,b)=>a.name.localeCompare(b.name,'ru')).map(e=>`<div class="employee-settings-row"><div class="employee-settings-person"><div class="list-row-name" title="${escapeAttr(e.name)}">${escapeHtml(employeeDisplayName(e.name))}</div><div class="list-row-sub">${escapeHtml(e.phone||'Телефон не указан')}</div></div><div class="employee-settings-role">${e.role==='admin'?'<span class="admin-badge">АДМИНИСТРАТОР</span>':''}</div><button class="btn btn-secondary employee-settings-edit" onclick="openEmployeeModal(${escapeAttr(JSON.stringify(e.id))})">Изменить</button>${e.role==='admin'?`<button class="icon-btn employee-settings-action" aria-label="Информация об администраторе" onclick="showEmployeeAdminInfo(${escapeAttr(JSON.stringify(e.id))})"><span class="ui-icon ui-icon-info" aria-hidden="true"></span></button>`:`<button class="icon-btn danger employee-settings-action" aria-label="Удалить сотрудника" onclick="deleteEmployee(${escapeAttr(JSON.stringify(e.id))})"><span class="ui-icon ui-icon-close" aria-hidden="true"></span></button>`}</div>`).join('') : '<div class="center-note">Сотрудников пока нет.</div>'}</div>
       </div>
       <div class="settings-card">
-        <div class="settings-section-head"><div style="font-size:16px;font-weight:800;">Поставщики и товары</div><button class="settings-plus-btn" title="Добавить поставщика" aria-label="Добавить поставщика" onclick="openSupplierModal()"><span class="ui-icon ui-icon-add" aria-hidden="true"></span></button></div>
+        <div class="settings-section-head"><div class="settings-section-title">Поставщики и товары</div><button class="settings-plus-btn" title="Добавить поставщика" aria-label="Добавить поставщика" onclick="openSupplierModal()"><span class="ui-icon ui-icon-add" aria-hidden="true"></span></button></div>
         <div class="setting-sub">Здесь настраиваются поставщики и товары, которые закреплены за каждым поставщиком.</div>
-        <div style="margin-top:14px;">${state.suppliers.length ? state.suppliers.slice().sort((a,b)=>a.name.localeCompare(b.name,'ru')).map(s=>`<div class="list-row"><div style="flex:1;min-width:0;"><div class="list-row-name">${escapeHtml(s.name)}</div><div class="list-row-sub">${Array.isArray(s.productIds)?s.productIds.length:0} закрепл. товаров</div></div><button class="btn btn-secondary" style="width:auto;padding:8px 12px;" onclick="openSupplierModal('${escapeAttr(s.id)}')">Товары</button>${canEditCompanySettings()?`<button class="icon-btn danger" aria-label="Удалить поставщика" onclick="deleteSupplier('${escapeAttr(s.id)}')"><span class="ui-icon ui-icon-close" aria-hidden="true"></span></button>`:''}</div>`).join('') : '<div class="center-note">Поставщиков пока нет.</div>'}</div>
+        <div class="settings-list">${state.suppliers.length ? state.suppliers.slice().sort((a,b)=>a.name.localeCompare(b.name,'ru')).map(s=>`<div class="list-row"><div class="settings-list-main"><div class="list-row-name">${escapeHtml(s.name)}</div><div class="list-row-sub">${Array.isArray(s.productIds)?s.productIds.length:0} закрепл. товаров</div></div><button class="btn btn-secondary settings-inline-button" onclick="openSupplierModal('${escapeAttr(s.id)}')">Товары</button>${canEditCompanySettings()?`<button class="icon-btn danger" aria-label="Удалить поставщика" onclick="deleteSupplier('${escapeAttr(s.id)}')"><span class="ui-icon ui-icon-close" aria-hidden="true"></span></button>`:''}</div>`).join('') : '<div class="center-note">Поставщиков пока нет.</div>'}</div>
       </div>
       <div class="settings-card">
-        <div class="settings-section-head"><div style="font-size:16px;font-weight:800;">Стоимость доставки</div>${canEditCompanySettings()?`<button class="settings-plus-btn" aria-label="Добавить стоимость доставки" onclick="openDeliveryRateModal()"><span class="ui-icon ui-icon-add" aria-hidden="true"></span></button>`:`<button class="settings-plus-btn settings-info-btn" aria-label="Информация о доступе" onclick="showAdminOnlyInfo('Стоимость доставки')"><span class="ui-icon ui-icon-info" aria-hidden="true"></span></button>`}</div>
+        <div class="settings-section-head"><div class="settings-section-title">Стоимость доставки</div>${canEditCompanySettings()?`<button class="settings-plus-btn" aria-label="Добавить стоимость доставки" onclick="openDeliveryRateModal()"><span class="ui-icon ui-icon-add" aria-hidden="true"></span></button>`:`<button class="settings-plus-btn settings-info-btn" aria-label="Информация о доступе" onclick="showAdminOnlyInfo('Стоимость доставки')"><span class="ui-icon ui-icon-info" aria-hidden="true"></span></button>`}</div>
         <div class="setting-sub">Настройте варианты стоимости. При выборе «Доставка» кассир сможет выбрать один из них.</div>
-        <div style="margin-top:14px;">${state.deliveryRates.length ? state.deliveryRates.map(r=>`<div class="list-row"><div style="flex:1;min-width:0;"><div class="list-row-name">${escapeHtml(r.name)}</div><div class="list-row-sub">${money(r.amount)}</div></div>${canEditCompanySettings()?`<button class="btn btn-secondary" style="width:auto;padding:8px 12px;" onclick="openDeliveryRateModal('${escapeAttr(r.id)}')">Изменить</button><button class="icon-btn danger" aria-label="Удалить стоимость доставки" onclick="deleteDeliveryRate('${escapeAttr(r.id)}')"><span class="ui-icon ui-icon-close" aria-hidden="true"></span></button>`:''}</div>`).join('') : '<div class="center-note">Варианты доставки пока не добавлены.</div>'}</div>
+        <div class="settings-list">${state.deliveryRates.length ? state.deliveryRates.map(r=>`<div class="list-row"><div class="settings-list-main"><div class="list-row-name">${escapeHtml(r.name)}</div><div class="list-row-sub">${money(r.amount)}</div></div>${canEditCompanySettings()?`<button class="btn btn-secondary settings-inline-button" onclick="openDeliveryRateModal('${escapeAttr(r.id)}')">Изменить</button><button class="icon-btn danger" aria-label="Удалить стоимость доставки" onclick="deleteDeliveryRate('${escapeAttr(r.id)}')"><span class="ui-icon ui-icon-close" aria-hidden="true"></span></button>`:''}</div>`).join('') : '<div class="center-note">Варианты доставки пока не добавлены.</div>'}</div>
       </div>
       <div class="settings-card">
-        <div class="settings-section-head"><div style="font-size:16px;font-weight:800;">Скидки</div>${canEditCompanySettings()?`<button class="settings-plus-btn" aria-label="Добавить скидку" onclick="openDiscountModal()"><span class="ui-icon ui-icon-add" aria-hidden="true"></span></button>`:`<button class="settings-plus-btn settings-info-btn" aria-label="Информация о доступе" onclick="showAdminOnlyInfo('Скидки')"><span class="ui-icon ui-icon-info" aria-hidden="true"></span></button>`}</div>
+        <div class="settings-section-head"><div class="settings-section-title">Скидки</div>${canEditCompanySettings()?`<button class="settings-plus-btn" aria-label="Добавить скидку" onclick="openDiscountModal()"><span class="ui-icon ui-icon-add" aria-hidden="true"></span></button>`:`<button class="settings-plus-btn settings-info-btn" aria-label="Информация о доступе" onclick="showAdminOnlyInfo('Скидки')"><span class="ui-icon ui-icon-info" aria-hidden="true"></span></button>`}</div>
         <div class="setting-sub">Создайте варианты скидок, которые можно будет назначать отдельному товару в текущем заказе.</div>
-        <div style="margin-top:14px;">${state.discounts.length ? state.discounts.map(d=>`<div class="list-row"><div style="flex:1;"><div class="list-row-name">${escapeHtml(d.name)}</div><div class="list-row-sub">${d.type==='percent'?Number(d.value)+'%':'Фиксированная скидка '+money(d.value)}</div></div>${canEditCompanySettings()?`<button class="icon-btn danger" aria-label="Удалить скидку" onclick="deleteDiscount('${escapeAttr(d.id)}')"><span class="ui-icon ui-icon-close" aria-hidden="true"></span></button>`:''}</div>`).join('') : '<div class="center-note">Скидок пока нет.</div>'}</div>
+        <div class="settings-list">${state.discounts.length ? state.discounts.map(d=>`<div class="list-row"><div class="settings-list-main"><div class="list-row-name">${escapeHtml(d.name)}</div><div class="list-row-sub">${d.type==='percent'?Number(d.value)+'%':'Фиксированная скидка '+money(d.value)}</div></div>${canEditCompanySettings()?`<button class="icon-btn danger" aria-label="Удалить скидку" onclick="deleteDiscount('${escapeAttr(d.id)}')"><span class="ui-icon ui-icon-close" aria-hidden="true"></span></button>`:''}</div>`).join('') : '<div class="center-note">Скидок пока нет.</div>'}</div>
       </div>
     </div>
   </div>`;
 }
 function showAdminOnlyInfo(sectionName){
   showModal(`<div class="modal-title">${escapeHtml(sectionName)}</div>
-    <div class="settings-note" style="font-size:15px;line-height:1.5;">Настраивать этот раздел могут только сотрудники с правами администратора.</div>
+    <div class="settings-note settings-admin-note">Настраивать этот раздел могут только сотрудники с правами администратора.</div>
     <div class="modal-actions"><button class="btn btn-primary" onclick="closeModal()">Понятно</button></div>`);
 }
 function openDeliveryRateModal(id){
