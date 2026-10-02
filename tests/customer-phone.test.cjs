@@ -1,5 +1,5 @@
 const test=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');
-const html=fs.readFileSync(path.join(__dirname,'../PrilavokPOS/pos.html'),'utf8');
+const html=fs.readFileSync(path.join(__dirname,'../PrilavokPOS/Web/js/features/loyalty.js'),'utf8');
 const c={};vm.createContext(c);vm.runInContext(html.slice(html.indexOf('function customerPhoneDigits('),html.indexOf('async function customerSearchChanged(')),c);
 test('customer phone accepts manual suffix or pasted Belarus number',()=>{assert.equal(c.customerPhoneDigits('29 123 45 67'),'291234567');assert.equal(c.customerPhoneDigits('+375 (29) 123-45-67'),'291234567');assert.equal(c.customerPhoneDigits('375291234567'),'291234567');assert.equal(c.customerPhoneDigits('abc29'),'29');assert.equal(c.customerPhoneDigits(''),'');assert.equal(c.customerPhoneDigits('29123456789'),'291234567')});
 test('picker starts at four digits and keeps only matching phone prefixes',async()=>{

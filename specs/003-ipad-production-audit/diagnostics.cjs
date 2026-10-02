@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const root = path.resolve(__dirname, '../..');
 const fixtureFile = path.join(root, 'tests/product-stock.test.cjs');
 const source = fs.readFileSync(fixtureFile, 'utf8');
-const prefix = source.slice(0, source.indexOf("test('all inline JavaScript"));
+const prefix = source.slice(0, source.indexOf("test('all production JavaScript modules parse'"));
 if (!prefix.includes('function fixture()')) throw new Error('Fixture structure changed');
 const mod = new Module(fixtureFile, module);
 mod.filename = fixtureFile;
@@ -15,6 +15,7 @@ mod.paths = module.paths;
 mod._compile(prefix + '\nmodule.exports=fixture;', fixtureFile);
 const fixture = mod.exports;
 const html = fs.readFileSync(path.join(root, 'PrilavokPOS/pos.html'), 'utf8');
+const loyalty = fs.readFileSync(path.join(root, 'PrilavokPOS/Web/js/features/loyalty.js'), 'utf8');
 const printerSwift = fs.readFileSync(path.join(root, 'PrilavokPOS/NetworkPrinterManager.swift'), 'utf8');
 const appSwift = fs.readFileSync(path.join(root, 'PrilavokPOS/PrilavokPOSApp.swift'), 'utf8');
 
@@ -114,7 +115,7 @@ const settle = async () => { for (let i = 0; i < 8; i++) await Promise.resolve()
   }
 
   {
-    const loyaltyBody = html.slice(html.indexOf('function loyaltyApi'), html.indexOf('async function searchCustomers'));
+    const loyaltyBody = loyalty.slice(loyalty.indexOf('function loyaltyApi'), loyalty.indexOf('async function searchCustomers'));
     const photoBody = html.slice(html.indexOf('async function saveProduct(editingId)'), html.indexOf('function canEditProductWebSetting'));
     results.push({
       id: 'A003-F06',

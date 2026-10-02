@@ -1,9 +1,9 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-const html=fs.readFileSync(require('node:path').join(__dirname,'../PrilavokPOS/pos.html'),'utf8');
+const html=fs.readFileSync(require('node:path').join(__dirname,'../PrilavokPOS/Web/js/features/loyalty.js'),'utf8');
 function fixture(api=async()=>{}){
  const nodes={'lp-save':{disabled:false,textContent:'Сохранить',dataset:{active:'false'}},'lp-name':{value:' Кофе '},'lp-required':{value:'5'},'lp-reward':{value:'1'}};
- const c={state:{products:[{id:'coffee',name:'Кофе',category:'Напитки'}]},document:{getElementById:id=>nodes[id],querySelector:()=>({classList:{add(){}}}),querySelectorAll:s=>s.includes('earning')?[{value:'coffee'},{value:'missing'}]:[{value:'coffee'}]},escapeHtml:String,escapeAttr:String,showModal:x=>c.markup=x,closeModal:()=>c.closed=true,flash:x=>c.message=x,loyaltyApi:api,openLoyaltyAdminScreen:()=>c.reloaded=true};
- vm.createContext(c);const a=html.indexOf('function loyaltyProgramForm('),b=html.indexOf('async function createLoyaltyProgram(',a);vm.runInContext(html.slice(a,b),c);return {c,nodes};
+ const c={loyaltyInlineArg:value=>JSON.stringify(String(value??'')),state:{products:[{id:'coffee',name:'Кофе',category:'Напитки'}]},document:{getElementById:id=>nodes[id],querySelector:()=>({classList:{add(){}}}),querySelectorAll:s=>s.includes('earning')?[{value:'coffee'},{value:'missing'}]:[{value:'coffee'}]},escapeHtml:String,escapeAttr:String,showModal:x=>c.markup=x,closeModal:()=>c.closed=true,flash:x=>c.message=x,loyaltyApi:api,openLoyaltyAdminScreen:()=>c.reloaded=true};
+ vm.createContext(c);const a=html.indexOf('function loyaltyProgramForm('),b=html.indexOf('function confirmDeleteLoyaltyProgram(',a);vm.runInContext(html.slice(a,b),c);return {c,nodes};
 }
 test('editor preserves selected product IDs absent from local catalog',()=>{const {c}=fixture();c.loyaltyProgramForm({id:'p',is_active:false,loyalty_earning_products:[{product_id:'missing'}]});assert.match(c.markup,/value="missing" checked/);assert.match(c.markup,/data-active="false"/)});
 test('save preserves disabled state and selected IDs, closes editor after success',async()=>{let request;const {c}=fixture(async(url,options)=>{request={url,body:JSON.parse(options.body)}});await c.saveLoyaltyProgram('p');assert.equal(request.body.isActive,false);assert.deepEqual(request.body.earningProductIds,['coffee','missing']);assert.equal(request.body.name,'Кофе');assert.equal(c.closed,true);assert.equal(c.reloaded,true)});

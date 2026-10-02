@@ -11,6 +11,7 @@ const inline=[...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].map(m=>m
 const adapter=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/core/storage.js'),'utf8');
 const shiftsScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/shifts.js'),'utf8');
 const employeesScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/employees.js'),'utf8');
+const loyaltyScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/loyalty.js'),'utf8');
 const suppliersScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/suppliers.js'),'utf8');
 const purchaseOrdersScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/purchase-orders.js'),'utf8');
 const receivingUiScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/receiving-ui.js'),'utf8');
@@ -39,7 +40,7 @@ function fixture(){
  const data=new Map(),messages=[],writes=[],fields={'pf-prep-station':{value:'kitchen'},'pf-prep-difficulty':{value:'1'},'pf-base-prep-minutes':{value:'5'}},events=[];
  const document={getElementById:id=>fields[id]||null,querySelector:()=>null,addEventListener:()=>{}};
  const c={console:{error:()=>{}},document,crypto:{randomUUID:()=> 'device-test'},setTimeout:()=>0,clearTimeout:()=>{},addEventListener:()=>{},removeEventListener:()=>{},AbortController,localStorage:{getItem:k=>data.has(k)?data.get(k):null,setItem:(k,v)=>{data.set(k,String(v));writes.push(k);},removeItem:k=>data.delete(k)},fetch:()=>{throw Error('Network is prohibited in this test');},setInterval:()=>{throw Error('Timer is prohibited in this test');}};
- c.window=c;vm.createContext(c);vm.runInContext(adapter,c);vm.runInContext(inline.replace(/loadAll\(\);\s*$/,''),c);vm.runInContext(shiftsScript,c);vm.runInContext(employeesScript,c);vm.runInContext(suppliersScript,c);vm.runInContext(purchaseOrdersScript,c);vm.runInContext(receivingUiScript,c);vm.runInContext(receivingDraftsScript,c);vm.runInContext(receivingScript,c);vm.runInContext(webOrdersScript,c);vm.runInContext(inventoryScript,c);vm.runInContext(warehouseReportingScript,c);vm.runInContext(analyticsScript,c);vm.runInContext(productCatalogScript,c);vm.runInContext(productCategoriesScript,c);vm.runInContext(posNavigationScript,c);vm.runInContext(cartPresentationScript,c);vm.runInContext(cartCompositionScript,c);vm.runInContext(parkedOrdersScript,c);vm.runInContext(paymentScript,c);vm.runInContext(receiptsScript,c);vm.runInContext(hallBookingsScript,c);vm.runInContext(backupScript,c);
+ c.window=c;vm.createContext(c);vm.runInContext(adapter,c);vm.runInContext(inline.replace(/loadAll\(\);\s*$/,''),c);vm.runInContext(shiftsScript,c);vm.runInContext(employeesScript,c);vm.runInContext(loyaltyScript,c);vm.runInContext(suppliersScript,c);vm.runInContext(purchaseOrdersScript,c);vm.runInContext(receivingUiScript,c);vm.runInContext(receivingDraftsScript,c);vm.runInContext(receivingScript,c);vm.runInContext(webOrdersScript,c);vm.runInContext(inventoryScript,c);vm.runInContext(warehouseReportingScript,c);vm.runInContext(analyticsScript,c);vm.runInContext(productCatalogScript,c);vm.runInContext(productCategoriesScript,c);vm.runInContext(posNavigationScript,c);vm.runInContext(cartPresentationScript,c);vm.runInContext(cartCompositionScript,c);vm.runInContext(parkedOrdersScript,c);vm.runInContext(paymentScript,c);vm.runInContext(receiptsScript,c);vm.runInContext(hallBookingsScript,c);vm.runInContext(backupScript,c);
  c.flash=m=>messages.push(m);c.render=()=>{};c.showReceipt=()=>{};c.showPaymentReceipt=()=>{};c.closeModal=()=>{};c.applyTheme=()=>{};
  const state=vm.runInContext('state',c);
  c.__printerSettingsSnapshot=()=>({printers:[],posNotifications:{soundEnabled:true,sound:'default'}});c.__restorePrinterSettings=()=>true;
@@ -49,7 +50,7 @@ function fixture(){
  async function sale(payments){cart();await c.finalizePayment(payments||[{method:'cash',amount:10}]);return state.orders[0];}
  return {c,state,data,messages,writes,fields,events,cart,sale};
 }
-test('all production JavaScript modules parse',()=>{new vm.Script(inline);new vm.Script(adapter);new vm.Script(shiftsScript);new vm.Script(employeesScript);new vm.Script(suppliersScript);new vm.Script(purchaseOrdersScript);new vm.Script(receivingUiScript);new vm.Script(receivingDraftsScript);new vm.Script(receivingScript);new vm.Script(webOrdersScript);new vm.Script(inventoryScript);new vm.Script(warehouseReportingScript);new vm.Script(analyticsScript);new vm.Script(productCatalogScript);new vm.Script(productCategoriesScript);new vm.Script(posNavigationScript);new vm.Script(cartPresentationScript);new vm.Script(cartCompositionScript);new vm.Script(parkedOrdersScript);new vm.Script(paymentScript);new vm.Script(receiptsScript);new vm.Script(hallBookingsScript);new vm.Script(backupScript);new vm.Script(printerScript);});
+test('all production JavaScript modules parse',()=>{new vm.Script(inline);new vm.Script(adapter);new vm.Script(shiftsScript);new vm.Script(employeesScript);new vm.Script(loyaltyScript);new vm.Script(suppliersScript);new vm.Script(purchaseOrdersScript);new vm.Script(receivingUiScript);new vm.Script(receivingDraftsScript);new vm.Script(receivingScript);new vm.Script(webOrdersScript);new vm.Script(inventoryScript);new vm.Script(warehouseReportingScript);new vm.Script(analyticsScript);new vm.Script(productCatalogScript);new vm.Script(productCategoriesScript);new vm.Script(posNavigationScript);new vm.Script(cartPresentationScript);new vm.Script(cartCompositionScript);new vm.Script(parkedOrdersScript);new vm.Script(paymentScript);new vm.Script(receiptsScript);new vm.Script(hallBookingsScript);new vm.Script(backupScript);new vm.Script(printerScript);});
 test('shifts module loads before dependent features and preserves its public API',()=>{
  const moduleTag='<script src="Web/js/features/shifts.js"></script>',paymentTag='<script src="Web/js/features/payment.js"></script>',startupTag='<script>loadAll();</script>';
  assert.ok(html.indexOf(moduleTag)>=0);assert.ok(html.indexOf(paymentTag)>html.indexOf(moduleTag));assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));assert.doesNotMatch(inline,/function submitCloseShift\s*\(/);
@@ -59,6 +60,26 @@ test('employees module loads after shifts and before startup with its public API
  const shiftsTag='<script src="Web/js/features/shifts.js"></script>',moduleTag='<script src="Web/js/features/employees.js"></script>',startupTag='<script>loadAll();</script>';
  assert.ok(html.indexOf(moduleTag)>html.indexOf(shiftsTag));assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));assert.doesNotMatch(inline,/function saveEmployee\s*\(/);
  const f=fixture();for(const name of ['employeeShortName','employeeDisplayName','openEmployeeModal','toggleEmployeeAdminPassword','saveEmployee','showEmployeeAdminInfo','employeeDeletionAllowed','deleteEmployee','confirmDeleteEmployee'])assert.equal(typeof f.c[name],'function',name);
+});
+test('loyalty module loads after employees and before suppliers with its public API',()=>{
+ const employeesTag='<script src="Web/js/features/employees.js"></script>',moduleTag='<script src="Web/js/features/loyalty.js"></script>',suppliersTag='<script src="Web/js/features/suppliers.js"></script>',startupTag='<script>loadAll();</script>';
+ assert.ok(html.indexOf(moduleTag)>html.indexOf(employeesTag));assert.ok(html.indexOf(suppliersTag)>html.indexOf(moduleTag));assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));assert.doesNotMatch(inline,/function loyaltyApi\s*\(/);
+ const f=fixture();for(const name of ['loyaltyInlineArg','loyaltyApi','searchCustomers','loadCustomerLoyalty','openOrderCustomer','loyaltySummaryHtml','openCustomerPicker','customerPhoneDigits','customerSearchChanged','removeOrderCustomer','selectCustomer','openCreateCustomer','createCustomerFromPos','publishPaidOrderLoyalty','reverseOrderLoyalty','settleReturnedOrderLoyalty','retryPendingLoyalty','loyaltyRewardAllocation','loyaltyRewardDiscount','openCustomersAdmin','customerAdminRows','adminCustomerSearch','openCustomerAdminCard','openLoyaltyAdjustment','saveLoyaltyAdjustment','openLoyaltyAdmin','loyaltyProgramForm','filterLoyaltyProducts','updateLoyaltyProductCount','openLoyaltyProgramCreate','openLoyaltyProgramEdit','saveLoyaltyProgram','confirmDeleteLoyaltyProgram','deleteLoyaltyProgram','toggleLoyaltyProgram','openLoyaltyAdminScreen','closeLoyaltyAdminScreen','loadLoyaltyAdminScreen','setLoyaltyAdminSection','renderLoyaltyAdminScreen','loyaltyAdminCustomerSearch'])assert.equal(typeof f.c[name],'function',name);
+ for(const retired of ['openLoyaltyAdminModalLegacy','createLoyaltyProgram'])assert.equal(typeof f.c[retired],'undefined',retired);
+});
+test('loyalty inline actions preserve backend IDs and names as inert arguments',()=>{
+ const f=fixture(),decode=value=>value.replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&');
+ const customerId="customer');injected();//",programId='program";injected();//',programName="Гость');injected();//";let injected=0,opened,deleted;
+ f.c.injected=()=>injected++;
+ f.c.openCustomerAdminCard=id=>{opened=id};
+ const customerMarkup=f.c.customerAdminRows([{id:customerId,name:'Имя',normalized_phone:'+375'}]);
+ const customerAction=decode(customerMarkup.match(/onclick="([^"]+)"/)[1]);vm.runInContext(customerAction,f.c);
+ assert.equal(opened,customerId);assert.equal(injected,0);
+ f.state.loyaltyAdminSection='programs';f.c.__loyaltyAdminPrograms=[{id:programId,name:programName,is_active:true,required_quantity:5,reward_quantity:1}];
+ f.c.confirmDeleteLoyaltyProgram=(id,name)=>{deleted=[id,name]};
+ const programMarkup=f.c.renderLoyaltyAdminScreen();
+ const deleteAction=decode(programMarkup.match(/onclick="([^"]*confirmDeleteLoyaltyProgram[^"]*)"/)[1]);vm.runInContext(deleteAction,f.c);
+ assert.deepEqual(deleted,[programId,programName]);assert.equal(injected,0);
 });
 test('suppliers module loads after access helpers and before startup with its public API',()=>{
  const employeesTag='<script src="Web/js/features/employees.js"></script>',moduleTag='<script src="Web/js/features/suppliers.js"></script>',startupTag='<script>loadAll();</script>';
