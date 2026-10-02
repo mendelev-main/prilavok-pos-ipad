@@ -1077,6 +1077,54 @@
   @media(max-width:900px){.shift-summary-grid{grid-template-columns:1fr;}.shift-summary-section.cash{grid-row:auto;}}
   @media(max-width:620px){.shift-summary-card{padding:16px;}.shift-summary-header{padding:14px;}.shift-summary-grid{gap:10px;}.shift-summary-section{padding:14px;}.shift-summary-row{gap:10px;}}
 
+  /* ---- Inventory ---- */
+  .inventory-reminder{color:var(--warning);background:var(--warning-soft);white-space:nowrap;}
+  .inventory-reminder.active{color:var(--warning);background:var(--warning-soft);box-shadow:inset 0 0 0 1px var(--warning);}
+  .inventory-screen-heading{display:flex;align-items:center;gap:12px;min-width:0;}
+  .inventory-back-button{width:auto;padding:10px 16px;flex:none;}
+  .inventory-scroll{overflow:auto;min-height:0;flex:1;padding-right:4px;}
+  .inventory-card-spaced{margin-bottom:16px;}
+  .inventory-card-title{font-size:17px;font-weight:800;line-height:1.35;}
+  .inventory-schedule-description{margin:4px 0 8px;line-height:1.5;}
+  .inventory-next-date{font-size:15px;font-weight:800;margin-bottom:16px;overflow-wrap:anywhere;}
+  .inventory-frequency-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:12px;}
+  .inventory-full-action{width:100%;}
+  .inventory-products-description{margin:4px 0 12px;line-height:1.5;}
+  .inventory-search{width:100%;min-height:44px;padding:11px 14px;border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--ink);font:inherit;margin-bottom:10px;}
+  .inventory-product-list{max-height:360px;overflow:auto;border-top:1px solid var(--border);}
+  .inventory-product-row{cursor:pointer;gap:12px;}
+  .inventory-product-row[hidden]{display:none;}
+  .inventory-product-checkbox{width:20px;height:20px;flex:0 0 20px;accent-color:var(--accent);}
+  .inventory-row-main{flex:1;min-width:0;overflow-wrap:anywhere;}
+  .inventory-save-button{width:100%;margin-top:14px;}
+  .inventory-history-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;}
+  .inventory-empty-state{margin:auto;}
+  .inventory-work-head{align-items:center;}
+  .inventory-cancel-button{width:auto;padding:10px 16px;flex:none;}
+  .inventory-work-layout{display:flex;flex-direction:column;min-height:0;flex:1;}
+  .inventory-work-list{flex:1;min-height:0;overflow:auto;padding-top:4px;}
+  .inventory-work-row{align-items:center;gap:16px;padding-top:14px;padding-bottom:14px;}
+  .inventory-item-expected,.inventory-item-difference{margin-top:5px;}
+  .inventory-item-difference{font-weight:800;}
+  .inventory-item-difference.is-shortage,.inventory-summary-difference.is-shortage{color:var(--danger);}
+  .inventory-item-difference.is-surplus,.inventory-summary-difference.is-surplus{color:var(--accent);}
+  .inventory-item-difference.is-balanced{color:var(--muted);}
+  .inventory-fixed-summary{min-width:190px;text-align:right;}
+  .inventory-fixed-value{font-size:18px;font-weight:800;margin-top:4px;overflow-wrap:anywhere;}
+  .inventory-entry{width:230px;max-width:100%;}
+  .inventory-entry-label{margin-bottom:5px;}
+  .inventory-entry-controls{display:flex;gap:8px;}
+  .inventory-actual-input{min-width:0;flex:1;padding:11px 12px;border:1px solid var(--border);border-radius:11px;background:var(--surface);color:var(--ink);font:inherit;}
+  .inventory-fix-button{width:auto;padding:0 14px;flex:none;}
+  .inventory-work-actions{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding-top:14px;flex:0 0 auto;}
+  .inventory-work-action{min-height:50px;}
+  .inventory-cancel-note{padding:4px 0 14px;text-align:left;}
+  .inventory-summary-stats{margin-bottom:14px;}
+  .inventory-summary-list{max-height:46vh;overflow:auto;border-top:1px solid var(--border);}
+  .inventory-summary-delta{text-align:right;flex:none;}
+  .inventory-summary-difference{font-weight:800;}
+  @media(max-width:700px){.inventory-frequency-grid{grid-template-columns:1fr;}.inventory-work-row{align-items:stretch;flex-direction:column;}.inventory-entry,.inventory-fixed-summary{width:100%;min-width:0;text-align:left;}.inventory-work-actions{grid-template-columns:1fr;}.inventory-cancel-button{width:100%;}.inventory-work-head{align-items:stretch;}}
+
 
   .modal.loyalty-editor{width:min(960px,100%);max-width:960px;padding:0;display:flex;flex-direction:column;overflow:hidden}
   .lp-heading{padding:22px 24px 16px;border-bottom:1px solid var(--border)}

@@ -199,3 +199,14 @@ test('shift surfaces use shared presentation and semantic visibility',()=>{
   assert.match(html,/\.shift-admin-password\[hidden\]\{display:none;/);
   assert.match(html,/\.shift-report-movements\{/);
 });
+
+test('inventory surfaces use shared responsive presentation',()=>{
+  const inventory=featureSourceByName.get('inventory.js');
+  assert.doesNotMatch(inventory,/style="/);
+  assert.doesNotMatch(inventory,/style\.display/);
+  assert.match(inventory,/row\.hidden=!!q&&!String\(row\.dataset\.inventoryProductName\|\|''\)\.includes\(q\)/);
+  assert.match(inventory,/class="inventory-item-difference \$\{diff<0\?'is-shortage':diff>0\?'is-surplus':'is-balanced'\}"/);
+  assert.match(html,/\.inventory-product-row\[hidden\]\{display:none;/);
+  assert.match(html,/\.inventory-work-actions\{/);
+  assert.match(html,/@media\(max-width:700px\)\{\.inventory-frequency-grid\{grid-template-columns:1fr;/);
+});
