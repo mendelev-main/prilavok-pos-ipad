@@ -12,6 +12,7 @@ Swift/UIKit application
       ├─ PrilavokPOS/pos.html: UI и основная business logic
       ├─ Web/js/core/storage.js: storage adapter
       ├─ Web/js/features/shifts.js: смены, кассовые итоги, движения и отчёт
+      ├─ Web/js/features/employees.js: сотрудники, локальные роли и защищённое сохранение
       ├─ Web/js/features/web-orders.js: входящие WEB-заказы, local-first acceptance и ACK/recovery
       ├─ Web/js/features/inventory.js: график, черновик, фиксация и завершение инвентаризации
       ├─ Web/js/features/warehouse-reporting.js: read-only складской отчёт и PDF/XLSX payload
@@ -64,6 +65,10 @@ critical journal и передаёт повторную печать сущес�
 изъятием, экраном истории и payload отчёта. Все изменения смены сначала проходят existing critical
 journal; Telegram и печать запускаются после commit. Некорректный производный остаток блокирует новую
 финансовую операцию, не переписывая сохранённые данные.
+`employees.js` владеет отображением и CRUD сотрудников. Создание, изменение и удаление сначала
+записывают полный снимок прежнего `prilavok_employees`, а затем публикуют его в памяти; при ошибке
+storage UI сохраняет исходное состояние и позволяет повторить действие. Действующие роли, пароль и
+ограничения удаления не изменены.
 
 ## Данные и offline-first
 

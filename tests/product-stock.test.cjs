@@ -10,6 +10,7 @@ const html=fs.readFileSync(path.join(root,'PrilavokPOS/pos.html'),'utf8');
 const inline=[...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].map(m=>m[1]).join('\n');
 const adapter=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/core/storage.js'),'utf8');
 const shiftsScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/shifts.js'),'utf8');
+const employeesScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/employees.js'),'utf8');
 const webOrdersScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/web-orders.js'),'utf8');
 const inventoryScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/inventory.js'),'utf8');
 const warehouseReportingScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/warehouse-reporting.js'),'utf8');
@@ -32,7 +33,7 @@ function fixture(){
  const data=new Map(),messages=[],writes=[],fields={'pf-prep-station':{value:'kitchen'},'pf-prep-difficulty':{value:'1'},'pf-base-prep-minutes':{value:'5'}},events=[];
  const document={getElementById:id=>fields[id]||null,querySelector:()=>null,addEventListener:()=>{}};
  const c={console:{error:()=>{}},document,crypto:{randomUUID:()=> 'device-test'},setTimeout:()=>0,clearTimeout:()=>{},addEventListener:()=>{},removeEventListener:()=>{},AbortController,localStorage:{getItem:k=>data.has(k)?data.get(k):null,setItem:(k,v)=>{data.set(k,String(v));writes.push(k);},removeItem:k=>data.delete(k)},fetch:()=>{throw Error('Network is prohibited in this test');},setInterval:()=>{throw Error('Timer is prohibited in this test');}};
- c.window=c;vm.createContext(c);vm.runInContext(adapter,c);vm.runInContext(inline.replace(/loadAll\(\);\s*$/,''),c);vm.runInContext(shiftsScript,c);vm.runInContext(webOrdersScript,c);vm.runInContext(inventoryScript,c);vm.runInContext(warehouseReportingScript,c);vm.runInContext(analyticsScript,c);vm.runInContext(productCatalogScript,c);vm.runInContext(productCategoriesScript,c);vm.runInContext(posNavigationScript,c);vm.runInContext(cartPresentationScript,c);vm.runInContext(cartCompositionScript,c);vm.runInContext(parkedOrdersScript,c);vm.runInContext(paymentScript,c);vm.runInContext(receiptsScript,c);vm.runInContext(hallBookingsScript,c);
+ c.window=c;vm.createContext(c);vm.runInContext(adapter,c);vm.runInContext(inline.replace(/loadAll\(\);\s*$/,''),c);vm.runInContext(shiftsScript,c);vm.runInContext(employeesScript,c);vm.runInContext(webOrdersScript,c);vm.runInContext(inventoryScript,c);vm.runInContext(warehouseReportingScript,c);vm.runInContext(analyticsScript,c);vm.runInContext(productCatalogScript,c);vm.runInContext(productCategoriesScript,c);vm.runInContext(posNavigationScript,c);vm.runInContext(cartPresentationScript,c);vm.runInContext(cartCompositionScript,c);vm.runInContext(parkedOrdersScript,c);vm.runInContext(paymentScript,c);vm.runInContext(receiptsScript,c);vm.runInContext(hallBookingsScript,c);
  c.flash=m=>messages.push(m);c.render=()=>{};c.showReceipt=()=>{};c.showPaymentReceipt=()=>{};c.closeModal=()=>{};c.applyTheme=()=>{};
  const state=vm.runInContext('state',c);
  c.__printerSettingsSnapshot=()=>({printers:[],posNotifications:{soundEnabled:true,sound:'default'}});c.__restorePrinterSettings=()=>true;
@@ -42,11 +43,16 @@ function fixture(){
  async function sale(payments){cart();await c.finalizePayment(payments||[{method:'cash',amount:10}]);return state.orders[0];}
  return {c,state,data,messages,writes,fields,events,cart,sale};
 }
-test('all production JavaScript modules parse',()=>{new vm.Script(inline);new vm.Script(adapter);new vm.Script(shiftsScript);new vm.Script(webOrdersScript);new vm.Script(inventoryScript);new vm.Script(warehouseReportingScript);new vm.Script(analyticsScript);new vm.Script(productCatalogScript);new vm.Script(productCategoriesScript);new vm.Script(posNavigationScript);new vm.Script(cartPresentationScript);new vm.Script(cartCompositionScript);new vm.Script(parkedOrdersScript);new vm.Script(paymentScript);new vm.Script(receiptsScript);new vm.Script(hallBookingsScript);new vm.Script(printerScript);});
+test('all production JavaScript modules parse',()=>{new vm.Script(inline);new vm.Script(adapter);new vm.Script(shiftsScript);new vm.Script(employeesScript);new vm.Script(webOrdersScript);new vm.Script(inventoryScript);new vm.Script(warehouseReportingScript);new vm.Script(analyticsScript);new vm.Script(productCatalogScript);new vm.Script(productCategoriesScript);new vm.Script(posNavigationScript);new vm.Script(cartPresentationScript);new vm.Script(cartCompositionScript);new vm.Script(parkedOrdersScript);new vm.Script(paymentScript);new vm.Script(receiptsScript);new vm.Script(hallBookingsScript);new vm.Script(printerScript);});
 test('shifts module loads before dependent features and preserves its public API',()=>{
  const moduleTag='<script src="Web/js/features/shifts.js"></script>',paymentTag='<script src="Web/js/features/payment.js"></script>',startupTag='<script>loadAll();</script>';
  assert.ok(html.indexOf(moduleTag)>=0);assert.ok(html.indexOf(paymentTag)>html.indexOf(moduleTag));assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));assert.doesNotMatch(inline,/function submitCloseShift\s*\(/);
  const f=fixture();for(const name of ['currentShift','currentShiftEmployeeIsAdmin','shiftOrders','shiftTotals','cashDrawerBalance','buildShiftReportPayload','renderShiftScreen','openShiftModal','submitOpenShift','submitCashMovement','submitCloseShift','viewShiftModal','printShiftReport'])assert.equal(typeof f.c[name],'function',name);
+});
+test('employees module loads after shifts and before startup with its public API',()=>{
+ const shiftsTag='<script src="Web/js/features/shifts.js"></script>',moduleTag='<script src="Web/js/features/employees.js"></script>',startupTag='<script>loadAll();</script>';
+ assert.ok(html.indexOf(moduleTag)>html.indexOf(shiftsTag));assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));assert.doesNotMatch(inline,/function saveEmployee\s*\(/);
+ const f=fixture();for(const name of ['employeeShortName','employeeDisplayName','openEmployeeModal','toggleEmployeeAdminPassword','saveEmployee','showEmployeeAdminInfo','employeeDeletionAllowed','deleteEmployee','confirmDeleteEmployee'])assert.equal(typeof f.c[name],'function',name);
 });
 test('WEB orders module loads before startup and preserves its public API',()=>{
  const moduleTag='<script src="Web/js/features/web-orders.js"></script>',startupTag='<script>loadAll();</script>';
@@ -1135,6 +1141,32 @@ test('employee deletion uses POS confirmation and preserves shifts and receipts'
 });
 test('employee deletion failure leaves local state intact',async()=>{
  const f=adminDeletionFixture();f.fields['employee-delete-password']={value:html.match(/function confirmDelete[\s\S]*?pass!=='([^']+)'/)[1]};f.c.localStorage.setItem=()=>{throw Error('quota');};await f.c.confirmDeleteEmployee('other');assert.equal(f.state.employees.length,2);assert.match(f.messages.at(-1),/Не удалось/);
+});
+
+
+test('employee create and edit publish state only after durable local storage',async()=>{
+ const f=fixture();f.state.employees=[];Object.assign(f.fields,{'ef-name':{value:' Иванов Иван '},'ef-phone':{value:'+375291112233'},'ef-admin':{checked:false},'ef-admin-password':{value:''},'employee-save-confirm':{disabled:false}});
+ let closed=0,rendered=0;f.c.closeModal=()=>closed++;f.c.render=()=>rendered++;
+ assert.equal(await f.c.saveEmployee(),true);assert.equal(f.state.employees.length,1);assert.deepEqual(f.writes,['prilavok_employees']);assert.equal(closed,1);assert.equal(rendered,1);
+ const id=f.state.employees[0].id;f.state.employees[0].legacyNote='keep';f.fields['ef-name'].value='Иванов Иван Иванович';f.fields['ef-phone'].value='+375292223344';
+ assert.equal(await f.c.saveEmployee(id),true);assert.equal(f.state.employees[0].legacyNote,'keep');assert.equal(JSON.parse(f.data.get('prilavok_employees'))[0].legacyNote,'keep');assert.equal(f.state.employees[0].name,'Иванов Иван Иванович');
+});
+test('employee storage failure preserves prior state and does not report success',async()=>{
+ for(const mode of ['create','edit']){
+  const f=fixture();f.state.employees=[{id:'one',name:'Старое имя',phone:'1',role:'employee',legacyNote:'keep'}];const before=JSON.stringify(f.state.employees);
+  Object.assign(f.fields,{'ef-name':{value:'Новое имя'},'ef-phone':{value:'2'},'ef-admin':{checked:false},'ef-admin-password':{value:''},'employee-save-confirm':{disabled:false}});
+  let closed=0,rendered=0;f.c.closeModal=()=>closed++;f.c.render=()=>rendered++;f.c.localStorage.setItem=()=>{throw Error('quota')};
+  assert.equal(await f.c.saveEmployee(mode==='edit'?'one':''),false);assert.equal(JSON.stringify(f.state.employees),before);assert.equal(closed,0);assert.equal(rendered,0);assert.equal(f.fields['employee-save-confirm'].disabled,false);assert.match(f.messages.at(-1),/Не удалось сохранить сотрудника/);
+ }
+});
+test('administrator role changes still require the existing password',async()=>{
+ const f=fixture();f.state.employees=[{id:'one',name:'Сотрудник',phone:'',role:'employee'}];Object.assign(f.fields,{'ef-name':{value:'Сотрудник'},'ef-phone':{value:''},'ef-admin':{checked:true},'ef-admin-password':{value:'wrong'},'employee-save-confirm':{disabled:false}});
+ assert.equal(await f.c.saveEmployee('one'),false);assert.equal(f.state.employees[0].role,'employee');assert.equal(f.writes.length,0);assert.match(f.messages.at(-1),/верный пароль/);
+ f.fields['ef-admin-password'].value='Rom23061998';assert.equal(await f.c.saveEmployee('one'),true);assert.equal(f.state.employees[0].role,'admin');assert.deepEqual(f.writes,['prilavok_employees']);
+});
+test('repeated employee save while storage is pending cannot create duplicates',async()=>{
+ const f=fixture();f.state.employees=[];Object.assign(f.fields,{'ef-name':{value:'Новый сотрудник'},'ef-phone':{value:''},'ef-admin':{checked:false},'ef-admin-password':{value:''},'employee-save-confirm':{disabled:false}});
+ const first=f.c.saveEmployee(),second=f.c.saveEmployee();assert.equal(f.fields['employee-save-confirm'].disabled,true);assert.equal(f.state.employees.length,0);assert.equal(await second,false);assert.equal(await first,true);assert.equal(f.state.employees.length,1);assert.deepEqual(f.writes,['prilavok_employees']);
 });
 
 function navigationFixture(){const f=fixture();f.state.products=[{id:'a',name:'А',category:'Пицца',type:'simple',stock:10,price:5,sortOrder:0},{id:'b',name:'Б',category:'Пицца',type:'simple',stock:10,price:6,sortOrder:1},{id:'c',name:'В',category:'Пицца',type:'simple',stock:10,sortOrder:2}];f.fields['modal-root']={innerHTML:''};f.fields['pos-folder-grid']={dataset:{},addEventListener:()=>{}};f.c.closeModal=()=>{f.c._posFolderModal=null;f.fields['modal-root'].innerHTML='';};f.state.posPath='Пицца';f.state.posFolder='';f.state.editMode=true;f.fields['pos-folder-name']={value:'Популярное'};return f;}

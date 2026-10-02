@@ -14,7 +14,7 @@
 | Приёмка | validation, weighted cost, critical commit, recovery | Node tests | PASS |
 | Инвентаризация | draft, fix, complete, history/config writes | injected write failure | A003-F03 |
 | Backup | schema validation, version 11, journal recovery, legacy data | Node tests | PASS; printer settings excluded |
-| Сотрудники | self-delete, admin delete, storage failure, rights | tests + review | PASS; A003-F10 for credential model |
+| Сотрудники | create/edit/delete, self-delete, admin delete, storage failure, rights | tests + review | PASS after spec 034; A003-F10 for credential model; A003-F15 fixed |
 | Навигация POS | category/folder layout, drag/drop, legacy normalization | Node tests | PASS |
 | WEB-заказы | SSE normalization, local-first accept, ACK/retry, ETA | Node tests + review | PASS; A003-F14 legacy edge |
 | Лояльность | search, rewards, offline sale, ordered retry/reversal | tests + review | A003-F06 |
