@@ -18,6 +18,7 @@ Swift/UIKit application
       ├─ Web/js/features/product-catalog.js: CSV-импорт, поиск, сортировка и таблица товаров
       ├─ Web/js/features/product-categories.js: category CRUD и оформление плиток
       ├─ Web/js/features/pos-navigation.js: папки, плитки и раскладка рабочей зоны
+      ├─ Web/js/features/cart-presentation.js: текущий заказ, скидки и параметры доставки
       ├─ Web/js/features/hall-bookings.js: карта зала, столы и локальные бронирования
       ├─ network-printer.js: JS-граница LAN-печати
       └─ notification-native.js: native notifications
@@ -44,6 +45,8 @@ critical storage journal. `warehouse-reporting.js` только читает л�
 `product-categories.js` поддерживает прежние category references в товарах, layout и POS-навигации.
 `pos-navigation.js` нормализует прежний `posNavigation`, управляет папками и размещением плиток,
 не изменяя товары или остатки; root layout продолжает храниться в прежнем `layout`.
+`cart-presentation.js` отображает текущий заказ и редактирует его существующую локальную сессию;
+проверка остатков, парковка, оплата, проведение чека и печать остаются в основном runtime.
 
 ## Данные и offline-first
 
