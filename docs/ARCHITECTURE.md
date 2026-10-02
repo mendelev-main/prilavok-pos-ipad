@@ -13,6 +13,7 @@ Swift/UIKit application
       ├─ Web/js/core/storage.js: storage adapter
       ├─ Web/js/features/shifts.js: смены, кассовые итоги, движения и отчёт
       ├─ Web/js/features/employees.js: сотрудники, локальные роли и защищённое сохранение
+      ├─ Web/js/features/suppliers.js: справочник поставщиков и связи с товарами
       ├─ Web/js/features/web-orders.js: входящие WEB-заказы, local-first acceptance и ACK/recovery
       ├─ Web/js/features/inventory.js: график, черновик, фиксация и завершение инвентаризации
       ├─ Web/js/features/warehouse-reporting.js: read-only складской отчёт и PDF/XLSX payload
@@ -69,6 +70,10 @@ journal; Telegram и печать запускаются после commit. Не
 записывают полный снимок прежнего `prilavok_employees`, а затем публикуют его в памяти; при ошибке
 storage UI сохраняет исходное состояние и позволяет повторить действие. Действующие роли, пароль и
 ограничения удаления не изменены.
+`suppliers.js` владеет справочником поставщиков и их связями с простыми товарами. CRUD сначала
+записывает полный снимок прежнего `prilavok_suppliers`, а затем публикует его в памяти. Исторические
+заказы и приёмки сохраняют собственные `supplierId`/`supplierName` и при удалении справочника не
+переписываются.
 
 ## Данные и offline-first
 

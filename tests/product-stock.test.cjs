@@ -11,6 +11,7 @@ const inline=[...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].map(m=>m
 const adapter=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/core/storage.js'),'utf8');
 const shiftsScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/shifts.js'),'utf8');
 const employeesScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/employees.js'),'utf8');
+const suppliersScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/suppliers.js'),'utf8');
 const webOrdersScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/web-orders.js'),'utf8');
 const inventoryScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/inventory.js'),'utf8');
 const warehouseReportingScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/warehouse-reporting.js'),'utf8');
@@ -33,7 +34,7 @@ function fixture(){
  const data=new Map(),messages=[],writes=[],fields={'pf-prep-station':{value:'kitchen'},'pf-prep-difficulty':{value:'1'},'pf-base-prep-minutes':{value:'5'}},events=[];
  const document={getElementById:id=>fields[id]||null,querySelector:()=>null,addEventListener:()=>{}};
  const c={console:{error:()=>{}},document,crypto:{randomUUID:()=> 'device-test'},setTimeout:()=>0,clearTimeout:()=>{},addEventListener:()=>{},removeEventListener:()=>{},AbortController,localStorage:{getItem:k=>data.has(k)?data.get(k):null,setItem:(k,v)=>{data.set(k,String(v));writes.push(k);},removeItem:k=>data.delete(k)},fetch:()=>{throw Error('Network is prohibited in this test');},setInterval:()=>{throw Error('Timer is prohibited in this test');}};
- c.window=c;vm.createContext(c);vm.runInContext(adapter,c);vm.runInContext(inline.replace(/loadAll\(\);\s*$/,''),c);vm.runInContext(shiftsScript,c);vm.runInContext(employeesScript,c);vm.runInContext(webOrdersScript,c);vm.runInContext(inventoryScript,c);vm.runInContext(warehouseReportingScript,c);vm.runInContext(analyticsScript,c);vm.runInContext(productCatalogScript,c);vm.runInContext(productCategoriesScript,c);vm.runInContext(posNavigationScript,c);vm.runInContext(cartPresentationScript,c);vm.runInContext(cartCompositionScript,c);vm.runInContext(parkedOrdersScript,c);vm.runInContext(paymentScript,c);vm.runInContext(receiptsScript,c);vm.runInContext(hallBookingsScript,c);
+ c.window=c;vm.createContext(c);vm.runInContext(adapter,c);vm.runInContext(inline.replace(/loadAll\(\);\s*$/,''),c);vm.runInContext(shiftsScript,c);vm.runInContext(employeesScript,c);vm.runInContext(suppliersScript,c);vm.runInContext(webOrdersScript,c);vm.runInContext(inventoryScript,c);vm.runInContext(warehouseReportingScript,c);vm.runInContext(analyticsScript,c);vm.runInContext(productCatalogScript,c);vm.runInContext(productCategoriesScript,c);vm.runInContext(posNavigationScript,c);vm.runInContext(cartPresentationScript,c);vm.runInContext(cartCompositionScript,c);vm.runInContext(parkedOrdersScript,c);vm.runInContext(paymentScript,c);vm.runInContext(receiptsScript,c);vm.runInContext(hallBookingsScript,c);
  c.flash=m=>messages.push(m);c.render=()=>{};c.showReceipt=()=>{};c.showPaymentReceipt=()=>{};c.closeModal=()=>{};c.applyTheme=()=>{};
  const state=vm.runInContext('state',c);
  c.__printerSettingsSnapshot=()=>({printers:[],posNotifications:{soundEnabled:true,sound:'default'}});c.__restorePrinterSettings=()=>true;
@@ -43,7 +44,7 @@ function fixture(){
  async function sale(payments){cart();await c.finalizePayment(payments||[{method:'cash',amount:10}]);return state.orders[0];}
  return {c,state,data,messages,writes,fields,events,cart,sale};
 }
-test('all production JavaScript modules parse',()=>{new vm.Script(inline);new vm.Script(adapter);new vm.Script(shiftsScript);new vm.Script(employeesScript);new vm.Script(webOrdersScript);new vm.Script(inventoryScript);new vm.Script(warehouseReportingScript);new vm.Script(analyticsScript);new vm.Script(productCatalogScript);new vm.Script(productCategoriesScript);new vm.Script(posNavigationScript);new vm.Script(cartPresentationScript);new vm.Script(cartCompositionScript);new vm.Script(parkedOrdersScript);new vm.Script(paymentScript);new vm.Script(receiptsScript);new vm.Script(hallBookingsScript);new vm.Script(printerScript);});
+test('all production JavaScript modules parse',()=>{new vm.Script(inline);new vm.Script(adapter);new vm.Script(shiftsScript);new vm.Script(employeesScript);new vm.Script(suppliersScript);new vm.Script(webOrdersScript);new vm.Script(inventoryScript);new vm.Script(warehouseReportingScript);new vm.Script(analyticsScript);new vm.Script(productCatalogScript);new vm.Script(productCategoriesScript);new vm.Script(posNavigationScript);new vm.Script(cartPresentationScript);new vm.Script(cartCompositionScript);new vm.Script(parkedOrdersScript);new vm.Script(paymentScript);new vm.Script(receiptsScript);new vm.Script(hallBookingsScript);new vm.Script(printerScript);});
 test('shifts module loads before dependent features and preserves its public API',()=>{
  const moduleTag='<script src="Web/js/features/shifts.js"></script>',paymentTag='<script src="Web/js/features/payment.js"></script>',startupTag='<script>loadAll();</script>';
  assert.ok(html.indexOf(moduleTag)>=0);assert.ok(html.indexOf(paymentTag)>html.indexOf(moduleTag));assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));assert.doesNotMatch(inline,/function submitCloseShift\s*\(/);
@@ -53,6 +54,11 @@ test('employees module loads after shifts and before startup with its public API
  const shiftsTag='<script src="Web/js/features/shifts.js"></script>',moduleTag='<script src="Web/js/features/employees.js"></script>',startupTag='<script>loadAll();</script>';
  assert.ok(html.indexOf(moduleTag)>html.indexOf(shiftsTag));assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));assert.doesNotMatch(inline,/function saveEmployee\s*\(/);
  const f=fixture();for(const name of ['employeeShortName','employeeDisplayName','openEmployeeModal','toggleEmployeeAdminPassword','saveEmployee','showEmployeeAdminInfo','employeeDeletionAllowed','deleteEmployee','confirmDeleteEmployee'])assert.equal(typeof f.c[name],'function',name);
+});
+test('suppliers module loads after access helpers and before startup with its public API',()=>{
+ const employeesTag='<script src="Web/js/features/employees.js"></script>',moduleTag='<script src="Web/js/features/suppliers.js"></script>',startupTag='<script>loadAll();</script>';
+ assert.ok(html.indexOf(moduleTag)>html.indexOf(employeesTag));assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));assert.doesNotMatch(inline,/function saveSupplier\s*\(/);
+ const f=fixture();for(const name of ['openSupplierModal','filterSupplierProducts','deleteSupplier','confirmDeleteSupplier','saveSupplier'])assert.equal(typeof f.c[name],'function',name);
 });
 test('WEB orders module loads before startup and preserves its public API',()=>{
  const moduleTag='<script src="Web/js/features/web-orders.js"></script>',startupTag='<script>loadAll();</script>';
@@ -828,6 +834,34 @@ test('new configuration and recipe display unit survive loadAll restart',async()
 });
 
 // Supplier order / TTN workflow uses synthetic local state only.
+function supplierFixture(){
+ const f=fixture();f.state.employees=[{id:'admin',name:'Администратор',role:'admin'}];f.state.shifts=[{id:'shift',status:'open',openingCash:100,employeeId:'admin'}];f.state.suppliers=[];f.state.purchaseOrders=[{id:'history',supplierId:'supplier',supplierName:'Старое имя',status:'received'}];f.state.receivings=[{id:'receipt',supplierId:'supplier',supplierName:'Старое имя'}];
+ Object.assign(f.fields,{'sf-name':{value:'Поставщик'},'supplier-save-confirm':{disabled:false},'supplier-delete-confirm':{disabled:false}});f.c.document.querySelectorAll=selector=>selector==='.supplier-product-check:checked'?[{value:'flour'},{value:'water'}]:[];return f;
+}
+test('supplier create and edit persist before publishing while retaining legacy fields',async()=>{
+ const f=supplierFixture();let closed=0,rendered=0;f.c.closeModal=()=>closed++;f.c.render=()=>rendered++;
+ assert.equal(await f.c.saveSupplier(),true);assert.equal(f.state.suppliers.length,1);assert.deepEqual(plain(f.state.suppliers[0].productIds),['flour','water']);assert.deepEqual(f.writes,['prilavok_suppliers']);assert.equal(closed,1);assert.equal(rendered,1);
+ const id=f.state.suppliers[0].id;f.state.suppliers[0].legacyNote='keep';f.fields['sf-name'].value='Новое имя';f.c.document.querySelectorAll=()=>[{value:'flour'}];
+ assert.equal(await f.c.saveSupplier(id),true);assert.equal(f.state.suppliers[0].legacyNote,'keep');assert.equal(JSON.parse(f.data.get('prilavok_suppliers'))[0].legacyNote,'keep');assert.equal(f.state.suppliers[0].name,'Новое имя');
+});
+test('supplier save failure keeps state and modal available for retry',async()=>{
+ for(const mode of ['create','edit']){
+  const f=supplierFixture();f.state.suppliers=[{id:'supplier',name:'Старое имя',productIds:['flour'],legacyNote:'keep'}];const before=JSON.stringify(f.state.suppliers);let closed=0,rendered=0;f.c.closeModal=()=>closed++;f.c.render=()=>rendered++;f.fields['sf-name'].value='Новое имя';f.c.localStorage.setItem=()=>{throw Error('quota')};
+  assert.equal(await f.c.saveSupplier(mode==='edit'?'supplier':''),false);assert.equal(JSON.stringify(f.state.suppliers),before);assert.equal(closed,0);assert.equal(rendered,0);assert.equal(f.fields['supplier-save-confirm'].disabled,false);assert.match(f.messages.at(-1),/Не удалось сохранить поставщика/);
+ }
+});
+test('repeated supplier save cannot create duplicate rows',async()=>{
+ const f=supplierFixture(),first=f.c.saveSupplier(),second=f.c.saveSupplier();assert.equal(f.fields['supplier-save-confirm'].disabled,true);assert.equal(f.state.suppliers.length,0);assert.equal(await second,false);assert.equal(await first,true);assert.equal(f.state.suppliers.length,1);assert.deepEqual(f.writes,['prilavok_suppliers']);
+});
+test('supplier delete persists first and preserves historical order snapshots',async()=>{
+ const f=supplierFixture();f.state.suppliers=[{id:'supplier',name:'Поставщик',productIds:['flour']}];const orders=JSON.stringify(f.state.purchaseOrders),receivings=JSON.stringify(f.state.receivings);
+ assert.equal(await f.c.confirmDeleteSupplier('supplier'),true);assert.equal(f.state.suppliers.length,0);assert.equal(JSON.stringify(f.state.purchaseOrders),orders);assert.equal(JSON.stringify(f.state.receivings),receivings);assert.deepEqual(f.writes,['prilavok_suppliers']);
+});
+test('supplier delete failure and access recheck never remove the local row',async()=>{
+ const f=supplierFixture();f.state.suppliers=[{id:'supplier',name:'Поставщик',productIds:[]}];const before=JSON.stringify(f.state.suppliers);f.c.localStorage.setItem=()=>{throw Error('quota')};assert.equal(await f.c.confirmDeleteSupplier('supplier'),false);assert.equal(JSON.stringify(f.state.suppliers),before);assert.equal(f.fields['supplier-delete-confirm'].disabled,false);assert.match(f.messages.at(-1),/Не удалось удалить поставщика/);
+ const g=supplierFixture();g.state.suppliers=[{id:'supplier',name:'Поставщик',productIds:[]}];g.state.employees[0].role='employee';assert.equal(await g.c.confirmDeleteSupplier('supplier'),false);assert.equal(g.state.suppliers.length,1);assert.equal(g.writes.length,0);
+});
+
 test('supplier requests preserve packages independently from expected warehouse quantity',()=>{
  const f=fixture(),p=f.c.getProduct('flour');p.stockUnit='kg';
  const unknown=f.c.makePurchaseLine(p,4,'pack','');assert.equal(unknown.qty,0);assert.equal(unknown.expectedQty,null);assert.equal(f.c.requestedQuantityText(unknown),'4 упаковка');
