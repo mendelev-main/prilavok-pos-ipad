@@ -549,7 +549,7 @@ function receiptBodyHtml(order){
     <div class="receipt-line"><span>${escapeHtml(i.name)} × ${i.qty}</span><span>${money(total)}</span></div>
     ${discount>0 ? `<div class="receipt-line" style="font-size:12px;color:var(--accent);padding-top:0;"><span>↳ Скидка: ${escapeHtml(i.discountName)}${i.discountType==='percent'?` (${Number(i.discountValue)}%)`:''}</span><span>−${money(discount)}</span></div>` : ''}
     ${(i.selectedModifiers||[]).length?`<div style="font-size:12px;color:var(--muted);padding:0 0 5px 10px;">↳ ${(i.selectedModifiers||[]).map(m=>escapeHtml(m.name)+(Number(m.priceDelta)?' ('+(Number(m.priceDelta)>0?'+':'')+money(m.priceDelta)+')':'')).join(' · ')}</div>`:''}
-    ${i.comment ? `<div style="font-size:12px;color:var(--muted);padding:0 0 5px 10px;">💬 ${escapeHtml(i.comment)}</div>` : ''}`;
+    ${i.comment ? `<div style="font-size:12px;color:var(--muted);padding:0 0 5px 10px;"><strong>Комментарий:</strong> ${escapeHtml(i.comment)}</div>` : ''}`;
   }).join('');
   return `
     ${order.returnedAt ? `<div style="padding:10px 12px;margin-bottom:10px;border-radius:12px;background:#FFF1F1;color:#A22;font-weight:800;">Возврат · ${fmtDate(order.returnedAt)}</div>` : ''}

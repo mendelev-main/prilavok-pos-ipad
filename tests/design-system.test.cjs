@@ -19,6 +19,9 @@ test('design tokens referenced by static UI are declared or intentionally dynami
 
 test('production UI uses only bundled Manrope font weights',()=>{
   assert.doesNotMatch(production,/font-weight\s*:\s*(?:750|850|900)\b/);
+  assert.doesNotMatch(html,/fonts\.googleapis\.com/);
+  assert.match(html,/Web\/fonts\/Manrope-Variable\.ttf/);
+  assert.ok(fs.existsSync(path.join(root,'PrilavokPOS/Web/fonts/Manrope-Variable.ttf')));
 });
 
 test('button switches expose state to assistive technologies',()=>{
@@ -34,4 +37,18 @@ test('primary controls use semantic colors and standard touch sizes',()=>{
   assert.match(html,/\.icon-btn\{width:44px;height:44px/);
   assert.match(html,/\.settings-plus-btn\{width:44px;height:44px;min-width:44px/);
   assert.match(html,/\.cart-customer-button\{width:44px;height:44px/);
+});
+
+test('switches and common fields share canonical geometry tokens',()=>{
+  assert.match(html,/--switch-width:48px/);
+  assert.match(html,/--control-height:44px/);
+  assert.match(html,/\.theme-switch\{[^}]+width:var\(--switch-width\)/);
+  assert.match(html,/\.switch\{[^}]+width:var\(--switch-width\)/);
+  assert.match(html,/\.analytics-filter input,[^}]+height:var\(--control-height\)/);
+});
+
+test('standalone control icons use the shared CSS icon set',()=>{
+  assert.match(html,/\.ui-icon-close::before/);
+  assert.match(html,/\.ui-icon-edit::before/);
+  assert.doesNotMatch(production,/✕|✎|💬|⚠️|⌕/);
 });

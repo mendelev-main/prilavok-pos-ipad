@@ -155,7 +155,7 @@ function renderProductsScreen(){
         <label>Поиск товаров</label>
         <div style="position:relative;">
           <input id="products-search" type="search" value="${escapeAttr(state.productsSearch||'')}" placeholder="Название или категория" oninput="filterProductsScreen()" onsearch="filterProductsScreen()" style="width:100%;box-sizing:border-box;padding-right:42px;">
-          <button type="button" class="icon-btn" onclick="clearProductsSearch()" aria-label="Очистить поиск" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);display:${query?'flex':'none'};">✕</button>
+          <button type="button" class="icon-btn" onclick="clearProductsSearch()" aria-label="Очистить поиск" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);display:${query?'flex':'none'};"><span class="ui-icon ui-icon-close" aria-hidden="true"></span></button>
         </div>
       </div>
     </div>

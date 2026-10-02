@@ -193,7 +193,7 @@ function renderPosScreen(shift){
         </div>
         <div class="pos-actions-left">
           <button class="park-btn demand-btn ${state.demandOverload?'active':''}" onclick="setDemandOverload(!state.demandOverload)" ${editing?'disabled':''} title="Сообщить гостям о повышенном спросе">${state.demandOverload?'Повышенный спрос':'Обычная загрузка'}</button>
-          <button class="park-btn ${editing?'chip active':''}" onclick="toggleEditMode()" title="Настроить рабочую зону">${editing?'✓ Готово':'✎ Раскладка'}</button>
+          <button class="park-btn ${editing?'chip active':''}" onclick="toggleEditMode()" title="Настроить рабочую зону">${editing?'Готово':'Раскладка'}</button>
           <button class="park-btn" onclick="openParkedModal()" ${editing?'disabled':''}>Отложенные ${parkCount?`<span class="park-badge">${parkCount}</span>`:''}</button>
         </div>
       </div>

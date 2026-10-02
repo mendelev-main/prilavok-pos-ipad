@@ -17,8 +17,8 @@ function openCategoriesModal(){
             <div class="category-sub">${count} ${count===1?'товар':'товаров'}</div>
           </div>
           <button type="button" class="web-switch ${state.categoryOnline[c]!==false?'on':''}" role="switch" aria-label="Публиковать категорию ${escapeAttr(c)} в WEB" aria-checked="${state.categoryOnline[c]!==false}" onclick="toggleCategoryOnline('${escapeAttr(c)}')" title="Публиковать в WEB"><span></span><b>WEB</b></button>
-          <button type="button" class="icon-btn" aria-label="Изменить категорию ${escapeAttr(c)}" onclick="openCategoryModal('${escapeAttr(c)}')">✎</button>
-          <button type="button" class="icon-btn danger" aria-label="Удалить категорию ${escapeAttr(c)}" onclick="deleteCategory('${escapeAttr(c)}')">✕</button>
+          <button type="button" class="icon-btn" aria-label="Изменить категорию ${escapeAttr(c)}" onclick="openCategoryModal('${escapeAttr(c)}')"><span class="ui-icon ui-icon-edit" aria-hidden="true"></span></button>
+          <button type="button" class="icon-btn danger" aria-label="Удалить категорию ${escapeAttr(c)}" onclick="deleteCategory('${escapeAttr(c)}')"><span class="ui-icon ui-icon-close" aria-hidden="true"></span></button>
         </div>`;
       }).join('') : '<div class="center-note">Категорий пока нет.</div>'}
     </div>

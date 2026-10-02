@@ -254,10 +254,10 @@ function renderBookingsScreen(){
     <div class="bookings-layout">
       <div class="bookings-map-card">
         <div class="bookings-map-toolbar">
-          <button class="bookings-edit-btn" title="Редактировать карту" onclick="openHallEditMenu()">✎</button>
+          <button class="bookings-edit-btn" aria-label="Редактировать карту" onclick="openHallEditMenu()"><span class="ui-icon ui-icon-edit" aria-hidden="true"></span></button>
         </div>
         <div class="bookings-map-wrap" id="bookingsMap">
-          ${state.hallTables.length?state.hallTables.map(t=>{const tb=bookingStatusForTable(t);return `<div class="hall-table ${t.shape} ${Number(t.rotation||0)?'rotated':''} ${state.selectedHallTableId===t.id?'selected':''} ${tb?'booked':'available'} ${state.hallEditMode?'editing':''}" data-id="${t.id}" style="left:${t.x}%;top:${t.y}%;transform:rotate(${Number(t.rotation||0)}deg)${state.selectedHallTableId===t.id?' scale(1.015)':''};" onclick="handleHallTableClick(event,'${t.id}')" onpointerdown="hallPointerStart(event,this)" onpointermove="hallPointerMove(event,this)" onpointerup="hallPointerEnd(event)" onpointercancel="hallPointerEnd(event)"><div><div class="hall-table-name">${escapeHtml(hallTableLabel(t))}</div><div class="hall-table-meta">${tb?'Существуют брони':'Свободен'}</div></div></div>`;}).join(''):`<div class="bookings-map-hint">Пока нет столов.<br>Откройте редактирование карты кнопкой ✎ и добавьте стол.</div>`}
+          ${state.hallTables.length?state.hallTables.map(t=>{const tb=bookingStatusForTable(t);return `<div class="hall-table ${t.shape} ${Number(t.rotation||0)?'rotated':''} ${state.selectedHallTableId===t.id?'selected':''} ${tb?'booked':'available'} ${state.hallEditMode?'editing':''}" data-id="${t.id}" style="left:${t.x}%;top:${t.y}%;transform:rotate(${Number(t.rotation||0)}deg)${state.selectedHallTableId===t.id?' scale(1.015)':''};" onclick="handleHallTableClick(event,'${t.id}')" onpointerdown="hallPointerStart(event,this)" onpointermove="hallPointerMove(event,this)" onpointerup="hallPointerEnd(event)" onpointercancel="hallPointerEnd(event)"><div><div class="hall-table-name">${escapeHtml(hallTableLabel(t))}</div><div class="hall-table-meta">${tb?'Существуют брони':'Свободен'}</div></div></div>`;}).join(''):`<div class="bookings-map-hint">Пока нет столов.<br>Откройте редактирование карты и добавьте стол.</div>`}
         </div>
       </div>
       <div class="bookings-side-card">
