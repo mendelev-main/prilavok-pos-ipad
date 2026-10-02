@@ -11,29 +11,29 @@ function viewReceivingModal(receivingId){
   const total=Number(r.totalCost??items.reduce((sum,i)=>sum+(Number(i.totalCost)||0),0));
   showModal(`
     <div class="modal-title">${r.type==='purchase'?'Закупка':'Приёмка'}</div>
-    <div style="font-size:14px;color:var(--muted);margin-bottom:14px;">
-      ${r.type==='purchaseOrder'?`<strong style="color:var(--ink);">${escapeHtml(r.supplierName||'Поставщик не указан')}</strong><br>`:''}
+    <div class="supply-modal-meta">
+      ${r.type==='purchaseOrder'?`<strong>${escapeHtml(r.supplierName||'Поставщик не указан')}</strong><br>`:''}
       ${fmtDate(r.timestamp)}${r.invoiceNumber?'<br>Номер '+escapeHtml(r.invoiceNumber):''}${r.invoiceDate?' · '+escapeHtml(r.invoiceDate):''}
-      ${r.type==='purchaseOrder'?`<br><span class="badge ${r.adminDeleted?'deleted-admin':(r.shortage?'shortage':'received')}" style="margin-top:8px;display:inline-block;">${r.adminDeleted?'Удалено администратором':(r.shortage?'Расхождение':'Принято')}</span>`:''}
+      ${r.type==='purchaseOrder'?`<br><span class="badge supply-status-badge ${r.adminDeleted?'deleted-admin':(r.shortage?'shortage':'received')}">${r.adminDeleted?'Удалено администратором':(r.shortage?'Расхождение':'Принято')}</span>`:''}
     </div>
-    <div style="border-top:1px solid var(--border);">
+    <div class="receiving-detail-list">
       ${items.map(i=>`
-        <div class="list-row" style="padding-left:0;padding-right:0;">
-          <div style="flex:1;min-width:0;">
+        <div class="list-row receiving-detail-row">
+          <div class="receiving-detail-main">
             <div class="list-row-name">${escapeHtml(i.productName||'Товар')}</div>
             <div class="list-row-sub">Количество: ${escapeHtml(String(i.invoiceQty??i.qty??0))} ${unitLabel(i.invoiceUnit??i.stockUnit??stockUnit(getProduct(i.productId)))} · Цена: ${Number(Number(i.invoiceUnitPrice??i.unitCost??0).toPrecision(10))} · Сумма: ${money(i.totalCost||0)}</div>
           </div>
           <div class="badge">${money(i.totalCost||0)}</div>
         </div>`).join('')}
     </div>
-    <div class="receipt-total" style="margin-top:8px;"><span>Итого</span><span>${money(total)}</span></div>
+    <div class="receipt-total receiving-detail-total"><span>Итого</span><span>${money(total)}</span></div>
     <div class="modal-actions"><button class="btn btn-primary" onclick="closeModal()">Закрыть</button></div>
   `);
 }
 
 function receivingHistoryMarkup(){
   const history=state.receivings.slice().sort((a,b)=>b.timestamp-a.timestamp);
-  return history.map(r=>{const status=r.adminDeleted?{label:'Удалено администратором',style:'deleted'}:r.shortage?{label:'Недовоз',style:'shortage'}:{label:'Принят',style:'received'};return `<button class="purchase-history-row" onclick="viewReceivingModal(${escapeAttr(JSON.stringify(r.id))})"><span class="purchase-history-title"><strong>${escapeHtml(r.supplierName||'Без поставщика')}</strong><small>${fmtDate(r.timestamp)}${r.invoiceNumber?' · Номер '+escapeHtml(r.invoiceNumber):''} · ${money(r.totalCost||0)}</small></span><span class="purchase-status ${status.style}">${status.label}</span></button>`;}).join('')||'<p class="pe-note" style="padding:16px">Приёмок пока нет.</p>';
+  return history.map(r=>{const status=r.adminDeleted?{label:'Удалено администратором',style:'deleted'}:r.shortage?{label:'Недовоз',style:'shortage'}:{label:'Принят',style:'received'};return `<button class="purchase-history-row" onclick="viewReceivingModal(${escapeAttr(JSON.stringify(r.id))})"><span class="purchase-history-title"><strong>${escapeHtml(r.supplierName||'Без поставщика')}</strong><small>${fmtDate(r.timestamp)}${r.invoiceNumber?' · Номер '+escapeHtml(r.invoiceNumber):''} · ${money(r.totalCost||0)}</small></span><span class="purchase-status ${status.style}">${status.label}</span></button>`;}).join('')||'<p class="pe-note supply-history-empty">Приёмок пока нет.</p>';
 }
 function toggleReceivingHistory(){
   window._receivingHistoryExpanded=!window._receivingHistoryExpanded;

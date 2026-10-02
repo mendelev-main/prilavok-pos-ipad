@@ -18,7 +18,7 @@ function openDeletePurchaseOrderModal(orderId){
   }
   showModal(`
     <div class="modal-title">Удалить приёмку?</div>
-    <div class="center-note" style="text-align:left;padding:8px 0 14px;">Заказ от «${escapeHtml(order.supplierName||'Поставщик')}» будет помечен как удалённый администратором и останется в списке с фиолетовым статусом.</div>
+    <div class="center-note supply-delete-note">Заказ от «${escapeHtml(order.supplierName||'Поставщик')}» будет помечен как удалённый администратором и останется в истории.</div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal()">Отмена</button>
       <button class="btn btn-danger" onclick="deletePurchaseOrderAsAdmin(${escapeAttr(JSON.stringify(order.id))})">Удалить приёмку</button>
@@ -142,7 +142,7 @@ function purchaseHistoryStatus(order){
 }
 function purchaseHistoryMarkup(){
   const history=state.purchaseOrders.slice().sort((a,b)=>b.timestamp-a.timestamp);
-  return history.map(o=>{const status=purchaseHistoryStatus(o);return `<button class="purchase-history-row" onclick="viewPurchaseOrder(${escapeAttr(JSON.stringify(o.id))})"><span class="purchase-history-title"><strong>${escapeHtml(o.supplierName||'Поставщик')}</strong><small>${fmtDate(o.timestamp)} · ${(o.items||[]).length} позиций</small></span><span class="purchase-status ${status.style}">${status.label}</span></button>`;}).join('')||'<p class="pe-note" style="padding:16px">Заказов пока нет.</p>';
+  return history.map(o=>{const status=purchaseHistoryStatus(o);return `<button class="purchase-history-row" onclick="viewPurchaseOrder(${escapeAttr(JSON.stringify(o.id))})"><span class="purchase-history-title"><strong>${escapeHtml(o.supplierName||'Поставщик')}</strong><small>${fmtDate(o.timestamp)} · ${(o.items||[]).length} позиций</small></span><span class="purchase-status ${status.style}">${status.label}</span></button>`;}).join('')||'<p class="pe-note supply-history-empty">Заказов пока нет.</p>';
 }
 function togglePurchaseHistory(){
   window._purchaseHistoryExpanded=!window._purchaseHistoryExpanded;
@@ -210,12 +210,12 @@ function selectPurchaseOrderSupplier(id){
 }
 function viewPurchaseOrder(id){
   const order=state.purchaseOrders.find(o=>o.id===id);if(!order)return;
-  const deletedLabel=order.status==='deleted'?`<div class="badge deleted-admin" style="display:inline-block;margin-bottom:12px;">Удалено администратором</div>`:'';
+  const deletedLabel=order.status==='deleted'?`<div class="badge deleted-admin supply-deleted-label">Удалено администратором</div>`:'';
   const text=purchaseOrderText(order),safeId=escapeAttr(JSON.stringify(order.id));
   showModal(`
     <div class="modal-title">Заказ поставщику</div>${deletedLabel}
-    <div style="font-size:14px;color:var(--muted);margin-bottom:14px;"><strong style="color:var(--ink);">${escapeHtml(order.supplierName)}</strong><br>${fmtDate(order.timestamp)}</div>
-    <pre id="purchase-order-text" style="white-space:pre-wrap;font-family:inherit;font-size:15px;line-height:1.55;background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:14px;margin:0;">${escapeHtml(text)}</pre>
+    <div class="supply-modal-meta"><strong>${escapeHtml(order.supplierName)}</strong><br>${fmtDate(order.timestamp)}</div>
+    <pre id="purchase-order-text" class="purchase-order-copy">${escapeHtml(text)}</pre>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="copyPurchaseOrder(${safeId})">Скопировать текст</button>
       <button class="btn btn-secondary" onclick="sharePurchaseOrder(${safeId})">Поделиться</button>
