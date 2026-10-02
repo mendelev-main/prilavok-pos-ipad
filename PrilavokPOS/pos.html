@@ -2600,7 +2600,10 @@ function paymentKeyPress(key,total){
 }
 function setPaymentCash(v,total){state._paymentCashGiven=Number(v)||0;renderPaymentAmount(total);}
 function updatePaymentChange(total){const out=document.getElementById('paymentChange');if(!out)return;const given=paymentGivenValue();out.textContent=fullMoney(Math.max(0,given-total));}
-function openSplitPayment(){
+function openSplitPayment(loyaltyValidated=false){
+  if(hasPaidSplitPayment()){renderSplitPayment();return true;}
+  if(hasSelectedLoyaltyReward()&&!loyaltyValidated)return beginPaymentWithLoyaltyGuard(()=>openSplitPayment(true));
+  if(loyaltyValidated)renderPaymentScreen();
   const total=cartTotal();
   if(!Array.isArray(state._splitPayments)||!state._splitPayments.length){
     state._splitPayments=buildSplitPayments(2,total);
@@ -2610,6 +2613,7 @@ function openSplitPayment(){
     normalizeSplitPayments(total);
   }
   renderSplitPayment();
+  return true;
 }
 function normalizePaymentParts(payments){
   if(!Array.isArray(payments)||!payments.length)throw new Error('Платежи не указаны');
@@ -2946,12 +2950,20 @@ async function revalidateSelectedLoyaltyReward(){
  if(!hasSelectedLoyaltyReward()||!state.customer?.id)return true;
  try{const data=await loyaltyApi('/api/customers/'+encodeURIComponent(state.customer.id)+'/loyalty');const byId=new Map((data.programs||[]).map(p=>[String(p.id),p]));for(const [programId,value] of Object.entries(state.loyaltyRedemptions||{})){const requested=Math.max(0,Math.trunc(Number(value)||0));if(requested>Number(byId.get(String(programId))?.rewards||0))return false}state.loyaltyPrograms=data.programs||[];return true}catch(e){return null}
 }
+let loyaltyPaymentGuardBusy=false;
+function cancelOfflinePayment(){window.__offlinePaymentAction=null;closeModal()}
+function continuePaymentWithoutLoyalty(){const action=window.__offlinePaymentAction;window.__offlinePaymentAction=null;state.loyaltyRedemptions={};closeModal();render();return typeof action==='function'?action():false}
 async function beginPaymentWithLoyaltyGuard(action){
  if(!hasSelectedLoyaltyReward())return action();
- const valid=await revalidateSelectedLoyaltyReward();
+ if(loyaltyPaymentGuardBusy)return false;
+ loyaltyPaymentGuardBusy=true;
+ let valid;
+ try{valid=await revalidateSelectedLoyaltyReward()}
+ finally{loyaltyPaymentGuardBusy=false}
  if(valid===true)return action();
  if(valid===false){flash('Подарок уже недоступен. Обновите клиента и повторите оплату');return}
- showModal(`<div class="modal-title">Нет связи с программой лояльности</div><div class="center-note" style="padding:10px 0 18px;">Продажу и оплату можно продолжить без интернета. Подарок сейчас подтвердить нельзя, поэтому он не будет списан и скидка по нему не применится.</div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Вернуться</button><button class="btn btn-primary" onclick="state.loyaltyRedemptions={};closeModal();render();window.__offlinePaymentAction&&window.__offlinePaymentAction()">Продолжить без подарка</button></div>`,true);window.__offlinePaymentAction=()=>{window.__offlinePaymentAction=null;action()};
+ showModal(`<div class="modal-title">Нет связи с программой лояльности</div><div class="center-note" style="padding:10px 0 18px;">Продажу и оплату можно продолжить без интернета. Подарок сейчас подтвердить нельзя, поэтому он не будет списан и скидка по нему не применится.</div><div class="modal-actions"><button class="btn btn-secondary" onclick="cancelOfflinePayment()">Вернуться</button><button class="btn btn-primary" onclick="continuePaymentWithoutLoyalty()">Продолжить без подарка</button></div>`,true);window.__offlinePaymentAction=action;
+ return false;
 }
 function confirmPaymentScreen(method,loyaltyValidated=false){
   if(!requireDeliveryTariff())return;

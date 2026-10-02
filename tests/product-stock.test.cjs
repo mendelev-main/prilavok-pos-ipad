@@ -436,6 +436,33 @@ test('loyalty API aborts a stalled request and payment can continue without a gi
  assert.equal(paid,false);assert.equal(cleared,true);assert.match(modal,/Продолжить без подарка/);assert.match(modal,/без интернета/);
 });
 
+test('split payment validates a selected loyalty gift before creating parts',async()=>{
+ const f=fixture();f.cart('pizza',2);f.state.customer={id:'customer'};f.state.loyaltyPrograms=[{id:'reward',loyalty_reward_products:[{product_id:'pizza'}]}];f.state.loyaltyRedemptions={reward:1};let calls=0,renders=0;
+ f.c.loyaltyApi=async()=>{calls++;return {programs:[{id:'reward',rewards:1,loyalty_reward_products:[{product_id:'pizza'}]}]}};f.c.renderPaymentScreen=()=>{};f.c.renderSplitPayment=()=>renders++;
+ assert.equal(await f.c.openSplitPayment(),true);assert.equal(calls,1);assert.equal(renders,1);assert.equal(f.state._splitPayments.reduce((sum,p)=>sum+p.amount,0),10);assert.equal(f.state._splitPaymentTotalCents,1000);
+});
+
+test('unavailable loyalty gift blocks split creation before money acceptance',async()=>{
+ const f=fixture();f.cart('pizza',2);f.state.customer={id:'customer'};f.state.loyaltyPrograms=[{id:'reward',loyalty_reward_products:[{product_id:'pizza'}]}];f.state.loyaltyRedemptions={reward:1};f.c.loyaltyApi=async()=>({programs:[{id:'reward',rewards:0}]});f.c.renderPaymentScreen=()=>{throw Error('must not refresh')};f.c.renderSplitPayment=()=>{throw Error('must not render')};
+ await f.c.openSplitPayment();assert.equal(f.state._splitPayments.length,0);assert.match(f.messages.at(-1),/Подарок уже недоступен/);
+});
+
+test('offline split continuation removes gift before calculating payment parts',async()=>{
+ const f=fixture();f.cart('pizza',2);f.state.customer={id:'customer'};f.state.loyaltyPrograms=[{id:'reward',loyalty_reward_products:[{product_id:'pizza'}]}];f.state.loyaltyRedemptions={reward:1};let modal='',renders=0,refreshes=0;f.c.loyaltyApi=async()=>{throw Error('offline')};f.c.showModal=html=>{modal=html};f.c.renderPaymentScreen=()=>refreshes++;f.c.renderSplitPayment=()=>renders++;
+ assert.equal(await f.c.openSplitPayment(),false);assert.match(modal,/Продолжить без подарка/);assert.equal(f.state._splitPayments.length,0);
+ assert.equal(f.c.continuePaymentWithoutLoyalty(),true);assert.deepEqual(plain(f.state.loyaltyRedemptions),{});assert.equal(refreshes,1);assert.equal(renders,1);assert.equal(f.state._splitPayments.reduce((sum,p)=>sum+p.amount,0),20);assert.equal(f.state._splitPaymentTotalCents,2000);
+});
+
+test('cancelling offline loyalty choice clears deferred payment action',async()=>{
+ const f=fixture();f.cart('pizza',2);f.state.customer={id:'customer'};f.state.loyaltyRedemptions={reward:1};f.c.loyaltyApi=async()=>{throw Error('offline')};f.c.showModal=()=>{};
+ await f.c.openSplitPayment();assert.equal(typeof f.c.__offlinePaymentAction,'function');f.c.cancelOfflinePayment();assert.equal(f.c.__offlinePaymentAction,null);assert.equal(f.state._splitPayments.length,0);assert.equal(f.state.loyaltyRedemptions.reward,1);
+});
+
+test('duplicate split taps share one in-flight loyalty validation',async()=>{
+ const f=fixture();f.cart('pizza',2);f.state.customer={id:'customer'};f.state.loyaltyPrograms=[{id:'reward',loyalty_reward_products:[{product_id:'pizza'}]}];f.state.loyaltyRedemptions={reward:1};let calls=0,release,renders=0;const gate=new Promise(resolve=>{release=resolve});f.c.loyaltyApi=async()=>{calls++;await gate;return {programs:[{id:'reward',rewards:1,loyalty_reward_products:[{product_id:'pizza'}]}]}};f.c.renderPaymentScreen=()=>{};f.c.renderSplitPayment=()=>renders++;
+ const first=f.c.openSplitPayment(),second=f.c.openSplitPayment();assert.equal(await second,false);assert.equal(calls,1);release();assert.equal(await first,true);assert.equal(renders,1);
+});
+
 test('returned loyalty sale is always posted before its reversal',async()=>{
  const f=fixture(),calls=[];const order={id:'paid',customer:{id:'customer'},items:[{productId:'pizza',qty:1}],loyaltySync:{status:'pending'},loyaltyReversal:{status:'pending'},returnedAt:Date.now()};f.state.orders=[order];
  f.c.loyaltyApi=async path=>{calls.push(path);return path.endsWith('/sales')?{events:[]}:{};};
