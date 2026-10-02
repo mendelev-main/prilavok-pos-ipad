@@ -4,16 +4,16 @@ function openCategoriesModal(){
   const cats=state.categoryOrder.slice();
   showModal(`
     <div class="modal-title">Категории</div>
-    <div class="center-note" style="padding:0 0 12px;text-align:left;">Добавляйте, переименовывайте, настраивайте цвет и удаляйте категории.</div>
-    <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
-      <button class="btn btn-primary" style="width:auto;padding:10px 14px;" onclick="openCategoryModal(null)">+ Добавить категорию</button>
+    <div class="center-note category-list-note">Добавляйте, переименовывайте, настраивайте цвет и удаляйте категории.</div>
+    <div class="category-toolbar">
+      <button class="btn btn-primary category-add-button" onclick="openCategoryModal(null)">+ Добавить категорию</button>
     </div>
-    <div style="max-height:52vh;overflow:auto;">
+    <div class="category-list">
       ${cats.length ? cats.map(c=>{
         const count=state.products.filter(p=>productCategoryKey(p)===c).length;
         return `<div class="category-row">
           <div class="category-main">
-            <div class="category-name"><span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:${state.categoryColors[c]||'#EEF1F5'};border:1px solid rgba(0,0,0,.12);margin-right:8px;vertical-align:-2px;"></span>${escapeHtml(c)}</div>
+            <div class="category-name"><span class="category-swatch" style="--category-color:${state.categoryColors[c]||'#EEF1F5'}"></span>${escapeHtml(c)}</div>
             <div class="category-sub">${count} ${count===1?'товар':'товаров'}</div>
           </div>
           <button type="button" class="web-switch ${state.categoryOnline[c]!==false?'on':''}" role="switch" aria-label="Публиковать категорию ${escapeAttr(c)} в WEB" aria-checked="${state.categoryOnline[c]!==false}" onclick="toggleCategoryOnline('${escapeAttr(c)}')" title="Публиковать в WEB"><span></span><b>WEB</b></button>
@@ -44,21 +44,21 @@ function openCategoryModal(oldName){
     </div>
     <div class="field"><label>Обозначение на плитке</label>
       <input type="text" id="cf-symbol" value="${editing?escapeAttr(state.categorySymbols[oldName]||''):''}" placeholder="До 3 символов: ☕ / К / КФ" autocomplete="off">
-      <div class="center-note" style="padding:6px 0 0;text-align:left;">До 3 символов. Они будут отображаться по центру плитки в рабочей зоне.</div>
+      <div class="center-note category-field-note">До 3 символов. Они будут отображаться по центру плитки в рабочей зоне.</div>
     </div>
     <div class="field"><label>Цвет категории</label>
       <div class="category-color-picker">
-        ${colors.map(color=>`<button type="button" class="category-color-option ${selectedColor===color?'selected':''}" style="background:${color}" data-color="${color}" onclick="selectCategoryColor('${color}')" aria-label="Выбрать цвет"></button>`).join('')}
+        ${colors.map(color=>`<button type="button" class="category-color-option ${selectedColor===color?'selected':''}" style="--category-color:${color}" data-color="${color}" onclick="selectCategoryColor('${color}')" aria-label="Выбрать цвет"></button>`).join('')}
       </div>
       <input type="hidden" id="cf-color" value="${selectedColor}">
     </div>
     <div class="field">
       <div class="web-setting-row">
-        <div><div style="font-weight:800;">Публиковать в WEB</div><div class="center-note" style="padding:3px 0 0;text-align:left;">Категория будет доступна клиентам онлайн.</div></div>
+        <div><div class="category-setting-title">Публиковать в WEB</div><div class="center-note category-web-note">Категория будет доступна клиентам онлайн.</div></div>
         <button type="button" id="cf-web-toggle" class="toggle-switch ${editing&&state.categoryOnline[oldName]===false?'':'on'}" role="switch" aria-label="Публиковать категорию в WEB" aria-checked="${editing&&state.categoryOnline[oldName]===false?'false':'true'}" onclick="toggleCategoryModalOnline()"><span></span></button>
       </div>
     </div>
-    ${editing?`<div class="center-note" style="padding:0;text-align:left;">При переименовании категория изменится у всех товаров, которые к ней относятся.</div>`:''}
+    ${editing?`<div class="center-note category-rename-note">При переименовании категория изменится у всех товаров, которые к ней относятся.</div>`:''}
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal()">Отмена</button>
       <button class="btn btn-primary" onclick="saveCategory(${editing?`'${escapeAttr(oldName)}'`:'null'})">Сохранить</button>

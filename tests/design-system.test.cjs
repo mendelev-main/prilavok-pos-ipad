@@ -74,3 +74,13 @@ test('catalog and workspace navigation isolate dynamic presentation',()=>{
   assert.match(html,/\.products-search-clear\[hidden\]/);
   assert.match(html,/\.pos-folder-modal\[data-columns="4"\]/);
 });
+
+test('product configuration and categories isolate dynamic presentation',()=>{
+  const configuration=featureSourceByName.get('product-configuration.js');
+  const categories=featureSourceByName.get('product-categories.js');
+  assert.doesNotMatch(configuration,/style="/);
+  const dynamicStyles=[...categories.matchAll(/style="([^"]*)"/g)].map(match=>match[1]);
+  assert.deepEqual(dynamicStyles,["--category-color:${state.categoryColors[c]||'#EEF1F5'}",'--category-color:${color}']);
+  assert.match(html,/\.configuration-access-note\{/);
+  assert.match(html,/\.category-swatch\{/);
+});
