@@ -13,3 +13,10 @@
 - [X] T011 Выполнить full Node, syntax, diagnostics и Simulator build
 - [X] T012 Записать results и проверить diff/version/project file
 - [X] T013 Commit/push этапа в `main`
+- [X] T014 [US5] Добавить backend snapshot service и защищённый endpoint
+- [X] T015 [US5] Добавить таблицы physical availability и WEB reservations с RLS
+- [X] T016 [US5] Сделать финальную проверку и резерв заказа атомарными
+- [X] T017 [US5] Ограничить карточки, корзину и checkout сайта эффективным остатком
+- [X] T018 [US5] Передавать settlement WEB-заказа после локальной оплаты
+- [X] T019 [US5] Восстанавливать settlement после restart из истории оплаченных чеков
+- [X] T020 [US5] Покрыть service, SQL transaction, web UI и restart recovery тестами

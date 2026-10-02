@@ -34,6 +34,13 @@ online event или восстановлению сети нет; следующ
 Фоновая публикация запускается после успешной оплаты, возврата, приёмки, фиксации инвентаризации и
 сохранения карточки товара. Ручная публикация меню остаётся отдельной операцией.
 
+### US5 — сайт не принимает больше доступного остатка
+
+Сайт получает доступное количество вместе с меню, блокирует отсутствующие товары и ограничивает
+увеличение количества в корзине. Перед оформлением остатки перечитываются. Окончательная проверка и
+резерв выполняются атомарно после подтверждения телефона, поэтому два одновременных заказа не могут
+использовать одну и ту же последнюю единицу.
+
 ## Functional Requirements
 
 - **FR-001**: Availability MUST publish only after the corresponding product snapshot is durably stored.
@@ -45,6 +52,10 @@ online event или восстановлению сети нет; следующ
 - **FR-007**: Snapshot format, endpoint, device key, revision and ingredient availability rules MUST remain compatible.
 - **FR-008**: Manual menu synchronization MUST remain manual-only and may publish availability after success.
 - **FR-009**: Product JSON, storage keys and authoritative POS data MUST remain unchanged.
+- **FR-010**: Backend MUST subtract open confirmed WEB reservations from the newest POS snapshot.
+- **FR-011**: Final order creation and reservation MUST be one atomic database operation.
+- **FR-012**: A paid WEB receipt MUST let POS settle its backend reservation without double subtraction.
+- **FR-013**: Pending settlement identity MUST survive an app restart through existing paid receipt history.
 
 ## Success Criteria
 
@@ -53,11 +64,13 @@ online event или восстановлению сети нет; следующ
 - **SC-003**: Tests prove startup, foreground and online events create no availability request.
 - **SC-004**: Payment, return, receiving, inventory and product save trigger publication only after success.
 - **SC-005**: Full Node suite, syntax, diagnostics and Simulator build pass.
+- **SC-006**: A concurrent oversized order is rejected without creating a partial order or reservation.
+- **SC-007**: Website quantity controls and checkout use current effective availability.
 
 ## Assumptions
 
 - При отсутствии интернета сайт может временно показывать устаревшие остатки; это принятый риск.
 - Новая попытка после сетевой ошибки появится только при следующем подтверждённом изменении склада
   или ручной синхронизации меню.
-- Backend обязан применять последний snapshot и проверять количество при создании WEB-заказа;
-  backend-репозиторий отсутствует в текущем workspace и не изменяется этим этапом.
+- В production используется один активный iPad; при отсутствии ровно одного активного устройства
+  backend безопасно запрещает оформление, пока источник availability не определён.

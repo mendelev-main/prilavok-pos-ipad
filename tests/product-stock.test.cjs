@@ -329,11 +329,11 @@ test('sale writes nested stock snapshot through real adapter; same receipt survi
  assert.ok(f.writes.every(k=>k.startsWith('prilavok_')));
 });
 test('payment publishes availability only after local commit and never waits for its network request',async()=>{
- const f=fixture();f.cart();let releaseCommit,availabilityCalls=0;const gate=new Promise(resolve=>{releaseCommit=resolve}),realCommit=f.c.commitCriticalStorage;
+ const f=fixture();f.cart();f.state.currentOrderSource='web';f.state.currentWebOrderId='web-order-1';f.state.currentWebOrderStatus='accepted';let releaseCommit,availabilityCalls=0,settledIds;const gate=new Promise(resolve=>{releaseCommit=resolve}),realCommit=f.c.commitCriticalStorage;
  f.c.commitCriticalStorage=async(...args)=>{await gate;return realCommit(...args)};
- f.c.publishAvailability=()=>{availabilityCalls++;return new Promise(()=>{})};
+ f.c.publishAvailability=ids=>{availabilityCalls++;settledIds=ids;return new Promise(()=>{})};
  const payment=f.c.finalizePayment([{method:'cash',amount:10}]);await Promise.resolve();assert.equal(availabilityCalls,0);assert.equal(f.state.orders.length,0);
- releaseCommit();await payment;assert.equal(availabilityCalls,1);assert.equal(f.state.orders.length,1);assert.equal(JSON.parse(f.data.get('prilavok_orders')).length,1);
+ releaseCommit();await payment;assert.equal(availabilityCalls,1);assert.deepEqual(plain(settledIds),['web-order-1']);assert.equal(f.state.orders.length,1);const stored=JSON.parse(f.data.get('prilavok_orders'))[0];assert.equal(stored.webOrderId,'web-order-1');assert.equal(stored.source,'web');
 });
 test('cash, card and split payments create one receipt and retain payment data',async()=>{
  for(const payments of [[{method:'cash',amount:10,cashGiven:20,change:10}],[{method:'card',amount:10}],[{method:'cash',amount:4,cashGiven:5,change:1},{method:'card',amount:6}]]){
@@ -1480,6 +1480,17 @@ test('availability coalesces an overlapping mutation and sends the newest persis
  const first=f.c.publishAvailability();for(let i=0;i<12&&bodies.length===0;i++)await Promise.resolve();assert.equal(bodies.length,1);
  const next=plain(f.state.products);next.find(p=>p.id==='flour').stock=4;await f.c.saveKey('products',next);const second=f.c.publishAvailability();releaseFirst();assert.equal(await first,true);assert.equal(await second,true);
  assert.equal(bodies.length,2);assert.equal(bodies[1].items.find(item=>item.externalId==='flour').quantity,4);assert.ok(bodies[1].revision>bodies[0].revision);
+});
+test('availability retains WEB settlement through failure and clears it only after success',async()=>{
+ const f=fixture();f.state.loaded=true;await f.c.saveKey('products',f.state.products);await f.c.saveKey('network',{backendUrl:'https://test',deviceKey:'test'});const bodies=[];let fail=true;
+ f.c.fetch=async(_url,options)=>{bodies.push(JSON.parse(options.body));if(fail)throw Error('offline');return {ok:true}};
+ assert.equal(await f.c.publishAvailability(['web-order-1']),false);fail=false;assert.equal(await f.c.publishAvailability(),true);assert.deepEqual(bodies.map(body=>body.settledWebOrderIds),[['web-order-1'],['web-order-1']]);
+ await f.c.publishAvailability();assert.deepEqual(bodies.at(-1).settledWebOrderIds,[]);
+});
+test('availability restores WEB settlements from durable paid receipts after restart',async()=>{
+ const f=fixture();f.state.loaded=true;await f.c.saveKey('products',f.state.products);await f.c.saveKey('network',{backendUrl:'https://test',deviceKey:'test'});await f.c.saveKey('orders',[{id:'receipt-1',webOrderId:'web-order-1',timestamp:10},{id:'receipt-2',webOrderId:'web-order-2',timestamp:20},{id:'local',timestamp:30}]);let body;
+ f.c.fetch=async(_url,options)=>{body=JSON.parse(options.body);return {ok:true}};
+ assert.equal(await f.c.publishAvailability(),true);assert.deepEqual(plain(body.settledWebOrderIds),['web-order-2','web-order-1']);
 });
 function webAcceptFixture(){const f=fixture();f.state.network={backendUrl:'https://test',deviceKey:'test'};f.state.webEvents=[{id:'web-1',external_id:'WEB-1',total:10,order_items:[{external_product_id:'pizza',product_name:'Пицца',quantity:1,price:10}]}];return f;}
 test('incoming WEB EventSource persists orders without invoking catalog or availability upload',()=>{

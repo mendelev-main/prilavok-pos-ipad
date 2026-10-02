@@ -26,7 +26,18 @@ Call `void publishAvailability()` immediately after successful local publication
 receiving, inventory and product persistence modules. Remove `startAvailabilitySchedule()` and its
 startup/foreground behavior. Keep the existing explicit call after successful manual menu sync.
 
+Backend сохраняет физический snapshot отдельно от открытых WEB-резервов. Публичное количество равно
+`physical - open reservations`. Создание подтверждённого заказа блокирует строку состояния устройства,
+повторно проверяет эффективный остаток и в одной транзакции создаёт заказ с резервом. Оплата WEB-заказа
+на POS передаёт его backend ID; после успешного snapshot резерв считается погашенным. При перезапуске
+неотправленные ID восстанавливаются из существующей локальной истории оплаченных чеков.
+
+Сайт получает availability при первоначальной загрузке, открытии корзины и непосредственно перед
+checkout. Локальные controls дают быструю обратную связь, а атомарная backend-проверка остаётся
+окончательной защитой от устаревшей вкладки и параллельных заказов.
+
 ## Validation
 
-Add module boundary, no-heartbeat, commit-order, failure isolation and coalescing regressions before
-implementation. Run full Node, production syntax, diagnostics, unsigned Simulator build and bundle hash.
+Add module boundary, no-heartbeat, commit-order, failure isolation, restart recovery and coalescing
+regressions. Execute the SQL migration in PGlite, including concurrent reservation and settlement cases.
+Run full Node, production syntax, diagnostics, unsigned Simulator build and bundle hash.
