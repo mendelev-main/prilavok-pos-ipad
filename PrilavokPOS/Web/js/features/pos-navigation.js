@@ -121,7 +121,7 @@ function ensureLayoutPositions(){
     while(occupied.has((n%cols)+':'+Math.floor(n/cols))) n++;
     t.col=n%cols; t.row=Math.floor(n/cols); occupied.add(t.col+':'+t.row); changed=true;
   });
-  if(changed) saveKey('layout',{categoryOrder:state.categoryOrder,categoryColors:state.categoryColors,categorySymbols:state.categorySymbols,categoryOnline:state.categoryOnline,tiles:state.layoutTiles});
+  if(changed) saveKey('layout',categoryLayoutSnapshot());
   return changed;
 }
 function tilePositionStyle(t){
@@ -263,13 +263,13 @@ function addLayoutTile(type,id){
   if(state.layoutTiles.length>=20){ flash('В рабочей зоне можно разместить максимум 20 плиток'); return; }
   state.layoutTiles.push({type,id});
   ensureLayoutPositions();
-  saveKey('layout',{categoryOrder:state.categoryOrder,categoryColors:state.categoryColors,categorySymbols:state.categorySymbols,categoryOnline:state.categoryOnline,tiles:state.layoutTiles});
+  saveKey('layout',categoryLayoutSnapshot());
   render();
   openLayoutEditor();
 }
 function removeLayoutTile(index){
   state.layoutTiles.splice(Number(index),1);
-  saveKey('layout',{categoryOrder:state.categoryOrder,categoryColors:state.categoryColors,categorySymbols:state.categorySymbols,categoryOnline:state.categoryOnline,tiles:state.layoutTiles});
+  saveKey('layout',categoryLayoutSnapshot());
   render();
   setTimeout(setupLayoutGridDrag,50);
 }
@@ -363,7 +363,7 @@ function onLayoutPointerUp(e){
       }else{
         const cell=nearestFreeCell(d.grid,target.col,target.row,d.index),old=state.layoutTiles[d.index];
         if(old){old.col=cell.col;old.row=cell.row;}
-        saveKey('layout',{categoryOrder:state.categoryOrder,categoryColors:state.categoryColors,categorySymbols:state.categorySymbols,categoryOnline:state.categoryOnline,tiles:state.layoutTiles});
+        saveKey('layout',categoryLayoutSnapshot());
       }
     }
     if(d.clone)d.clone.remove();

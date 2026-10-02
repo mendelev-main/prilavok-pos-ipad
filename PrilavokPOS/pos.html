@@ -1230,6 +1230,8 @@ let state = {
   categoryColors: {},
   categorySymbols: {},
   categoryOnline: {},
+  categoryOnlineOrder: {},
+  categoryOnlineMenu: {},
   theme: 'light',
   layoutTiles: [],
   posPath: null,
@@ -1385,7 +1387,7 @@ async function loadAll(){
     loadKey('suppliers', []),
     loadKey('purchaseOrders', []),
     loadKey('discounts', []),
-    loadKey('layout', {categoryOrder:[], categoryColors:{}, categorySymbols:{}, categoryOnline:{}}),
+    loadKey('layout', {categoryOrder:[], categoryColors:{}, categorySymbols:{}, categoryOnline:{}, categoryOnlineOrder:{}, categoryOnlineMenu:{}}),
     loadKey('printer', {enabled:false, autoPrint:false, ip:'', port:9100 }),
     loadKey('theme', 'light'),
     loadKey('company', {establishmentName:'', legalName:'', address:'', deliveryAddress:''}),
@@ -1420,12 +1422,20 @@ async function loadAll(){
   state.discounts = storageRecordArray(discounts,'discounts');
   state.receivingCart = [];
   const layoutShapeValid=!!layout&&typeof layout==='object'&&!Array.isArray(layout);
-  const safeLayout=storageRecord(layout,'layout',{categoryOrder:[],categoryColors:{},categorySymbols:{},categoryOnline:{}});
+  const safeLayout=storageRecord(layout,'layout',{categoryOrder:[],categoryColors:{},categorySymbols:{},categoryOnline:{},categoryOnlineOrder:{},categoryOnlineMenu:{}});
   state.categoryOrder = Array.isArray(safeLayout.categoryOrder)?safeLayout.categoryOrder:[];
   state.categoryColors = storageRecord(safeLayout.categoryColors,'layout.categoryColors',{});
   state.categorySymbols = storageRecord(safeLayout.categorySymbols,'layout.categorySymbols',{});
-  state.categoryOnline = storageRecord(safeLayout.categoryOnline,'layout.categoryOnline',{});
-  state.categoryOrder.forEach(c=>{ if(typeof state.categoryOnline[c] !== 'boolean') state.categoryOnline[c]=true; });
+  const legacyCategoryOnline=storageRecord(safeLayout.categoryOnline,'layout.categoryOnline',{});
+  state.categoryOnlineOrder = storageRecord(safeLayout.categoryOnlineOrder,'layout.categoryOnlineOrder',Object.assign({},legacyCategoryOnline));
+  state.categoryOnlineMenu = storageRecord(safeLayout.categoryOnlineMenu,'layout.categoryOnlineMenu',Object.assign({},legacyCategoryOnline));
+  state.categoryOrder.forEach(c=>{
+    const legacy=typeof legacyCategoryOnline[c]==='boolean'?legacyCategoryOnline[c]:true;
+    if(typeof state.categoryOnlineOrder[c] !== 'boolean') state.categoryOnlineOrder[c]=legacy;
+    if(typeof state.categoryOnlineMenu[c] !== 'boolean') state.categoryOnlineMenu[c]=legacy;
+  });
+  // Compatibility facade for older modules and downgrade-safe backups.
+  state.categoryOnline = state.categoryOnlineOrder;
   state.layoutTiles = Array.isArray(safeLayout.tiles) ? safeLayout.tiles.filter(item=>item&&typeof item==='object'&&!Array.isArray(item)) : [];
   state.posNavigation=normalizePosNavigation(posNavigation);
   state.posFolder='';
@@ -1501,7 +1511,7 @@ async function loadAll(){
   syncCategoryOrder();
   if(!state.layoutTiles.length){
     state.layoutTiles = state.products.map(p=>({type:'product', id:p.id}));
-    if(layoutShapeValid)saveKey('layout', {categoryOrder: state.categoryOrder, categoryColors: state.categoryColors, categorySymbols: state.categorySymbols, categoryOnline: state.categoryOnline, tiles: state.layoutTiles});
+    if(layoutShapeValid)saveKey('layout', categoryLayoutSnapshot());
   } else {
     // Удаляем из раскладки ссылки на уже удалённые товары/категории.
     const validProducts = new Set(state.products.map(p=>p.id));
@@ -1520,14 +1530,28 @@ async function loadAll(){
   startOperationalSchedule();
   void recoverWebAcceptanceJournal().catch(e=>console.warn('WEB acceptance recovery:',e));
 }
+function categoryLayoutSnapshot(){
+  return {
+    categoryOrder:state.categoryOrder,
+    categoryColors:state.categoryColors,
+    categorySymbols:state.categorySymbols,
+    // Legacy field mirrors online-order visibility for downgrade compatibility.
+    categoryOnline:state.categoryOnlineOrder,
+    categoryOnlineOrder:state.categoryOnlineOrder,
+    categoryOnlineMenu:state.categoryOnlineMenu,
+    tiles:state.layoutTiles
+  };
+}
 // поддерживаем список категорий в актуальном виде: новые — в конец, пустые — не теряем сразу
 function syncCategoryOrder(){
   const present = new Set(state.products.map(p=>(p.category||'').trim() || 'Без категории'));
   let changed = false;
   for(const c of present){
     if(!state.categoryOrder.includes(c)){ state.categoryOrder.push(c); changed = true; }
+    if(typeof state.categoryOnlineOrder[c]!=='boolean'){state.categoryOnlineOrder[c]=true;changed=true;}
+    if(typeof state.categoryOnlineMenu[c]!=='boolean'){state.categoryOnlineMenu[c]=true;changed=true;}
   }
-  if(changed) saveKey('layout', {categoryOrder: state.categoryOrder, categoryColors: state.categoryColors, categorySymbols: state.categorySymbols, categoryOnline: state.categoryOnline, tiles: state.layoutTiles});
+  if(changed) saveKey('layout', categoryLayoutSnapshot());
   return changed;
 }
 function seedProducts(){
@@ -2099,7 +2123,9 @@ function buildMenuSyncPayload(){
     name,
     color:(state.categoryColors||{})[name]||'',
     sortOrder:index,
-    isActive:(state.categoryOnline||{})[name]!==false
+    isActive:true,
+    availableOnline:(state.categoryOnlineOrder||{})[name]!==false,
+    visibleInOnlineMenu:(state.categoryOnlineMenu||{})[name]!==false
   }));
   const products=(state.products||[]).map((p,index)=>({
     externalId:String(p.id),
@@ -2109,8 +2135,8 @@ function buildMenuSyncPayload(){
     category:String(p.category||'Без категории'),
     sortOrder:Number.isFinite(Number(p.sortOrder)) ? Number(p.sortOrder) : index,
     isActive:true,
-    availableOnline:(p.availableOnline!==false) && (state.categoryOnline[String(p.category||'Без категории').trim() || 'Без категории']!==false),
-    visibleInOnlineMenu:(p.availableInOnlineMenu!==false) && (state.categoryOnline[String(p.category||'Без категории').trim() || 'Без категории']!==false),
+    availableOnline:(p.availableOnline!==false) && (state.categoryOnlineOrder[String(p.category||'Без категории').trim() || 'Без категории']!==false),
+    visibleInOnlineMenu:(p.availableInOnlineMenu!==false) && (state.categoryOnlineMenu[String(p.category||'Без категории').trim() || 'Без категории']!==false),
     imageUrl:String(p.imageUrl||'')
   })).filter(p=>p.name);
   return {deviceKey:networkConfigFromState().deviceKey,deviceName:networkConfigFromState().deviceName,categories,products};
@@ -2453,8 +2479,10 @@ function confirmDelete(type,id){
     delete state.categoryColors[id];
     delete state.categorySymbols[id];
     delete state.categoryOnline[id];
+    delete state.categoryOnlineOrder[id];
+    delete state.categoryOnlineMenu[id];
     state.layoutTiles=state.layoutTiles.filter(t=>!(t.type==='category' && t.id===id));
-    saveKey('layout',{categoryOrder:state.categoryOrder,categoryColors:state.categoryColors,categorySymbols:state.categorySymbols,categoryOnline:state.categoryOnline,tiles:state.layoutTiles});
+    saveKey('layout',categoryLayoutSnapshot());
     closeModal(); render(); flash('Категория удалена');
   } else {
     if(hasUnreturnedStockConsumption(id)){ flash('Товар нужен для возврата ранее проданных чеков'); return; }
@@ -2463,7 +2491,7 @@ function confirmDelete(type,id){
     state.products=state.products.filter(p=>p.id!==id);
     saveKey('products',state.products);
     state.layoutTiles=state.layoutTiles.filter(t=>!(t.type==='product' && t.id===id));
-    saveKey('layout',{categoryOrder:state.categoryOrder,categoryColors:state.categoryColors,categorySymbols:state.categorySymbols,categoryOnline:state.categoryOnline,tiles:state.layoutTiles});
+    saveKey('layout',categoryLayoutSnapshot());
     closeModal(); render(); flash('Товар удалён');
     if(window._pmEditingId===id && document.getElementById('pe-save'))finishProductEditor();
   }

@@ -29,7 +29,8 @@ test('button switches expose state to assistive technologies',()=>{
   const categories=featureSources.find(source=>source.includes('function openCategoriesModal'));
   const catalog=featureSources.find(source=>source.includes('function renderProducts'));
   assert.match(categories,/class="web-switch[^\n]+role="switch"[^\n]+aria-checked=/);
-  assert.match(categories,/id="cf-web-toggle"[^\n]+role="switch"[^\n]+aria-checked=/);
+  assert.match(categories,/id="cf-menu-toggle"[^\n]+role="switch"[^\n]+aria-checked=/);
+  assert.match(categories,/id="cf-order-toggle"[^\n]+role="switch"[^\n]+aria-checked=/);
   assert.match(catalog,/class="web-switch[^\n]+role="switch"[^\n]+aria-checked=/);
 });
 

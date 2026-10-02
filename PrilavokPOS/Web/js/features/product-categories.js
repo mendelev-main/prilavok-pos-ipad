@@ -16,7 +16,8 @@ function openCategoriesModal(){
             <div class="category-name"><span class="category-swatch" style="--category-color:${state.categoryColors[c]||'#EEF1F5'}"></span>${escapeHtml(c)}</div>
             <div class="category-sub">${count} ${count===1?'товар':'товаров'}</div>
           </div>
-          <button type="button" class="web-switch ${state.categoryOnline[c]!==false?'on':''}" role="switch" aria-label="Публиковать категорию ${escapeAttr(c)} в WEB" aria-checked="${state.categoryOnline[c]!==false}" onclick="toggleCategoryOnline('${escapeAttr(c)}')" title="Публиковать в WEB"><span></span><b>WEB</b></button>
+          <button type="button" class="web-switch ${state.categoryOnlineMenu[c]!==false?'on':''}" role="switch" aria-label="Показывать категорию ${escapeAttr(c)} в онлайн-меню" aria-checked="${state.categoryOnlineMenu[c]!==false}" onclick="toggleCategoryChannel('${escapeAttr(c)}','menu')" title="Онлайн меню"><span></span><b>МЕНЮ</b></button>
+          <button type="button" class="web-switch ${state.categoryOnlineOrder[c]!==false?'on':''}" role="switch" aria-label="Разрешить категорию ${escapeAttr(c)} в онлайн-заказе" aria-checked="${state.categoryOnlineOrder[c]!==false}" onclick="toggleCategoryChannel('${escapeAttr(c)}','order')" title="Онлайн заказ"><span></span><b>ЗАКАЗ</b></button>
           <button type="button" class="icon-btn" aria-label="Изменить категорию ${escapeAttr(c)}" onclick="openCategoryModal('${escapeAttr(c)}')"><span class="ui-icon ui-icon-edit" aria-hidden="true"></span></button>
           <button type="button" class="icon-btn danger" aria-label="Удалить категорию ${escapeAttr(c)}" onclick="deleteCategory('${escapeAttr(c)}')"><span class="ui-icon ui-icon-close" aria-hidden="true"></span></button>
         </div>`;
@@ -36,7 +37,8 @@ function openCategoryModal(oldName){
     '#E9DDFB','#DDF4F4','#F5E1D3','#E5E5E5','#DCE6F7'
   ];
   const selectedColor = state.categoryColors[oldName] || colors[0];
-  window._cmOnline = editing ? state.categoryOnline[oldName] !== false : true;
+  window._cmOnlineMenu = editing ? state.categoryOnlineMenu[oldName] !== false : true;
+  window._cmOnlineOrder = editing ? state.categoryOnlineOrder[oldName] !== false : true;
   showModal(`
     <div class="modal-title">${editing?'Изменить категорию':'Новая категория'}</div>
     <div class="field"><label>Название категории</label>
@@ -54,8 +56,12 @@ function openCategoryModal(oldName){
     </div>
     <div class="field">
       <div class="web-setting-row">
-        <div><div class="category-setting-title">Публиковать в WEB</div><div class="center-note category-web-note">Категория будет доступна клиентам онлайн.</div></div>
-        <button type="button" id="cf-web-toggle" class="toggle-switch ${editing&&state.categoryOnline[oldName]===false?'':'on'}" role="switch" aria-label="Публиковать категорию в WEB" aria-checked="${editing&&state.categoryOnline[oldName]===false?'false':'true'}" onclick="toggleCategoryModalOnline()"><span></span></button>
+        <div><div class="category-setting-title">Онлайн меню</div><div class="center-note category-web-note">Показывать категорию в меню для просмотра.</div></div>
+        <button type="button" id="cf-menu-toggle" class="toggle-switch ${editing&&state.categoryOnlineMenu[oldName]===false?'':'on'}" role="switch" aria-label="Показывать категорию в онлайн-меню" aria-checked="${editing&&state.categoryOnlineMenu[oldName]===false?'false':'true'}" onclick="toggleCategoryModalChannel('menu')"><span></span></button>
+      </div>
+      <div class="web-setting-row">
+        <div><div class="category-setting-title">Онлайн заказ</div><div class="center-note category-web-note">Разрешить товары категории для онлайн-заказа.</div></div>
+        <button type="button" id="cf-order-toggle" class="toggle-switch ${editing&&state.categoryOnlineOrder[oldName]===false?'':'on'}" role="switch" aria-label="Разрешить категорию в онлайн-заказе" aria-checked="${editing&&state.categoryOnlineOrder[oldName]===false?'false':'true'}" onclick="toggleCategoryModalChannel('order')"><span></span></button>
       </div>
     </div>
     ${editing?`<div class="center-note category-rename-note">При переименовании категория изменится у всех товаров, которые к ней относятся.</div>`:''}
@@ -97,7 +103,8 @@ function saveCategory(oldName){
   if(oldName===null || oldName===undefined){
     state.categoryOrder.push(name);
     state.categoryColors[name]=color;
-    state.categoryOnline[name]=window._cmOnline !== false;
+    state.categoryOnlineMenu[name]=window._cmOnlineMenu !== false;
+    state.categoryOnlineOrder[name]=window._cmOnlineOrder !== false;
     if(symbol) state.categorySymbols[name]=symbol; else delete state.categorySymbols[name];
   } else {
     if(oldName!==name){const entry=state.posNavigation.categories.find(e=>e.category===oldName);if(entry){entry.category=name;saveKey('posNavigation',state.posNavigation);}}
@@ -105,35 +112,39 @@ function saveCategory(oldName){
     if(idx>=0) state.categoryOrder[idx]=name;
     state.products.forEach(p=>{ if(productCategoryKey(p)===oldName) p.category=name; });
     state.layoutTiles.forEach(t=>{ if(t.type==='category' && t.id===oldName) t.id=name; });
-    if(oldName!==name) { delete state.categoryColors[oldName]; delete state.categorySymbols[oldName]; state.categoryOnline[name]=state.categoryOnline[oldName] !== false; delete state.categoryOnline[oldName]; }
+    if(oldName!==name) {
+      delete state.categoryColors[oldName]; delete state.categorySymbols[oldName];
+      state.categoryOnlineMenu[name]=state.categoryOnlineMenu[oldName] !== false;
+      state.categoryOnlineOrder[name]=state.categoryOnlineOrder[oldName] !== false;
+      delete state.categoryOnlineMenu[oldName]; delete state.categoryOnlineOrder[oldName]; delete state.categoryOnline[oldName];
+    }
     state.categoryColors[name]=color;
-    state.categoryOnline[name]=window._cmOnline !== false;
+    state.categoryOnlineMenu[name]=window._cmOnlineMenu !== false;
+    state.categoryOnlineOrder[name]=window._cmOnlineOrder !== false;
     if(symbol) state.categorySymbols[name]=symbol; else delete state.categorySymbols[name];
     saveKey('products',state.products);
   }
-  saveKey('layout',{categoryOrder:state.categoryOrder,categoryColors:state.categoryColors,categorySymbols:state.categorySymbols,categoryOnline:state.categoryOnline,tiles:state.layoutTiles});
+  state.categoryOnline=state.categoryOnlineOrder;
+  saveKey('layout',categoryLayoutSnapshot());
   closeModal(); render(); flash(oldName===null||oldName===undefined?'Категория добавлена':'Категория изменена');
 }
-function toggleCategoryOnline(name){
-  state.categoryOnline[name]=state.categoryOnline[name]===false;
-  saveKey('layout',{categoryOrder:state.categoryOrder,categoryColors:state.categoryColors,categorySymbols:state.categorySymbols,categoryOnline:state.categoryOnline,tiles:state.layoutTiles});
-  const rows=document.querySelectorAll('#modal-root .category-row');
-  rows.forEach(row=>{
-    const btn=row.querySelector('.web-switch');
-    const nameEl=row.querySelector('.category-name');
-    if(btn && nameEl && nameEl.textContent.trim()===name){
-      const enabled=state.categoryOnline[name]!==false;
-      btn.classList.toggle('on',enabled);
-      btn.setAttribute('aria-checked',String(enabled));
-    }
-  });
-  flash(state.categoryOnline[name]?'Категория опубликована в WEB':'Категория снята с публикации WEB');
+function toggleCategoryChannel(name,channel){
+  const map=channel==='menu'?state.categoryOnlineMenu:state.categoryOnlineOrder;
+  map[name]=map[name]===false;
+  state.categoryOnline=state.categoryOnlineOrder;
+  saveKey('layout',categoryLayoutSnapshot());
+  openCategoriesModal();
+  flash(map[name]?(channel==='menu'?'Категория добавлена в онлайн-меню':'Категория доступна для онлайн-заказа'):(channel==='menu'?'Категория скрыта из онлайн-меню':'Категория недоступна для онлайн-заказа'));
 }
-function toggleCategoryModalOnline(){
-  window._cmOnline=!window._cmOnline;
-  const b=document.getElementById('cf-web-toggle');
-  if(b){ b.classList.toggle('on',window._cmOnline); b.setAttribute('aria-checked',String(window._cmOnline)); }
+function toggleCategoryModalChannel(channel){
+  const key=channel==='menu'?'_cmOnlineMenu':'_cmOnlineOrder';
+  window[key]=!window[key];
+  const b=document.getElementById(channel==='menu'?'cf-menu-toggle':'cf-order-toggle');
+  if(b){ b.classList.toggle('on',window[key]); b.setAttribute('aria-checked',String(window[key])); }
 }
+// Compatibility wrappers for cached markup and gradual module migration.
+function toggleCategoryOnline(name){ toggleCategoryChannel(name,'order'); }
+function toggleCategoryModalOnline(){ toggleCategoryModalChannel('order'); }
 
 function deleteCategory(name){
   const used=state.products.some(p=>productCategoryKey(p)===name);
