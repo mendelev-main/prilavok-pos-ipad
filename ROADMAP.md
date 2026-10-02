@@ -17,6 +17,7 @@
 | R9 | Аудит кода и схемы БД | Удалять только доказанно неиспользуемое; каждую миграцию выполнять отдельно с rollback-планом | R1 | planned | — |
 | R10 | Локальный OCR приёмки | Apple Vision OCR → parser → catalog matching → редактируемый draft; без сети и без автопроводки | R1, R6 | planned | — |
 | R11 | Documentation workflow | Перейти на Constitution → Roadmap → feature specs без MASTER/DELTA | — | done | [002-speckit-workflow](specs/002-speckit-workflow/spec.md) |
+| R12 | Единая дизайн-система | Зафиксировать текущий визуальный язык, провести аудит controls и поэтапно устранить подтверждённые отклонения без изменения бизнес-логики | R1 | audit complete; alignment awaiting decisions | [047 design audit](specs/047-design-system-audit/spec.md) |
 
 ## Правила обновления
 

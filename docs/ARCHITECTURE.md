@@ -1,6 +1,6 @@
 # M POS: текущая архитектура
 
-Это reference-документ о фактической системе. Он не хранит backlog и task-status. Постоянные инварианты задаёт [constitution](../.specify/memory/constitution.md), будущие срезы — [roadmap](../ROADMAP.md), а проверяемые изменения — `specs/`.
+Это reference-документ о фактической системе версии **130.54**. Он не хранит backlog и task-status. Постоянные инварианты задаёт [constitution](../.specify/memory/constitution.md), будущие срезы — [roadmap](../ROADMAP.md), а проверяемые изменения — `specs/`.
 
 ## Продукт и runtime
 
