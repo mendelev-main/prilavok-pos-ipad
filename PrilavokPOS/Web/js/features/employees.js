@@ -20,11 +20,11 @@ function openEmployeeModal(id=''){
     <div class="modal-title">${editing?'Сотрудник':'Новый сотрудник'}</div>
     <div class="field"><label>ФИО</label><input id="ef-name" value="${escapeAttr(employee?.name||'')}" placeholder="Иванов Иван Иванович"></div>
     <div class="field"><label>Номер телефона</label><input id="ef-phone" type="tel" value="${escapeAttr(employee?.phone||'')}" inputmode="tel" placeholder="+375 XX XXX-XX-XX"></div>
-    <div class="setting-row" style="margin-top:10px;">
+    <div class="setting-row employee-admin-row">
       <div><div class="setting-title">Администратор</div><div class="setting-sub">${isAdmin?'Для снятия прав администратора потребуется пароль.':'Выдать сотруднику расширенные права приложения.'}</div></div>
       <label class="switch"><input id="ef-admin" type="checkbox" ${isAdmin?'checked':''} onchange="toggleEmployeeAdminPassword()"><span></span></label>
     </div>
-    <div id="ef-admin-password-wrap" class="field" data-original-admin="${isAdmin?'true':'false'}" style="margin-top:12px;display:none;">
+    <div id="ef-admin-password-wrap" class="field employee-admin-password" data-original-admin="${isAdmin?'true':'false'}" hidden>
       <label>${isAdmin?'Пароль для снятия прав администратора':'Пароль для выдачи прав администратора'}</label>
       <input id="ef-admin-password" type="password" autocomplete="off" placeholder="Введите пароль">
     </div>
@@ -38,7 +38,7 @@ function toggleEmployeeAdminPassword(){
   if(!checkbox || !wrap) return;
   const originalAdmin=wrap.dataset.originalAdmin==='true';
   const changed=checkbox.checked!==originalAdmin;
-  wrap.style.display=changed?'block':'none';
+  wrap.hidden=!changed;
   const label=wrap.querySelector('label');
   if(label) label.textContent=checkbox.checked?'Пароль для выдачи прав администратора':'Пароль для снятия прав администратора';
   if(changed) setTimeout(()=>document.getElementById('ef-admin-password')?.focus(),50);

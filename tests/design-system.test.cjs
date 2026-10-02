@@ -145,3 +145,16 @@ test('cart presentation uses readable shared classes',()=>{
   assert.match(html,/\.cart-total-meta\{/);
   assert.match(html,/\.modifier-selection-total\{/);
 });
+
+test('employee and product editor forms use shared presentation classes',()=>{
+  const employees=featureSourceByName.get('employees.js');
+  const productEditor=featureSourceByName.get('product-editor.js');
+  assert.doesNotMatch(employees,/style="/);
+  assert.doesNotMatch(productEditor,/style="/);
+  assert.match(employees,/id="ef-admin-password-wrap"[^>]+hidden/);
+  assert.match(employees,/wrap\.hidden=!changed/);
+  assert.match(html,/\.employee-admin-row\{/);
+  assert.match(html,/\.employee-admin-password\{/);
+  assert.match(productEditor,/class="product-note-input"/);
+  assert.match(html,/\.product-note-input\{/);
+});
