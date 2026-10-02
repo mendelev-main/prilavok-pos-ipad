@@ -9,6 +9,7 @@ const root=path.resolve(__dirname,'..');
 const html=fs.readFileSync(path.join(root,'PrilavokPOS/pos.html'),'utf8');
 const inline=[...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].map(m=>m[1]).join('\n');
 const adapter=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/core/storage.js'),'utf8');
+const shiftsScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/shifts.js'),'utf8');
 const webOrdersScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/web-orders.js'),'utf8');
 const inventoryScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/inventory.js'),'utf8');
 const warehouseReportingScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/warehouse-reporting.js'),'utf8');
@@ -31,7 +32,7 @@ function fixture(){
  const data=new Map(),messages=[],writes=[],fields={'pf-prep-station':{value:'kitchen'},'pf-prep-difficulty':{value:'1'},'pf-base-prep-minutes':{value:'5'}},events=[];
  const document={getElementById:id=>fields[id]||null,querySelector:()=>null,addEventListener:()=>{}};
  const c={console:{error:()=>{}},document,crypto:{randomUUID:()=> 'device-test'},setTimeout:()=>0,clearTimeout:()=>{},addEventListener:()=>{},removeEventListener:()=>{},AbortController,localStorage:{getItem:k=>data.has(k)?data.get(k):null,setItem:(k,v)=>{data.set(k,String(v));writes.push(k);},removeItem:k=>data.delete(k)},fetch:()=>{throw Error('Network is prohibited in this test');},setInterval:()=>{throw Error('Timer is prohibited in this test');}};
- c.window=c;vm.createContext(c);vm.runInContext(adapter,c);vm.runInContext(inline.replace(/loadAll\(\);\s*$/,''),c);vm.runInContext(webOrdersScript,c);vm.runInContext(inventoryScript,c);vm.runInContext(warehouseReportingScript,c);vm.runInContext(analyticsScript,c);vm.runInContext(productCatalogScript,c);vm.runInContext(productCategoriesScript,c);vm.runInContext(posNavigationScript,c);vm.runInContext(cartPresentationScript,c);vm.runInContext(cartCompositionScript,c);vm.runInContext(parkedOrdersScript,c);vm.runInContext(paymentScript,c);vm.runInContext(receiptsScript,c);vm.runInContext(hallBookingsScript,c);
+ c.window=c;vm.createContext(c);vm.runInContext(adapter,c);vm.runInContext(inline.replace(/loadAll\(\);\s*$/,''),c);vm.runInContext(shiftsScript,c);vm.runInContext(webOrdersScript,c);vm.runInContext(inventoryScript,c);vm.runInContext(warehouseReportingScript,c);vm.runInContext(analyticsScript,c);vm.runInContext(productCatalogScript,c);vm.runInContext(productCategoriesScript,c);vm.runInContext(posNavigationScript,c);vm.runInContext(cartPresentationScript,c);vm.runInContext(cartCompositionScript,c);vm.runInContext(parkedOrdersScript,c);vm.runInContext(paymentScript,c);vm.runInContext(receiptsScript,c);vm.runInContext(hallBookingsScript,c);
  c.flash=m=>messages.push(m);c.render=()=>{};c.showReceipt=()=>{};c.showPaymentReceipt=()=>{};c.closeModal=()=>{};c.applyTheme=()=>{};
  const state=vm.runInContext('state',c);
  c.__printerSettingsSnapshot=()=>({printers:[],posNotifications:{soundEnabled:true,sound:'default'}});c.__restorePrinterSettings=()=>true;
@@ -41,7 +42,12 @@ function fixture(){
  async function sale(payments){cart();await c.finalizePayment(payments||[{method:'cash',amount:10}]);return state.orders[0];}
  return {c,state,data,messages,writes,fields,events,cart,sale};
 }
-test('all production JavaScript modules parse',()=>{new vm.Script(inline);new vm.Script(adapter);new vm.Script(webOrdersScript);new vm.Script(inventoryScript);new vm.Script(warehouseReportingScript);new vm.Script(analyticsScript);new vm.Script(productCatalogScript);new vm.Script(productCategoriesScript);new vm.Script(posNavigationScript);new vm.Script(cartPresentationScript);new vm.Script(cartCompositionScript);new vm.Script(parkedOrdersScript);new vm.Script(paymentScript);new vm.Script(receiptsScript);new vm.Script(hallBookingsScript);new vm.Script(printerScript);});
+test('all production JavaScript modules parse',()=>{new vm.Script(inline);new vm.Script(adapter);new vm.Script(shiftsScript);new vm.Script(webOrdersScript);new vm.Script(inventoryScript);new vm.Script(warehouseReportingScript);new vm.Script(analyticsScript);new vm.Script(productCatalogScript);new vm.Script(productCategoriesScript);new vm.Script(posNavigationScript);new vm.Script(cartPresentationScript);new vm.Script(cartCompositionScript);new vm.Script(parkedOrdersScript);new vm.Script(paymentScript);new vm.Script(receiptsScript);new vm.Script(hallBookingsScript);new vm.Script(printerScript);});
+test('shifts module loads before dependent features and preserves its public API',()=>{
+ const moduleTag='<script src="Web/js/features/shifts.js"></script>',paymentTag='<script src="Web/js/features/payment.js"></script>',startupTag='<script>loadAll();</script>';
+ assert.ok(html.indexOf(moduleTag)>=0);assert.ok(html.indexOf(paymentTag)>html.indexOf(moduleTag));assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));assert.doesNotMatch(inline,/function submitCloseShift\s*\(/);
+ const f=fixture();for(const name of ['currentShift','currentShiftEmployeeIsAdmin','shiftOrders','shiftTotals','cashDrawerBalance','buildShiftReportPayload','renderShiftScreen','openShiftModal','submitOpenShift','submitCashMovement','submitCloseShift','viewShiftModal','printShiftReport'])assert.equal(typeof f.c[name],'function',name);
+});
 test('WEB orders module loads before startup and preserves its public API',()=>{
  const moduleTag='<script src="Web/js/features/web-orders.js"></script>',startupTag='<script>loadAll();</script>';
  assert.ok(html.indexOf(moduleTag)>=0);assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));
@@ -386,6 +392,29 @@ test('interrupted shift close recovers durable closed state after restart',async
  f.c.localStorage.setItem=(key,value)=>{if(key==='prilavok_shifts'&&!failed){failed=true;throw Error('injected shift failure')}originalSet(key,value)};
  assert.equal(await f.c.submitCloseShift(),false);assert.equal(f.state.shifts[0].status,'open');assert.ok(JSON.parse(f.data.get('prilavok_criticalStorageJournal')));
  const restarted=fixture();for(const [key,value] of f.data)restarted.data.set(key,value);await restarted.c.loadAll();assert.equal(restarted.state.shifts[0].status,'closed');assert.equal(restarted.state.shifts[0].countedCash,100);
+});
+
+test('mixed shift keeps cash, card, return, movements and close report consistent',async()=>{
+ const f=fixture();await f.sale([{method:'cash',amount:10}]);const cashOrder=f.state.orders.at(-1);
+ await f.sale([{method:'card',amount:10}]);await f.sale([{method:'cash',amount:4},{method:'card',amount:6}]);
+ await f.c.processFullReturn(cashOrder.id);
+ f.fields['cash-movement-amount']={value:'20'};f.fields['cash-movement-note']={value:'Размен'};assert.equal(await f.c.submitCashMovement('deposit'),true);
+ f.fields['cash-movement-amount']={value:'5'};f.fields['cash-movement-note']={value:'Инкассация'};assert.equal(await f.c.submitCashMovement('withdrawal'),true);
+ const totals=f.c.shiftTotals('shift');assert.equal(totals.count,2);assert.equal(totals.cash,4);assert.equal(totals.card,16);assert.equal(totals.total,20);assert.equal(totals.refunds,10);assert.equal(totals.deposits,20);assert.equal(totals.withdrawals,15);assert.equal(f.c.cashDrawerBalance(f.state.shifts[0],totals),119);
+ f.fields['sf-counted']={value:'119'};f.c.sendTelegramShiftClosed=()=>{};f.c.printShiftCloseReceipt=()=>true;assert.equal(await f.c.submitCloseShift(),true);
+ const report=f.c.buildShiftReportPayload(f.state.shifts[0]);assert.equal(report.expectedCash,119);assert.equal(report.countedCash,119);assert.equal(report.difference,0);assert.equal(report.orders.length,3);
+});
+
+test('corrupt drawer values block shift mutations and cash return before storage writes',async()=>{
+ const f=fixture(),order=await f.sale();f.state.shifts[0].cashMovements=[{id:'broken',type:'deposit',amount:Infinity}];
+ f.fields['cash-movement-amount']={value:'1'};f.fields['cash-movement-note']={value:''};f.fields['sf-counted']={value:'100'};
+ const before=JSON.stringify(f.state),writes=f.writes.length;
+ assert.equal(await f.c.submitCashMovement('deposit'),false);assert.equal(await f.c.submitCloseShift(),false);await f.c.processFullReturn(order.id);
+ assert.equal(JSON.stringify(f.state),before);assert.equal(f.writes.length,writes);assert.match(f.messages.at(-1),/Некорректные данные кассовой смены/);
+ const g=fixture();g.state.shifts=[{id:'old',status:'closed',closedAt:1,countedCash:Infinity}];g.state.employees=[{id:'employee',name:'Иванов Иван',role:'employee'}];g.fields['sf-employee']={value:'employee'};
+ assert.equal(await g.c.submitOpenShift(),false);assert.equal(g.state.shifts.length,1);assert.equal(g.writes.length,0);assert.match(g.messages.at(-1),/Некорректный остаток/);
+ const h=fixture();h.cart();h.state.orderType='Доставка';h.state.deliveryRates=[{name:'Город',amount:5}];h.state.deliveryFee=5;h.state.deliveryTariffSelected=true;h.state.shifts[0].cashMovements=[{id:'broken',type:'deposit',amount:Infinity}];const hWrites=h.writes.length;
+ await h.c.finalizePayment([{method:'cash',amount:15}]);assert.equal(h.state.orders.length,0);assert.equal(h.writes.length,hWrites);assert.match(h.messages.at(-1),/Некорректные данные кассовой смены/);
 });
 
 test('inventory fix failure leaves product and draft unchanged',async()=>{

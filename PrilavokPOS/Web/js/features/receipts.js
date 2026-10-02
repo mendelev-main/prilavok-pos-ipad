@@ -82,6 +82,7 @@ async function processFullReturn(orderId){
     if(refundCash>0){
       const t=shiftTotals(shift.id);
       const available=cashDrawerBalance(shift,t);
+      if(!Number.isFinite(available)||available<0){flash('Некорректные данные кассовой смены');return;}
       if(refundCash>available+0.0001){flash('Недостаточно наличных в кассе для возврата');return;}
     }
     const nextProducts=storageSnapshot(state.products),nextOrders=storageSnapshot(state.orders),nextShifts=storageSnapshot(state.shifts);

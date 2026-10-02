@@ -11,6 +11,7 @@ Swift/UIKit application
   └─ WKWebView
       ├─ PrilavokPOS/pos.html: UI и основная business logic
       ├─ Web/js/core/storage.js: storage adapter
+      ├─ Web/js/features/shifts.js: смены, кассовые итоги, движения и отчёт
       ├─ Web/js/features/web-orders.js: входящие WEB-заказы, local-first acceptance и ACK/recovery
       ├─ Web/js/features/inventory.js: график, черновик, фиксация и завершение инвентаризации
       ├─ Web/js/features/warehouse-reporting.js: read-only складской отчёт и PDF/XLSX payload
@@ -59,6 +60,10 @@ critical storage journal. `warehouse-reporting.js` только читает л�
 `receipts.js` использует сохранённый при продаже снимок списания, проводит остатки/чек/кассу одним
 critical journal и передаёт повторную печать существующему LAN printer path. Физический баланс кассы
 считает наличный возврат один раз, хотя он остаётся отдельным движением для аудита.
+`shifts.js` владеет доступом к текущей смене, кассовыми итогами, открытием/закрытием, внесением/
+изъятием, экраном истории и payload отчёта. Все изменения смены сначала проходят existing critical
+journal; Telegram и печать запускаются после commit. Некорректный производный остаток блокирует новую
+финансовую операцию, не переписывая сохранённые данные.
 
 ## Данные и offline-first
 
