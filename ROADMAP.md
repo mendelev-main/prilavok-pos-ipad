@@ -10,6 +10,7 @@
 | R2 | Единая техническая версия | Убрать ручное дублирование Debug/Release/UI и оставить один build-time source | R1 | planned | — |
 | R3 | Local-first фото товара | Сохранять карточку и фото локально; upload делать отдельной явной сетевой операцией | R1 | automated acceptance complete; device deferred | [011 photos](specs/011-local-first-product-photos/spec.md) |
 | R4 | Граница входящих WEB-заказов | Изолировать EventSource/ACK от manual POS→backend sync и закрепить границу тестами | R1 | planned | — |
+| R5 | Единый scene lifecycle | Создавать окно и POS-контроллер ровно в одном месте | R1 | automated acceptance complete; device deferred | [012 lifecycle](specs/012-single-scene-lifecycle/spec.md) |
 | R5 | Immutable stock ledger | Хранить новые складские движения как неизменяемые события, не выдумывая историю для старых данных | R1 | planned | — |
 | R6 | Регрессия native bridge и печати | Покрыть payload/routing/copies/comments/reprint автотестами; raster и LAN остаются physical checks | R1 | planned | — |
 | R7 | Постепенная модульная миграция | Выносить из `pos.html` по одному домену без изменения storage, UI и lifecycle | R1, R6 | planned | — |

@@ -9,6 +9,8 @@ const root=path.resolve(__dirname,'..');
 const html=fs.readFileSync(path.join(root,'PrilavokPOS/pos.html'),'utf8');
 const inline=[...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].map(m=>m[1]).join('\n');
 const adapter=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/core/storage.js'),'utf8');
+const appSwift=fs.readFileSync(path.join(root,'PrilavokPOS/PrilavokPOSApp.swift'),'utf8');
+const sceneSwift=fs.readFileSync(path.join(root,'PrilavokPOS/SceneDelegate.swift'),'utf8');
 const plain=x=>JSON.parse(JSON.stringify(x));
 const near=(actual,expected)=>assert.ok(Math.abs(actual-expected)<1e-10,`${actual} != ${expected}`);
 function fixture(){
@@ -25,6 +27,10 @@ function fixture(){
  return {c,state,data,messages,writes,fields,events,cart,sale};
 }
 test('all inline JavaScript and adapter parse',()=>{new vm.Script(inline);new vm.Script(adapter);});
+test('scene delegate is the single owner of the POS window',()=>{
+ const appLifecycle=appSwift.slice(appSwift.indexOf('@main'),appSwift.indexOf('final class POSViewController'));
+ assert.doesNotMatch(appLifecycle,/UIWindow\s*\(/);assert.doesNotMatch(appLifecycle,/POSViewController\s*\(/);assert.match(sceneSwift,/window\.rootViewController\s*=\s*POSViewController\(\)/);
+});
 test('startup first paint does not wait for WEB acceptance recovery',async()=>{
  const f=fixture();let rendered=false,recoveryStarted=false,release;
  const gate=new Promise(resolve=>{release=resolve;});

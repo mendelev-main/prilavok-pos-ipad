@@ -188,7 +188,7 @@ serial queue, добавляет десятисекундный deadline и ед
 
 ### A003-F12 — lifecycle создаёт корневой POS-контроллер в двух местах
 
-**Статус**: Code-confirmed risk; проявление не воспроизведено.  
+**Статус**: Code-confirmed на baseline `6975821`; исправлено в spec 012, device-проверка отложена.
 **Код**: `PrilavokPOS/PrilavokPOSApp.swift:6`, `PrilavokPOS/SceneDelegate.swift:8`,
 `PrilavokPOS/Info.plist:28`.
 
@@ -197,6 +197,9 @@ serial queue, добавляет десятисекундный deadline и ед
 
 **Закрытие**: один владелец окна для scene lifecycle; счётчик создания/deinit и цикл
 launch/background/foreground.
+
+**Решение**: [spec 012](../012-single-scene-lifecycle/spec.md) оставляет создание окна и
+`POSViewController` только в `SceneDelegate`.
 
 ### A003-F13 — настройки принтеров обходят основной storage adapter и backup
 
