@@ -5,6 +5,7 @@
 ## Delivered
 
 - Поиск клиента использует цифровую клавиатуру, фиксированный `+375` и компактные карточки результатов.
+- Окно поиска клиента использует верхние иконки закрытия и добавления; цифровая клавиатура появляется только после касания номера.
 - Окно клиента различает загрузку, отсутствие программ и сетевую ошибку; загруженная loyalty-сессия сохраняется вместе с незавершённым заказом.
 - Новые оплаченные чеки сохраняют снимок товарных скидок и использованных программ лояльности.
 - Скидки и лояльность показываются перед оплатой, в истории чека и при LAN-печати.
@@ -13,7 +14,7 @@
 ## Verification
 
 - Focused regression: 300 passed.
-- Full regression suite: 327 passed.
+- Full regression suite: 328 passed.
 - JavaScript syntax: passed.
 - iOS Simulator build: passed (`BUILD SUCCEEDED`, Debug, generic iOS Simulator, code signing disabled).
 - Physical iPad acceptance: pending.

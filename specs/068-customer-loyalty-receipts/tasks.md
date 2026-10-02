@@ -10,3 +10,4 @@
 - [x] T008 Добавить регрессионные проверки в `tests/`.
 - [x] T009 Выполнить полный JavaScript regression suite и iOS Simulator build.
 - [ ] T010 Выполнить финальную проверку на физическом iPad: picker, повторное открытие, скидка, подарок, история и LAN-печать.
+- [x] T011 [US1] Перенести закрытие и создание клиента в верхнюю панель picker, убрать поясняющий баннер и автофокус в `PrilavokPOS/Web/js/features/loyalty.js` и `PrilavokPOS/pos.html`.

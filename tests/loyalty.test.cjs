@@ -4,6 +4,7 @@ const loyalty=fs.readFileSync(path.join(__dirname,"../PrilavokPOS/Web/js/feature
 const payment=fs.readFileSync(path.join(__dirname,"../PrilavokPOS/Web/js/features/payment.js"),"utf8");
 const receipts=fs.readFileSync(path.join(__dirname,"../PrilavokPOS/Web/js/features/receipts.js"),"utf8");
 test("POS exposes customer search and loyalty balance",()=>{assert.match(loyalty,/openCustomerPicker/);assert.match(loyalty,/\/api\/customers\/search/);assert.match(loyalty,/\/loyalty/);assert.match(loyalty,/Прогресс:/);assert.match(loyalty,/Подарков:/)});
+test('customer picker uses compact header actions and numeric phone input',()=>{assert.match(loyalty,/customer-picker-heading[\s\S]+customer-picker-close[\s\S]+Клиент заказа[\s\S]+customer-picker-add/);assert.match(loyalty,/id="customer-search" type="tel" inputmode="numeric"/);assert.doesNotMatch(loyalty,/Поиск начинается после четырёх цифр номера/);assert.doesNotMatch(loyalty,/customer-picker-actions/);assert.doesNotMatch(loyalty,/getElementById\('customer-search'\)\?\.focus/)});
 test("loyalty is published only from finalized payment path",()=>{const finalize=payment.slice(payment.indexOf("function finalizePayment"),payment.indexOf("function openCashModal"));assert.match(finalize,/publishPaidOrderLoyalty\(order\)/);assert.match(payment,/loyaltySync=\{status:'pending'/)});
 test("reward selection is bounded by server-provided balance",()=>{assert.match(loyalty,/Array\.from\(\{length:Number\(p\.rewards\)\}/);assert.match(loyalty,/loyaltyRedemptions/)});
 
