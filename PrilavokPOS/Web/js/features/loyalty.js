@@ -20,31 +20,56 @@ async function searchCustomers(q){
  const data=await loyaltyApi('/api/customers/search?q='+encodeURIComponent(term));return data.customers||[];
 }
 async function loadCustomerLoyalty(customerId){
- if(!customerId){state.loyaltyPrograms=[];state.loyaltyRedemptions={};return}
+ if(!customerId){state.loyaltyPrograms=[];state.loyaltyRedemptions={};state.loyaltyCustomerId='';state.loyaltyLoadingCustomerId='';state.loyaltyLoadError='';return}
  const selectedCustomer=state.customer;
- const data=await loyaltyApi('/api/customers/'+encodeURIComponent(customerId)+'/loyalty');
- if(state.customer!==selectedCustomer||String(state.customer?.id)!==String(customerId))return;
- state.customer={...state.customer,id:data.customer.id,name:data.customer.name,phone:data.customer.normalized_phone};
- state.loyaltyPrograms=data.programs||[];state.loyaltyRedemptions={};render();
+ state.loyaltyLoadingCustomerId=String(customerId);state.loyaltyLoadError='';if(typeof refreshOrderCustomerModal==='function')refreshOrderCustomerModal();
+ try{
+  const data=await loyaltyApi('/api/customers/'+encodeURIComponent(customerId)+'/loyalty');
+  if(state.customer!==selectedCustomer||String(state.customer?.id)!==String(customerId))return;
+  state.customer={...state.customer,id:data.customer.id,name:data.customer.name,phone:data.customer.normalized_phone};
+  state.loyaltyPrograms=data.programs||[];state.loyaltyRedemptions={};state.loyaltyCustomerId=String(customerId);state.loyaltyLoadingCustomerId='';state.loyaltyLoadError='';saveCurrentOrderSession();render();if(typeof refreshOrderCustomerModal==='function')refreshOrderCustomerModal();
+ }catch(e){
+  if(state.customer===selectedCustomer&&String(state.customer?.id)===String(customerId)){state.loyaltyLoadingCustomerId='';state.loyaltyLoadError=String(e?.message||e);if(typeof refreshOrderCustomerModal==='function')refreshOrderCustomerModal()}
+  throw e;
+ }
 }
 function openOrderCustomer(){
  if(!state.customer?.id)return openCustomerPicker();
- showModal(`<div class="modal-title">${escapeHtml(state.customer.name||'Клиент')}</div><div class="settings-note">${escapeHtml(state.customer.phone||'')}</div><div class="loyalty-summary-section">${loyaltySummaryHtml()}</div><div class="modal-actions"><button class="btn btn-secondary" onclick="openCustomerPicker()">Сменить клиента</button><button class="btn btn-primary" onclick="closeModal();render()">Готово</button></div><button class="btn btn-secondary loyalty-remove-customer" onclick="removeOrderCustomer()">Убрать клиента из заказа</button>`,false);
+ renderOrderCustomerModal();
+ const id=String(state.customer.id);if(state.loyaltyCustomerId!==id&&state.loyaltyLoadingCustomerId!==id)void loadCustomerLoyalty(id).catch(()=>{});
+}
+function renderOrderCustomerModal(){
+ if(!state.customer?.id)return;
+ showModal(`<div class="customer-profile-heading"><div class="customer-avatar" aria-hidden="true">${customerInitial(state.customer.name)}</div><div><div class="modal-title">${escapeHtml(state.customer.name||'Клиент')}</div><div class="customer-profile-phone">${escapeHtml(state.customer.phone||'')}</div></div></div><div class="loyalty-summary-section">${loyaltySummaryHtml()}</div><div class="modal-actions customer-profile-actions"><button class="btn btn-secondary" onclick="openCustomerPicker()">Сменить клиента</button><button class="btn btn-primary" onclick="closeModal();render()">Готово</button></div><button class="btn btn-secondary loyalty-remove-customer" onclick="removeOrderCustomer()">Убрать клиента из заказа</button>`,false);
+ document.querySelector('#modal-root .modal')?.classList.add('customer-profile-modal');
+}
+function refreshOrderCustomerModal(){if(typeof document!=='undefined'&&document.querySelector?.('#modal-root .customer-profile-modal'))renderOrderCustomerModal()}
+function retryCustomerLoyalty(){const id=state.customer?.id;if(id)void loadCustomerLoyalty(id).catch(()=>{})}
+function setLoyaltyRedemption(programId,value){state.loyaltyRedemptions[programId]=Number(value)||0;saveCurrentOrderSession();render();renderOrderCustomerModal()}
+function loyaltyReceiptSnapshot(allocation=loyaltyRewardAllocation()){
+ const programs=[];
+ for(const program of state.loyaltyPrograms||[]){const rewards=Math.max(0,Math.trunc(Number(state.loyaltyRedemptions?.[program.id])||0)),discount=Number(allocation.programDiscounts?.[program.id])||0;if(rewards&&discount>0)programs.push({id:String(program.id),name:String(program.name||'Программа лояльности'),rewards,discount:Math.round(discount*100)/100})}
+ return {discount:Math.round((Number(allocation.discount)||0)*100)/100,programs};
 }
 function loyaltySummaryHtml(){
  if(!state.customer?.id)return '<div class="setting-sub">Выберите клиента, чтобы использовать программу лояльности.</div>';
+ if(state.loyaltyLoadingCustomerId===String(state.customer.id))return '<div class="customer-loyalty-state"><strong>Загружаем программы</strong><span>Данные клиента обновляются…</span></div>';
+ if(state.loyaltyLoadError)return '<div class="customer-loyalty-state is-error"><strong>Не удалось загрузить программы</strong><span>Проверьте интернет и повторите.</span><button class="btn btn-secondary" onclick="retryCustomerLoyalty()">Повторить</button></div>';
  if(!state.loyaltyPrograms.length)return '<div class="setting-sub">Для клиента пока нет активных программ.</div>';
- return state.loyaltyPrograms.map(p=>`<div class="list-row"><div class="loyalty-summary-main"><div class="list-row-name">${escapeHtml(p.name)}</div><div class="list-row-sub">Прогресс: ${Number(p.progress)||0} / ${Number(p.required_quantity)||0} · Подарков: ${Number(p.rewards)||0}</div></div>${Number(p.rewards)>0?`<select onchange="state.loyaltyRedemptions[${loyaltyInlineArg(p.id)}]=Number(this.value)||0;render()"><option value="0" ${!Number(state.loyaltyRedemptions?.[p.id])?'selected':''}>Не использовать</option>${Array.from({length:Number(p.rewards)},(_,i)=>`<option value="${i+1}" ${Number(state.loyaltyRedemptions?.[p.id])===i+1?'selected':''}>Использовать ${i+1}</option>`).join('')}</select>`:''}</div>`).join('');
+ return state.loyaltyPrograms.map(p=>`<div class="loyalty-summary-card"><div class="loyalty-summary-main"><div class="list-row-name">${escapeHtml(p.name)}</div><div class="list-row-sub">Прогресс: ${Number(p.progress)||0} из ${Number(p.required_quantity)||0}</div></div><div class="loyalty-reward-count"><span>Подарков:</span><strong>${Number(p.rewards)||0}</strong></div>${Number(p.rewards)>0?`<select aria-label="Использовать подарки программы ${escapeAttr(p.name)}" onchange="setLoyaltyRedemption(${loyaltyInlineArg(p.id)},this.value)"><option value="0" ${!Number(state.loyaltyRedemptions?.[p.id])?'selected':''}>Не использовать</option>${Array.from({length:Number(p.rewards)},(_,i)=>`<option value="${i+1}" ${Number(state.loyaltyRedemptions?.[p.id])===i+1?'selected':''}>Использовать ${i+1}</option>`).join('')}</select>`:''}</div>`).join('');
 }
 async function openCustomerPicker(){
  ++customerSearchSeq;
- showModal(`<div class="modal-title">Клиент заказа</div><div class="field"><label for="customer-search">Номер телефона</label><div class="customer-phone-field"><span>+375</span><input id="customer-search" type="tel" inputmode="numeric" autocomplete="off" placeholder="29 123 45 67" aria-label="Номер телефона после +375" oninput="customerSearchChanged(this.value)"></div></div><div id="customer-search-results" class="customer-picker-results"><div class="center-note">Введите минимум 4 цифры номера</div></div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Закрыть</button><button class="btn btn-primary" onclick="openCreateCustomer()">Новый клиент</button></div>`,false);
+ showModal(`<div class="customer-picker-heading"><div class="modal-title">Клиент заказа</div><div class="settings-note">Поиск начинается после четырёх цифр номера.</div></div><div class="field customer-search-field"><label for="customer-search">Номер телефона</label><div class="customer-phone-field"><span>+375</span><input id="customer-search" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="9" autocomplete="off" placeholder="29 123 45 67" aria-label="Номер телефона после +375" oninput="customerSearchChanged(this.value)"></div></div><div id="customer-search-results" class="customer-picker-results"><div class="center-note">Введите минимум 4 цифры номера</div></div><div class="modal-actions customer-picker-actions"><button class="btn btn-secondary" onclick="closeModal()">Закрыть</button><button class="btn btn-primary" onclick="openCreateCustomer()">Новый клиент</button></div>`,false);
+ document.querySelector('#modal-root .modal')?.classList.add('customer-picker-modal');setTimeout(()=>document.getElementById('customer-search')?.focus(),50);
 }
 let customerSearchSeq=0;
 function customerPhoneDigits(value){
  const raw=String(value||''),digits=raw.replace(/\D/g,'');
  return ((raw.trim().startsWith('+375')||digits.length===12&&digits.startsWith('375'))?digits.slice(3):digits).slice(0,9);
 }
+function customerInitial(name){return escapeHtml((String(name||'?').trim().charAt(0)||'?').toLocaleUpperCase('ru'))}
+function customerResultCards(rows){return rows.map(x=>`<button class="customer-result-card" data-customer-id="${escapeAttr(x.id)}"><span class="customer-result-avatar" aria-hidden="true">${customerInitial(x.name)}</span><span class="customer-result-copy"><strong>${escapeHtml(x.name)}</strong><small>${escapeHtml(x.normalized_phone)}</small></span><span class="customer-result-action">Выбрать</span></button>`).join('')}
 async function customerSearchChanged(value){
  const seq=++customerSearchSeq,el=document.getElementById('customer-search-results'),input=document.getElementById('customer-search');
  const digits=customerPhoneDigits(value);if(input)input.value=digits;if(!el)return;
@@ -53,24 +78,24 @@ async function customerSearchChanged(value){
  try{
   const rows=(await searchCustomers(phone)).filter(x=>String(x.normalized_phone||'').replace(/\D/g,'').startsWith('375'+digits));
   if(seq!==customerSearchSeq||document.getElementById('customer-search-results')!==el)return;
-  el.innerHTML=rows.length?rows.map(x=>`<button class="customer-result-card" data-customer-id="${escapeAttr(x.id)}"><strong>${escapeHtml(x.name)}</strong><span>${escapeHtml(x.normalized_phone)}</span></button>`).join(''):'<div class="center-note">Клиент не найден. Можно создать нового.</div>';
+  el.innerHTML=rows.length?customerResultCards(rows):'<div class="center-note">Клиент не найден. Можно создать нового.</div>';
   el.querySelectorAll('[data-customer-id]').forEach(button=>{button.onclick=()=>{const x=rows.find(x=>String(x.id)===button.dataset.customerId);if(x)selectCustomer(x.id,x.name,x.normalized_phone)}});
  }catch(e){if(seq===customerSearchSeq&&document.getElementById('customer-search-results')===el)el.innerHTML='<div class="center-note">Нет связи с сервером. Повторите поиск.</div>'}
 }
 function removeOrderCustomer(){
  ++customerSearchSeq;
  state.customer={name:'',phone:'',address:state.customer?.address||''};
- state.loyaltyPrograms=[];state.loyaltyRedemptions={};
+ state.loyaltyPrograms=[];state.loyaltyRedemptions={};state.loyaltyCustomerId='';state.loyaltyLoadingCustomerId='';state.loyaltyLoadError='';
  saveCurrentOrderSession();closeModal();render();
 }
 async function selectCustomer(id,name,phone){
  state.customer={...state.customer,id,name,phone};
- state.loyaltyPrograms=[];state.loyaltyRedemptions={};
+ state.loyaltyPrograms=[];state.loyaltyRedemptions={};state.loyaltyCustomerId='';state.loyaltyLoadingCustomerId=String(id);state.loyaltyLoadError='';
  const selectedCustomer=state.customer;
  saveCurrentOrderSession();closeModal();render();
  try{await loadCustomerLoyalty(id)}catch(e){if(state.customer===selectedCustomer){flash('Клиент выбран, но loyalty недоступна');render()}}
 }
-function openCreateCustomer(){showModal(`<div class="modal-title">Новый клиент</div><div class="field"><label>Имя</label><input id="new-customer-name"></div><div class="field"><label>Телефон</label><input id="new-customer-phone" inputmode="tel"></div><div class="modal-actions"><button class="btn btn-secondary" onclick="openCustomerPicker()">Назад</button><button class="btn btn-primary" onclick="createCustomerFromPos()">Создать</button></div>`,true)}
+function openCreateCustomer(){showModal(`<div class="modal-title">Новый клиент</div><div class="field"><label>Имя</label><input id="new-customer-name"></div><div class="field"><label>Телефон</label><input id="new-customer-phone" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off"></div><div class="modal-actions"><button class="btn btn-secondary" onclick="openCustomerPicker()">Назад</button><button class="btn btn-primary" onclick="createCustomerFromPos()">Создать</button></div>`,true)}
 async function createCustomerFromPos(){try{const data=await loyaltyApi('/api/customers',{method:'POST',body:JSON.stringify({name:document.getElementById('new-customer-name')?.value,phone:document.getElementById('new-customer-phone')?.value})});await selectCustomer(data.customer.id,data.customer.name,data.customer.normalized_phone)}catch(e){flash(e.message||'Не удалось создать клиента')}}
 async function publishPaidOrderLoyalty(order){
  if(!order?.customer?.id||order.loyaltySync?.status==='sending')return;
@@ -95,16 +120,17 @@ function retryPendingLoyalty(){for(const order of state.orders||[]){if(!order?.c
 function loyaltyRewardAllocation(){
   const units=[];
   for(const [lineIndex,item] of (state.cart||[]).entries())for(let unitIndex=0;unitIndex<Math.max(0,Math.trunc(Number(item.qty)||0));unitIndex++)units.push({id:lineIndex+':'+unitIndex,productId:String(item.productId),price:Math.max(0,Number(item.price)||0)});
-  const used=new Set(),allocations={};let discount=0;
+  const used=new Set(),allocations={},programDiscounts={};let discount=0;
   for(const program of state.loyaltyPrograms||[]){
     const requested=Math.max(0,Math.trunc(Number(state.loyaltyRedemptions?.[program.id])||0));if(!requested)continue;
     const allowed=new Set((program.loyalty_reward_products||[]).map(x=>String(x.product_id)));
     const selected=units.filter(unit=>!used.has(unit.id)&&allowed.has(unit.productId)).sort((a,b)=>a.price-b.price).slice(0,requested);
     if(selected.length!==requested)continue;
-    allocations[program.id]=[];
-    for(const unit of selected){used.add(unit.id);discount+=unit.price;const row=allocations[program.id].find(x=>x.productId===unit.productId);if(row)row.quantity++;else allocations[program.id].push({productId:unit.productId,quantity:1})}
+    allocations[program.id]=[];programDiscounts[program.id]=0;
+    for(const unit of selected){used.add(unit.id);discount+=unit.price;programDiscounts[program.id]+=unit.price;const row=allocations[program.id].find(x=>x.productId===unit.productId);if(row)row.quantity++;else allocations[program.id].push({productId:unit.productId,quantity:1})}
   }
-  return {discount:Math.round(discount*100)/100,allocations};
+  Object.keys(programDiscounts).forEach(id=>{programDiscounts[id]=Math.round(programDiscounts[id]*100)/100});
+  return {discount:Math.round(discount*100)/100,allocations,programDiscounts};
 }
 function loyaltyRewardDiscount(){
   return loyaltyRewardAllocation().discount;

@@ -78,6 +78,9 @@ function resetCurrentOrderState(){
   state.customer={name:'',phone:'',address:'',id:''};
   state.loyaltyPrograms=[];
   state.loyaltyRedemptions={};
+  state.loyaltyCustomerId='';
+  state.loyaltyLoadingCustomerId='';
+  state.loyaltyLoadError='';
   state.orderComment='';
   state.currentOrderSource='';
   state.currentWebOrderId='';

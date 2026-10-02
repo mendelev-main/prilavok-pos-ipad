@@ -136,9 +136,29 @@ private enum ReceiptEncoder {
                     let disc=dt=="percent" ? gross*dv/100 : (dt.isEmpty ? 0 : dv*q)
                     pair(name,money(max(0,gross-disc)),medium,0)
                     add("\(qty(q)) × "+money(price),regular,.left,1)
-                    if disc>0 {add("Скидка: −"+money(disc),small,.left,1)}
+                    if disc>0 {
+                        let discountName=((item["discountName"] as? String) ?? "").trimmingCharacters(in:.whitespacesAndNewlines)
+                        add((discountName.isEmpty ? "Скидка" : discountName)+": −"+money(disc),small,.left,1)
+                    }
                     if cfg["printPaymentComments"] as? Bool != false, let comment=item["comment"] as? String,!comment.isEmpty {add("Комментарий: "+comment,small,.left,1)}
                     add("",small,.left,0)
+                }
+            }
+            let productDiscount=number(order["productDiscountTotal"])
+            let loyaltyDiscount=number(order["loyaltyDiscount"])
+            if productDiscount>0 || loyaltyDiscount>0 {
+                separator(7)
+                let beforeDiscounts=number(order["subtotalBeforeDiscounts"])
+                if beforeDiscounts>0 {pair("Сумма без скидок",money(beforeDiscounts),regular,3)}
+                if productDiscount>0 {pair("Скидки на товары","−"+money(productDiscount),regular,3)}
+                if let programs=order["loyaltyProgramsApplied"] as? [[String:Any]],!programs.isEmpty {
+                    for program in programs {
+                        let name=((program["name"] as? String) ?? "Программа лояльности").trimmingCharacters(in:.whitespacesAndNewlines)
+                        let discount=number(program["discount"])
+                        if discount>0 {pair("Лояльность · "+name,"−"+money(discount),regular,3)}
+                    }
+                } else if loyaltyDiscount>0 {
+                    pair("Программа лояльности","−"+money(loyaltyDiscount),regular,3)
                 }
             }
             let delivery=number(order["deliveryFee"])

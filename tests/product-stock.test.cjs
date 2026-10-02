@@ -385,6 +385,10 @@ test('split draft restores loyalty inputs that define the paid receipt total',as
  const f=fixture();f.cart('pizza',2);f.state.loyaltyPrograms=[{id:'reward',loyalty_reward_products:[{product_id:'pizza'}]}];f.state.loyaltyRedemptions={reward:1};assert.equal(f.c.cartTotal(),10);f.c.renderSplitPayment=()=>{};f.state._splitPayments=f.c.buildSplitPayments(2,10);f.state._splitPaymentTotalCents=1000;await f.c.completeSplitPayment(0);
  const restarted=fixture();for(const [key,value] of f.data)restarted.data.set(key,value);await restarted.c.loadAll();assert.equal(restarted.c.cartTotal(),10);assert.equal(restarted.state.loyaltyRedemptions.reward,1);assert.equal(restarted.state._splitPayments[0].paid,true);
 });
+test('selected customer loyalty survives a normal unfinished order restart',async()=>{
+ const f=fixture();f.cart('pizza',2);f.state.customer={id:'customer',name:'Клиент',phone:'+375290000000'};f.state.loyaltyPrograms=[{id:'reward',name:'Каждый второй',rewards:1,loyalty_reward_products:[{product_id:'pizza'}]}];f.state.loyaltyRedemptions={reward:1};f.state.loyaltyCustomerId='customer';f.c.saveCurrentOrderSession();
+ const restarted=fixture();for(const [key,value] of f.data)restarted.data.set(key,value);await restarted.c.loadAll();assert.equal(restarted.state.customer.id,'customer');assert.equal(restarted.state.loyaltyCustomerId,'customer');assert.equal(restarted.state.loyaltyPrograms[0].name,'Каждый второй');assert.equal(restarted.state.loyaltyRedemptions.reward,1);assert.equal(restarted.c.cartTotal(),10);
+});
 
 test('paid split draft cannot be silently discarded and clears with final receipt',async()=>{
  const f=fixture();f.cart();f.c.renderSplitPayment=()=>{};f.state._splitPayments=[{method:'cash',amount:4,paid:true,cashGiven:5,change:1},{method:'card',amount:6,paid:false,cashGiven:null,change:null}];f.state._splitPaymentTotalCents=1000;
@@ -604,13 +608,14 @@ test('interrupted inventory completion recovers every related key',async()=>{
 
 test('loyalty job is durable, and overlapping programs cannot reuse one item',async()=>{
  const f=fixture();f.cart();f.state.customer={id:'customer',name:'Клиент',phone:'+375290000000'};
- f.state.loyaltyPrograms=['a','b'].map(id=>({id,loyalty_reward_products:[{product_id:'pizza'}]}));f.state.loyaltyRedemptions={a:1,b:1};
+ f.state.loyaltyPrograms=['a','b'].map(id=>({id,name:'Программа '+id,loyalty_reward_products:[{product_id:'pizza'}]}));f.state.loyaltyRedemptions={a:1,b:1};
  assert.equal(f.c.loyaltyRewardDiscount(),10);assert.equal(f.c.cartTotal(),0);
  await f.c.finalizePayment([{method:'cash',amount:0}]);assert.equal(f.state.orders.length,0);assert.match(f.messages.at(-1),/Недостаточно/);
  f.state.loyaltyRedemptions={a:1};
  let release;f.c.loyaltyApi=()=>new Promise(resolve=>{release=resolve});await f.c.finalizePayment([{method:'cash',amount:0}]);
  const stored=JSON.parse(f.data.get('prilavok_orders'))[0];assert.equal(stored.loyaltySync.status,'pending');
  assert.deepEqual(stored.loyaltyRewardAllocations,{a:[{productId:'pizza',quantity:1}]});
+ assert.equal(stored.loyaltyDiscount,10);assert.equal(stored.loyaltyProgramsApplied[0].name,'Программа a');assert.equal(stored.loyaltyProgramsApplied[0].discount,10);
  release({events:[]});
 });
 

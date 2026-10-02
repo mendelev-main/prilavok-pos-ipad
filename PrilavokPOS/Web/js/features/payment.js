@@ -1,15 +1,16 @@
 /* ---- Payment ---- */
 function paymentCartLines(){
   return state.cart.map(i=>{
-    const discount=discountValue(i);
-    return `<div class="receipt-line"><span>${escapeHtml(i.name)} × ${i.qty}</span><span>${money(itemTotal(i))}</span></div>${discount>0?`<div class="receipt-line payment-line-discount"><span>↳ Скидка</span><span>−${money(discount)}</span></div>`:''}`;
+    const discount=discountValue(i),discountName=(state.discounts.find(d=>d.id===i.discountId)||{}).name||'Скидка';
+    return `<div class="receipt-line"><span>${escapeHtml(i.name)} × ${i.qty}</span><span>${money(itemTotal(i))}</span></div>${discount>0?`<div class="receipt-line payment-line-discount"><span>↳ ${escapeHtml(discountName)}</span><span>−${money(discount)}</span></div>`:''}`;
   }).join('');
 }
 function paymentReceiptHtml(){
-  const delivery=state.orderType==='Доставка'?Number(state.deliveryFee||0):0;
+  const delivery=state.orderType==='Доставка'?Number(state.deliveryFee||0):0,loyalty=loyaltyReceiptSnapshot();
   return `${state.orderLabel?`<div class="payment-order-label">${escapeHtml(state.orderLabel)}</div>`:''}
     <div class="payment-order-meta">${escapeHtml(state.orderType||'На месте')}${state.customer.name?' · '+escapeHtml(state.customer.name):''}</div>
     ${paymentCartLines()}
+    ${loyalty.programs.map(program=>`<div class="receipt-line payment-line-discount"><span>Лояльность · ${escapeHtml(program.name)}</span><span>−${money(program.discount)}</span></div>`).join('')}
     ${delivery>0?`<div class="receipt-line"><span>Доставка</span><span>${fullMoney(delivery)}</span></div>`:''}
     <div class="receipt-total"><span>Итого</span><span>${fullMoney(cartTotal())}</span></div>`;
 }
@@ -508,11 +509,14 @@ async function finalizePayment(payments){
   const receiptSequence=(state.orders.filter(o=>o.shiftId===shift.id).length+1);
   const shiftEmployee=state.employees.find(e=>e.id===shift.employeeId);
   const rewardAllocation=loyaltyRewardAllocation();
+  const loyaltyReceipt=loyaltyReceiptSnapshot(rewardAllocation);
+  const productDiscountTotal=Math.round(state.cart.reduce((sum,item)=>sum+discountValue(item),0)*100)/100;
+  const subtotalBeforeDiscounts=Math.round(state.cart.reduce((sum,item)=>sum+Number(item.price||0)*Number(item.qty||0),0)*100)/100;
   for(const [programId,value] of Object.entries(state.loyaltyRedemptions||{})){
     const requested=Math.max(0,Math.trunc(Number(value)||0)),allocated=(rewardAllocation.allocations[programId]||[]).reduce((sum,item)=>sum+Number(item.quantity||0),0);
     if(requested!==allocated){flash('Недостаточно подходящих товаров для выбранного подарка');return}
   }
-  const order={id:uid(),loyaltyRedemptions:storageSnapshot(state.loyaltyRedemptions||{}),loyaltyRewardAllocations:rewardAllocation.allocations,shiftId:shift.id,receiptNumber:receiptSequence,receiptDisplayNumber:`#${receiptSequence}`,employeeId:shift.employeeId||'',employeeName:shiftEmployee?.name||shiftEmployee?.fullName||'Сотрудник',registerName:'POS 1',method,total,payments:clean,cashGiven:method==='cash'?clean[0].cashGiven:null,change:method==='cash'?clean[0].change:null,orderLabel:state.orderLabel||'',orderType:state.orderType,deliveryFee:deliveryFee,customer:storageSnapshot(state.customer),source:state.currentOrderSource||'',webOrderId:state.currentWebOrderId||'',webOrderStatus:state.currentWebOrderStatus||'',items:state.cart.map(i=>{const d=state.discounts.find(x=>x.id===i.discountId),product=getProduct(i.productId);return {...i,category:product?.category||i.category||'',discountName:d?.name||'',discountType:d?.type||'',discountValue:Number(d?.value)||0,cost:product?(product.type==='simple'?product.cost:compositeCost(product)):0};}),timestamp:Date.now(),kitchenPrinted,printedItems:storageSnapshot(window.__currentOrderPrintedItems||[])};
+  const order={id:uid(),loyaltyRedemptions:storageSnapshot(state.loyaltyRedemptions||{}),loyaltyRewardAllocations:rewardAllocation.allocations,loyaltyDiscount:loyaltyReceipt.discount,loyaltyProgramsApplied:storageSnapshot(loyaltyReceipt.programs),productDiscountTotal,subtotalBeforeDiscounts,shiftId:shift.id,receiptNumber:receiptSequence,receiptDisplayNumber:`#${receiptSequence}`,employeeId:shift.employeeId||'',employeeName:shiftEmployee?.name||shiftEmployee?.fullName||'Сотрудник',registerName:'POS 1',method,total,payments:clean,cashGiven:method==='cash'?clean[0].cashGiven:null,change:method==='cash'?clean[0].change:null,orderLabel:state.orderLabel||'',orderType:state.orderType,deliveryFee:deliveryFee,customer:storageSnapshot(state.customer),source:state.currentOrderSource||'',webOrderId:state.currentWebOrderId||'',webOrderStatus:state.currentWebOrderStatus||'',items:state.cart.map(i=>{const d=state.discounts.find(x=>x.id===i.discountId),product=getProduct(i.productId);return {...i,category:product?.category||i.category||'',discountName:d?.name||'',discountType:d?.type||'',discountValue:Number(d?.value)||0,cost:product?(product.type==='simple'?product.cost:compositeCost(product)):0};}),timestamp:Date.now(),kitchenPrinted,printedItems:storageSnapshot(window.__currentOrderPrintedItems||[])};
   order.stockConsumption=stockConsumption;
   if(order.customer?.id)order.loyaltySync={status:'pending',at:Date.now(),attempts:0};
   const nextProducts=storageSnapshot(state.products),nextOrders=storageSnapshot(state.orders),nextShifts=storageSnapshot(state.shifts);
@@ -542,6 +546,8 @@ function receiptItemDiscount(i){
   return i.discountType==='percent' ? base*Math.max(0,Math.min(100,Number(i.discountValue)||0))/100 : Math.min(base,Math.max(0,Number(i.discountValue)||0)*Number(i.qty||0));
 }
 function receiptItemTotal(i){ return Math.max(0,Number(i.price||0)*Number(i.qty||0)-receiptItemDiscount(i)); }
+function receiptProductDiscountTotal(order){return Math.round((Number.isFinite(Number(order?.productDiscountTotal))?Number(order.productDiscountTotal):(order?.items||[]).reduce((sum,item)=>sum+receiptItemDiscount(item),0))*100)/100}
+function receiptLoyaltyPrograms(order){return Array.isArray(order?.loyaltyProgramsApplied)?order.loyaltyProgramsApplied.filter(program=>Number(program?.discount)>0):[]}
 function receiptBodyHtml(order){
   const lines = order.items.map(i=>{
     const discount=receiptItemDiscount(i), total=receiptItemTotal(i);
@@ -557,6 +563,8 @@ function receiptBodyHtml(order){
     <div class="receipt-order-meta">${fmtDate(order.timestamp)} · ${order.method==='cash'?'Наличные':order.method==='card'?'Карта':'Наличные + карта'} · ${escapeHtml(order.orderType||'На месте')}</div>
     ${order.customer && (order.customer.name||order.customer.phone||order.customer.address) ? `<div class="receipt-customer">${escapeHtml(order.customer.name||'')} ${escapeHtml(order.customer.phone||'')} ${escapeHtml(order.customer.address||'')}</div>`:''}
     ${lines}
+    ${receiptProductDiscountTotal(order)>0?`<div class="receipt-line receipt-discount-summary"><span>Скидки на товары</span><span>−${money(receiptProductDiscountTotal(order))}</span></div>`:''}
+    ${receiptLoyaltyPrograms(order).map(program=>`<div class="receipt-line receipt-loyalty-summary"><span>Лояльность · ${escapeHtml(program.name||'Программа')}</span><span>−${money(program.discount)}</span></div>`).join('')}
     ${Number(order.deliveryFee||0)>0 ? `<div class="receipt-line"><span>Доставка</span><span>${fullMoney(order.deliveryFee)}</span></div>` : ''}
     ${(Array.isArray(order.payments) && order.payments.length) ? `
       <div class="receipt-payment-heading">Платежи</div>

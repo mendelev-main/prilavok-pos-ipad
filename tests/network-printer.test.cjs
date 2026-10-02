@@ -43,5 +43,5 @@ test('missing native printer bridge reports failure without throwing',async()=>{
 });
 
 test('Swift bridge retains printer routing, validation, timeout and receipt document contracts',()=>{
-  assert.match(swiftBridge,/case "print":[\s\S]*networkPrinter\.print\(order: order\)/);assert.match(swiftPrinter,/connectionTimeout:\s*TimeInterval\s*=\s*10/);assert.match(swiftPrinter,/validIPv4\(ip\)/);assert.match(swiftPrinter,/documentType=="kitchen"/);assert.match(swiftPrinter,/documentType=="shift-close"/);assert.match(swiftPrinter,/printPaymentComments/);assert.match(swiftPrinter,/receiptRandomPhrases/);
+  assert.match(swiftBridge,/case "print":[\s\S]*networkPrinter\.print\(order: order\)/);assert.match(swiftPrinter,/connectionTimeout:\s*TimeInterval\s*=\s*10/);assert.match(swiftPrinter,/validIPv4\(ip\)/);assert.match(swiftPrinter,/documentType=="kitchen"/);assert.match(swiftPrinter,/documentType=="shift-close"/);assert.match(swiftPrinter,/printPaymentComments/);assert.match(swiftPrinter,/receiptRandomPhrases/);assert.match(swiftPrinter,/discountName/);assert.match(swiftPrinter,/loyaltyProgramsApplied/);assert.match(swiftPrinter,/Скидки на товары/);
 });
