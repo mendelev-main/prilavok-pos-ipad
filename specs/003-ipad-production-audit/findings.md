@@ -221,7 +221,7 @@ launch/background/foreground.
 
 ### A003-F14 — старое WEB-принятие без времени готовности может бесконечно повторяться
 
-**Статус**: Code-confirmed compatibility edge case.  
+**Статус**: Code-confirmed на baseline `6975821`; исправлено в spec 014.
 **Код**: `PrilavokPOS/pos.html:2328`.
 
 Recovery отправляет `record.readyEstimate || ''`. Если backend уже требует время, старый journal
@@ -229,6 +229,9 @@ Recovery отправляет `record.readyEstimate || ''`. Если backend у�
 
 **Закрытие**: распознать legacy-запись, запросить время один раз и сохранить его в том же journal;
 не создавать второй parked-заказ.
+
+**Решение**: [spec 014](../014-legacy-web-acceptance/spec.md) блокирует invalid ACK, сохраняет
+выбранное время до сети и повторно использует существующий parked-заказ.
 
 ## Подтверждённо защищённые критические пути
 

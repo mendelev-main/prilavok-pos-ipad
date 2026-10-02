@@ -2342,7 +2342,32 @@ function openWebOrder(id){
   document.querySelector('#modal-root .modal')?.classList.add('web-order-modal');
   const body=document.querySelector('.web-order-body');if(body)body.scrollTop=scrollTop;
 }
-let webAcceptBusy=false,webAcceptanceRecoveryBusy=false;
+let webAcceptBusy=false,webAcceptanceRecoveryBusy=false,legacyWebReadyBusy=false;
+const legacyWebReadyPrompted=new Set();
+function openLegacyWebReadyPrompt(id,record){
+  if(legacyWebReadyPrompted.has(id)||document.getElementById('modal-root')?.innerHTML.trim())return false;
+  legacyWebReadyPrompted.add(id);
+  const encoded=encodeURIComponent(id),label=record?.parked?.receiptDisplayNumber||record?.parked?.orderLabel||id;
+  const estimates=WEB_READY_ESTIMATES.map(([value,text])=>`<button class="btn btn-secondary" onclick="saveLegacyWebReadyEstimate(decodeURIComponent('${encoded}'),'${value}')">${text}</button>`).join('');
+  showModal(`<div class="modal-title">Укажите время готовности</div><div class="settings-note" style="margin-bottom:16px">Заказ ${escapeHtml(label)} уже сохранён в Отложенных. Выберите время, чтобы завершить подтверждение на сайте.</div><div class="web-ready-grid">${estimates}</div><div class="web-ready-custom" style="margin-top:14px"><label for="legacy-web-ready-time">Будет готово к<span>По времени заведения</span></label><input id="legacy-web-ready-time" type="time" onchange="saveLegacyWebReadyEstimate(decodeURIComponent('${encoded}'),'at:'+this.value)"></div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Позже</button></div>`);
+  return true;
+}
+async function saveLegacyWebReadyEstimate(id,readyEstimate){
+  if(legacyWebReadyBusy||!validWebReadyEstimate(readyEstimate)){if(readyEstimate)flash('Укажите корректное время готовности');return false;}
+  legacyWebReadyBusy=true;
+  try{
+    const journal=await loadKey('webOrderAcceptances',{}),record=journal?.[id];
+    if(!record||record.stage!=='local'||!record.parked)throw new Error('Запись приёма заказа не найдена');
+    if(!state.parked.some(p=>p.webOrderId===record.parked.webOrderId))throw new Error('Заказ не найден в Отложенных');
+    record.readyEstimate=readyEstimate;record.readyEstimateUpdatedAt=Date.now();
+    try{await window.PrilavokCore.Storage.set('webOrderAcceptances',journal)}catch(e){markStorageBroken(e);throw e}
+    const confirmed=await confirmWebAcceptance(id,record,journal);
+    if(confirmed){const cleaned=await removeConfirmedWebEvents(journal);closeModal();render();flash(cleaned?'Время сохранено, заказ подтверждён':'Заказ подтверждён. Событие будет убрано после восстановления хранилища');}
+    else{closeModal();flash('Время сохранено. Подтверждение повторится после восстановления связи');}
+    return confirmed;
+  }catch(e){flash('Не удалось сохранить время готовности: '+(e?.message||e));return false;}
+  finally{legacyWebReadyBusy=false;}
+}
 function webOrderCartItems(o){
   if(!Array.isArray(o.order_items)||!o.order_items.length)throw new Error('В заказе нет товаров');
   return o.order_items.map(i=>{
@@ -2364,6 +2389,12 @@ async function confirmWebAcceptance(id,record,journal){
     record.stage='confirmed';record.confirmedAt=Date.now();await window.PrilavokCore.Storage.set('webOrderAcceptances',journal);return true;
   }catch(e){return false;}finally{clearTimeout(timeout);}
 }
+async function removeConfirmedWebEvents(journal){
+  const confirmed=new Set(Object.entries(journal||{}).filter(([,record])=>record?.stage==='confirmed').map(([id])=>id));
+  if(!confirmed.size)return true;
+  const events=state.webEvents.filter(event=>!confirmed.has(event?.id));if(events.length===state.webEvents.length)return true;
+  try{await window.PrilavokCore.Storage.set('webEvents',events);state.webEvents=events;return true}catch(e){markStorageBroken(e);return false}
+}
 async function recoverWebAcceptanceJournal(){
   if(webAcceptanceRecoveryBusy)return false;
   webAcceptanceRecoveryBusy=true;
@@ -2381,14 +2412,11 @@ async function recoverWebAcceptanceJournal(){
   for(const [id,record] of records.filter(([,r])=>r?.stage==='local')){
     const local=state.parked.some(p=>p.webOrderId===record.parked?.webOrderId);
     if(local){
-      const confirmed=await confirmWebAcceptance(id,record,journal);
-      if(confirmed){
-        const before=state.webEvents.length;
-        state.webEvents=state.webEvents.filter(event=>event?.id!==id);
-        if(state.webEvents.length!==before)await window.PrilavokCore.Storage.set('webEvents',state.webEvents);
-      }
+      if(!validWebReadyEstimate(record.readyEstimate||'')){openLegacyWebReadyPrompt(id,record);continue;}
+      await confirmWebAcceptance(id,record,journal);
     }
   }
+  await removeConfirmedWebEvents(journal);
   return true;
   }finally{webAcceptanceRecoveryBusy=false;}
 }

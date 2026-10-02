@@ -984,13 +984,26 @@ test('WEB local write failure never sends confirmation',async()=>{
  const f=webAcceptFixture();f.c.localStorage.setItem=()=>{throw Error('disk full')};let calls=0;f.c.fetch=async()=>{calls++};await f.c.acceptWebOrder('web-1','15m');assert.equal(calls,0);assert.equal(f.state.parked.length,0);
 });
 test('prepared WEB acceptance recovers persisted parked row on restart without another copy',async()=>{
- const f=webAcceptFixture();const parked={id:'p',webOrderId:'web-1',items:[]};f.state.parked=[parked];await f.c.saveKey('webOrderAcceptances',{'web-1':{stage:'prepared',parked}});await f.c.recoverWebAcceptanceJournal();assert.equal(JSON.parse(f.data.get('prilavok_webOrderAcceptances'))['web-1'].stage,'local');assert.equal(f.state.parked.length,1);
+ const f=webAcceptFixture();const parked={id:'p',webOrderId:'web-1',items:[]};f.state.parked=[parked];await f.c.saveKey('webOrderAcceptances',{'web-1':{stage:'prepared',readyEstimate:'15m',parked}});await f.c.recoverWebAcceptanceJournal();assert.equal(JSON.parse(f.data.get('prilavok_webOrderAcceptances'))['web-1'].stage,'local');assert.equal(f.state.parked.length,1);
 });
 test('recovered WEB ACK clears stale event without duplicating parked order',async()=>{
- const f=webAcceptFixture();const parked={id:'p',webOrderId:'web-1',items:[]};f.state.parked=[parked];await f.c.saveKey('parked',f.state.parked);await f.c.saveKey('webOrderAcceptances',{'web-1':{stage:'local',parked}});
+ const f=webAcceptFixture();const parked={id:'p',webOrderId:'web-1',items:[]};f.state.parked=[parked];await f.c.saveKey('parked',f.state.parked);await f.c.saveKey('webOrderAcceptances',{'web-1':{stage:'local',readyEstimate:'15m',parked}});
  f.c.fetch=async()=>({ok:true,json:async()=>({ok:true})});await f.c.recoverWebAcceptanceJournal();
  assert.equal(f.state.parked.length,1);assert.equal(f.state.webEvents.length,0);assert.deepEqual(JSON.parse(f.data.get('prilavok_webEvents')),[]);
  assert.equal(JSON.parse(f.data.get('prilavok_webOrderAcceptances'))['web-1'].stage,'confirmed');
+});
+test('legacy WEB acceptance waits for a persisted ready time and never duplicates its parked order',async()=>{
+ const f=webAcceptFixture(),parked={id:'p',webOrderId:'web-1',receiptDisplayNumber:'#WEB-1',items:[]};f.state.parked=[parked];f.fields['modal-root']={innerHTML:''};await f.c.saveKey('parked',f.state.parked);await f.c.saveKey('webOrderAcceptances',{'web-1':{stage:'local',parked}});
+ let calls=0;f.c.fetch=async()=>{calls++;return {ok:true,json:async()=>({ok:true})}};await f.c.recoverWebAcceptanceJournal();assert.equal(calls,0);assert.match(f.fields['modal-root'].innerHTML,/Укажите время готовности/);assert.equal(f.state.parked.length,1);
+ f.fields['modal-root'].innerHTML='';await f.c.recoverWebAcceptanceJournal();assert.equal(f.fields['modal-root'].innerHTML,'');assert.equal(calls,0);
+ assert.equal(await f.c.saveLegacyWebReadyEstimate('web-1','15m'),true);const journal=JSON.parse(f.data.get('prilavok_webOrderAcceptances'));assert.equal(journal['web-1'].readyEstimate,'15m');assert.equal(journal['web-1'].stage,'confirmed');assert.equal(calls,1);assert.equal(f.state.parked.length,1);assert.equal(f.state.webEvents.length,0);
+});
+test('legacy WEB acceptance persists ready time before its network retry',async()=>{
+ const f=webAcceptFixture(),parked={id:'p',webOrderId:'web-1',items:[]};f.state.parked=[parked];await f.c.saveKey('webOrderAcceptances',{'web-1':{stage:'local',parked}});
+ f.c.fetch=async()=>{const journal=JSON.parse(f.data.get('prilavok_webOrderAcceptances'));assert.equal(journal['web-1'].readyEstimate,'at:18:45');throw Error('offline')};assert.equal(await f.c.saveLegacyWebReadyEstimate('web-1','at:18:45'),false);assert.equal(JSON.parse(f.data.get('prilavok_webOrderAcceptances'))['web-1'].readyEstimate,'at:18:45');assert.equal(f.state.parked.length,1);
+});
+test('WEB recovery removes a stale event whose acceptance was already confirmed',async()=>{
+ const f=webAcceptFixture(),parked={id:'p',webOrderId:'web-1',items:[]};f.state.parked=[parked];await f.c.saveKey('webOrderAcceptances',{'web-1':{stage:'confirmed',readyEstimate:'15m',parked}});let calls=0;f.c.fetch=async()=>{calls++};await f.c.recoverWebAcceptanceJournal();assert.equal(calls,0);assert.equal(f.state.webEvents.length,0);assert.deepEqual(JSON.parse(f.data.get('prilavok_webEvents')),[]);
 });
 
 test('manual demand status is persisted and included in operational snapshot',async()=>{
