@@ -162,7 +162,7 @@ function renderReceiptsScreen(){
       </div>
       <div class="card" style="min-height:0;overflow:hidden;display:flex;flex-direction:column;">
         ${selected ? `
-          <div style="font-size:20px;font-weight:850;margin-bottom:14px;flex:0 0 auto;">Чек ${escapeHtml(selected.receiptDisplayNumber||'')}</div>
+          <div style="font-size:20px;font-weight:800;margin-bottom:14px;flex:0 0 auto;">Чек ${escapeHtml(selected.receiptDisplayNumber||'')}</div>
           <div id="receipt-body" style="flex:1;min-height:0;overflow:auto;padding-right:4px;">${receiptBodyHtml(selected)}</div>
           <div class="receipt-modal-actions" style="margin-top:18px;grid-template-columns:1fr 1fr;width:100%;flex:0 0 auto;">
             <button class="btn receipt-action receipt-action-print" style="width:100%;" onclick="printReceipt('${escapeAttr(selected.id)}')">Печать</button>

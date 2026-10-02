@@ -12,8 +12,8 @@ function openSupplierModal(id=''){
     <div style="font-weight:800;margin:14px 0 8px;">Товары на поставщике</div>
     <div class="settings-note" style="margin-bottom:10px;">Выберите товары, которые обычно закупаются у этого поставщика. В приёмке они будут показываться первыми.</div>
     <div class="field" style="margin-bottom:10px;"><input id="supplier-product-search" type="search" placeholder="Поиск товара или категории" autocomplete="off" oninput="filterSupplierProducts(this.value)"></div>
-    <div id="supplier-product-list" style="max-height:360px;overflow:auto;border:1px solid var(--line);border-radius:12px;padding:6px;">
-      ${products.length ? products.map(p=>`<label class="supplier-product-option" data-search="${escapeAttr((p.name+' '+(p.category||'')).toLocaleLowerCase('ru'))}" style="display:flex;align-items:center;gap:10px;padding:10px 8px;border-bottom:1px solid var(--line);cursor:pointer;">
+    <div id="supplier-product-list" style="max-height:360px;overflow:auto;border:1px solid var(--border);border-radius:12px;padding:6px;">
+      ${products.length ? products.map(p=>`<label class="supplier-product-option" data-search="${escapeAttr((p.name+' '+(p.category||'')).toLocaleLowerCase('ru'))}" style="display:flex;align-items:center;gap:10px;padding:10px 8px;border-bottom:1px solid var(--border);cursor:pointer;">
         <input class="supplier-product-check" type="checkbox" value="${escapeAttr(p.id)}" ${selected.has(p.id)?'checked':''} style="width:20px;height:20px;">
         <span style="flex:1;min-width:0;">${escapeHtml(p.name)}</span>
         <span class="list-row-sub">${escapeHtml(p.category||'Без категории')}</span>

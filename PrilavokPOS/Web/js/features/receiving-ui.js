@@ -12,7 +12,7 @@ function viewReceivingModal(receivingId){
   showModal(`
     <div class="modal-title">${r.type==='purchase'?'Закупка':'Приёмка'}</div>
     <div style="font-size:14px;color:var(--muted);margin-bottom:14px;">
-      ${r.type==='purchaseOrder'?`<strong style="color:var(--text);">${escapeHtml(r.supplierName||'Поставщик не указан')}</strong><br>`:''}
+      ${r.type==='purchaseOrder'?`<strong style="color:var(--ink);">${escapeHtml(r.supplierName||'Поставщик не указан')}</strong><br>`:''}
       ${fmtDate(r.timestamp)}${r.invoiceNumber?'<br>Номер '+escapeHtml(r.invoiceNumber):''}${r.invoiceDate?' · '+escapeHtml(r.invoiceDate):''}
       ${r.type==='purchaseOrder'?`<br><span class="badge ${r.adminDeleted?'deleted-admin':(r.shortage?'shortage':'received')}" style="margin-top:8px;display:inline-block;">${r.adminDeleted?'Удалено администратором':(r.shortage?'Расхождение':'Принято')}</span>`:''}
     </div>

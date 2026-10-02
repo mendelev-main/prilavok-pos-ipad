@@ -340,7 +340,7 @@ function renderSplitPayment(){
     <div class="payment-split-head">
       <div style="display:flex;align-items:center;gap:10px;">
         <button class="btn btn-secondary" style="flex:none;" onclick="returnFromSplitPayment()">← Назад</button>
-        <span style="font-size:18px;font-weight:850;">Разделить оплату</span>
+        <span style="font-size:18px;font-weight:800;">Разделить оплату</span>
       </div>
       <div class="split-count"><button onclick="adjustSplitCount(-1)">−</button><span>${ps.length}</span><button onclick="adjustSplitCount(1)">+</button></div>
     </div>
@@ -391,10 +391,10 @@ function openSplitCashPayment(index){
 
   showModal(`<div class="modal-title">Оплата наличными</div>
     <div class="center-note" style="padding:8px 0 4px;">Платёж ${index+1}</div>
-    <div style="font-size:30px;font-weight:850;text-align:center;margin:8px 0 18px;">${fullMoney(amount)}</div>
+    <div style="font-size:30px;font-weight:800;text-align:center;margin:8px 0 18px;">${fullMoney(amount)}</div>
     <div class="field"><label>Внесено наличными</label><input class="payment-input" type="number" id="splitCashGiven" min="0" step="0.01" inputmode="decimal" value="${given.toFixed(2)}" oninput="updateSplitCashChange(${amount})"></div>
     <div class="payment-quick">${buttons}</div>
-    <div class="field" style="margin-top:14px;"><label>Сдача</label><div id="splitCashChange" style="font-size:24px;font-weight:850;color:var(--accent);">${fullMoney(Math.max(0,given-amount))}</div></div>
+    <div class="field" style="margin-top:14px;"><label>Сдача</label><div id="splitCashChange" style="font-size:24px;font-weight:800;color:var(--accent);">${fullMoney(Math.max(0,given-amount))}</div></div>
     <div class="modal-actions" style="margin-top:18px;">
       <button type="button" class="btn btn-secondary" onclick="closeModal();renderSplitPayment();">Отмена</button>
       <button type="button" class="btn btn-cash" onclick="confirmSplitCashPayment(${index},${amount})">Оплатить ${fullMoney(amount)}</button>
@@ -445,7 +445,7 @@ async function completeSplitPayment(index){
 function openCardPartConfirmation(amount,onSuccess){
   showModal(`<div class="modal-title">Оплата картой</div>
     <div class="center-note" style="padding:18px 0 12px;">Проведите оплату на терминале</div>
-    <div style="font-size:30px;font-weight:850;text-align:center;margin-bottom:16px;">${fullMoney(amount)}</div>
+    <div style="font-size:30px;font-weight:800;text-align:center;margin-bottom:16px;">${fullMoney(amount)}</div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal();renderSplitPayment();">Отмена</button>
       <button class="btn btn-card" onclick="window.__cardPaymentConfirm&&window.__cardPaymentConfirm()">Оплата прошла</button>

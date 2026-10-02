@@ -7,8 +7,8 @@ function renderCartPanel(shift){
         <div style="width:100%;min-width:0;">
           <div class="cart-row-title-line"><div class="cart-row-name">${escapeHtml(i.name)}</div><div class="cart-row-linetotal">${money(itemTotal(i))}</div></div>
           <div class="cart-row-sub">${money(i.price)} / шт · ×${i.qty}${i.discountId ? ' · '+escapeHtml((state.discounts.find(d=>d.id===i.discountId)||{}).name||'Скидка') : ''}</div>
-          ${(i.selectedModifiers||[]).length?`<div class="cart-row-sub" style="color:var(--text);margin-top:5px;">↳ ${(i.selectedModifiers||[]).map(m=>escapeHtml(m.name)).join(' · ')}</div>`:''}
-          ${i.comment ? `<div class="cart-row-sub" style="color:var(--text);margin-top:5px;">💬 ${escapeHtml(i.comment)}</div>` : ''}
+          ${(i.selectedModifiers||[]).length?`<div class="cart-row-sub" style="color:var(--ink);margin-top:5px;">↳ ${(i.selectedModifiers||[]).map(m=>escapeHtml(m.name)).join(' · ')}</div>`:''}
+          ${i.comment ? `<div class="cart-row-sub" style="color:var(--ink);margin-top:5px;">💬 ${escapeHtml(i.comment)}</div>` : ''}
         </div>
       </div>
       </div>
@@ -24,7 +24,7 @@ function renderCartPanel(shift){
     <div class="cart-head"><span class="cart-order-title">Текущий заказ <span class="cart-position-count">— ${state.cart.reduce((s,i)=>s+i.qty,0)} поз.</span></span><div class="cart-head-actions"><span id="cart-add-feedback" class="cart-add-feedback">Добавлено</span><button class="cart-customer-button ${state.customer?.id?'selected':''}" onclick="openOrderCustomer()" aria-label="${state.customer?.id?'Изменить клиента заказа':'Выбрать клиента'}" title="${escapeAttr(state.customer?.name||'Выбрать клиента')}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg></button></div></div>
     <div class="order-meta">
       <button class="order-type-btn" onclick="openOrderSettings()">${state.orderLabel?'<b>'+escapeHtml(state.orderLabel)+'</b> · ':''}${escapeHtml(state.orderType)}${state.customer.name||state.customer.phone?' · '+escapeHtml(state.customer.name||state.customer.phone):''}</button>
-      ${state.orderComment?`<div class="cart-row-sub" style="color:var(--text);margin-top:6px;">💬 ${escapeHtml(state.orderComment)}</div>`:''}
+      ${state.orderComment?`<div class="cart-row-sub" style="color:var(--ink);margin-top:6px;">💬 ${escapeHtml(state.orderComment)}</div>`:''}
     </div>
     <div class="cart-items">${rows}</div>
     <div class="cart-foot">

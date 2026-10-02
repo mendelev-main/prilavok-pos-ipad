@@ -16,9 +16,9 @@ function openCategoriesModal(){
             <div class="category-name"><span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:${state.categoryColors[c]||'#EEF1F5'};border:1px solid rgba(0,0,0,.12);margin-right:8px;vertical-align:-2px;"></span>${escapeHtml(c)}</div>
             <div class="category-sub">${count} ${count===1?'товар':'товаров'}</div>
           </div>
-          <button class="web-switch ${state.categoryOnline[c]!==false?'on':''}" onclick="toggleCategoryOnline('${escapeAttr(c)}')" title="Публиковать в WEB"><span></span><b>WEB</b></button>
-          <button class="icon-btn" onclick="openCategoryModal('${escapeAttr(c)}')">✎</button>
-          <button class="icon-btn danger" onclick="deleteCategory('${escapeAttr(c)}')">✕</button>
+          <button type="button" class="web-switch ${state.categoryOnline[c]!==false?'on':''}" role="switch" aria-label="Публиковать категорию ${escapeAttr(c)} в WEB" aria-checked="${state.categoryOnline[c]!==false}" onclick="toggleCategoryOnline('${escapeAttr(c)}')" title="Публиковать в WEB"><span></span><b>WEB</b></button>
+          <button type="button" class="icon-btn" aria-label="Изменить категорию ${escapeAttr(c)}" onclick="openCategoryModal('${escapeAttr(c)}')">✎</button>
+          <button type="button" class="icon-btn danger" aria-label="Удалить категорию ${escapeAttr(c)}" onclick="deleteCategory('${escapeAttr(c)}')">✕</button>
         </div>`;
       }).join('') : '<div class="center-note">Категорий пока нет.</div>'}
     </div>
@@ -55,7 +55,7 @@ function openCategoryModal(oldName){
     <div class="field">
       <div class="web-setting-row">
         <div><div style="font-weight:800;">Публиковать в WEB</div><div class="center-note" style="padding:3px 0 0;text-align:left;">Категория будет доступна клиентам онлайн.</div></div>
-        <button type="button" id="cf-web-toggle" class="toggle-switch ${editing&&state.categoryOnline[oldName]===false?'':'on'}" onclick="toggleCategoryModalOnline()"><span></span></button>
+        <button type="button" id="cf-web-toggle" class="toggle-switch ${editing&&state.categoryOnline[oldName]===false?'':'on'}" role="switch" aria-label="Публиковать категорию в WEB" aria-checked="${editing&&state.categoryOnline[oldName]===false?'false':'true'}" onclick="toggleCategoryModalOnline()"><span></span></button>
       </div>
     </div>
     ${editing?`<div class="center-note" style="padding:0;text-align:left;">При переименовании категория изменится у всех товаров, которые к ней относятся.</div>`:''}
@@ -121,13 +121,18 @@ function toggleCategoryOnline(name){
   rows.forEach(row=>{
     const btn=row.querySelector('.web-switch');
     const nameEl=row.querySelector('.category-name');
-    if(btn && nameEl && nameEl.textContent.trim()===name) btn.classList.toggle('on',state.categoryOnline[name]!==false);
+    if(btn && nameEl && nameEl.textContent.trim()===name){
+      const enabled=state.categoryOnline[name]!==false;
+      btn.classList.toggle('on',enabled);
+      btn.setAttribute('aria-checked',String(enabled));
+    }
   });
   flash(state.categoryOnline[name]?'Категория опубликована в WEB':'Категория снята с публикации WEB');
 }
 function toggleCategoryModalOnline(){
   window._cmOnline=!window._cmOnline;
-  const b=document.getElementById('cf-web-toggle'); if(b) b.classList.toggle('on',window._cmOnline);
+  const b=document.getElementById('cf-web-toggle');
+  if(b){ b.classList.toggle('on',window._cmOnline); b.setAttribute('aria-checked',String(window._cmOnline)); }
 }
 
 function deleteCategory(name){

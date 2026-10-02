@@ -79,7 +79,7 @@ function openParkedModal(){
     <div class="list-row">
       <div style="flex:1;"><div class="list-row-name">${escapeHtml(o.orderLabel||'Без подписи')}</div>
       <div class="list-row-sub">${o.items.reduce((sum,i)=>sum+i.qty,0)} поз. · ${fullMoney(o.total)} · ${escapeHtml(o.orderType||'На месте')} · ${fmtDate(o.createdAt)}</div>
-      ${o.comment?`<div class="list-row-sub" style="color:var(--text);margin-top:4px;">💬 ${escapeHtml(o.comment)}</div>`:''}</div>
+      ${o.comment?`<div class="list-row-sub" style="color:var(--ink);margin-top:4px;">💬 ${escapeHtml(o.comment)}</div>`:''}</div>
       <button class="btn btn-outline" style="flex:none;padding:9px 14px;" onclick="resumeParked('${o.id}')">Открыть</button>
       <button class="icon-btn danger" onclick="deleteParked('${o.id}')">✕</button>
     </div>`).join(''):`<div class="center-note">Нет отложенных чеков</div>`}

@@ -135,7 +135,7 @@ function renderProductsScreen(){
       <div class="products-table-cell"><span class="badge ${p.type==='composite'?'type-composite':''}">${typeLabel}</span></div>
       <div class="products-table-cell">${money(p.price)}</div>
       <div class="products-table-cell">${money(compositeCost(p))}</div>
-      <div class="products-table-cell products-web-cell"><button type="button" class="web-switch ${p.availableOnline!==false?'on':''}" onclick="event.stopPropagation();toggleProductOnline(${productInlineArg(p.id)})" title="Публиковать в WEB"><span></span><b>WEB</b></button></div>
+      <div class="products-table-cell products-web-cell"><button type="button" class="web-switch ${p.availableOnline!==false?'on':''}" role="switch" aria-label="Публиковать товар ${escapeAttr(p.name)} в WEB" aria-checked="${p.availableOnline!==false}" onclick="event.stopPropagation();toggleProductOnline(${productInlineArg(p.id)})" title="Публиковать в WEB"><span></span><b>WEB</b></button></div>
       <div class="products-table-cell products-stock">${p.noStockTracking?'—':stockLabel}</div>
     </div>`;
   }).join('');

@@ -89,8 +89,8 @@ function renderShiftScreen(shift){
     openBlock = `
       <div class="card shift-summary-card">
         <div class="shift-summary-actions">
-          <button class="btn" style="width:auto;background:#16a34a;border-color:#16a34a;color:#fff;" onclick="openCashMovementModal('deposit')">Внести наличные</button>
-          <button class="btn" style="width:auto;background:#dc2626;border-color:#dc2626;color:#fff;" onclick="openCashMovementModal('withdrawal')">Изъять наличные</button>
+          <button class="btn btn-success" style="width:auto;" onclick="openCashMovementModal('deposit')">Внести наличные</button>
+          <button class="btn btn-danger" style="width:auto;" onclick="openCashMovementModal('withdrawal')">Изъять наличные</button>
         </div>
 
         <div class="shift-summary-header">
@@ -325,7 +325,7 @@ function viewShiftModal(shiftId){
     </div>
     <div class="grid-2" style="margin-top:12px;">
       <div class="stat-box"><div class="label">Карта</div><div class="value">${money(t.card)}</div></div>
-      <div class="stat-box"><div class="label">Расхождение</div><div class="value" style="color:${Math.abs(diff)<0.01?'var(--text)':'var(--danger)'};">${money(diff)}</div></div>
+      <div class="stat-box"><div class="label">Расхождение</div><div class="value" style="color:${Math.abs(diff)<0.01?'var(--ink)':'var(--danger)'};">${money(diff)}</div></div>
     </div>
     <div class="grid-2" style="margin-top:12px;">
       <div class="stat-box"><div class="label">Внесено наличных</div><div class="value">${money(t.deposits)}</div></div>

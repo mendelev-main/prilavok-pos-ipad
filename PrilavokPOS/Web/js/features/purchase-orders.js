@@ -214,7 +214,7 @@ function viewPurchaseOrder(id){
   const text=purchaseOrderText(order),safeId=escapeAttr(JSON.stringify(order.id));
   showModal(`
     <div class="modal-title">Заказ поставщику</div>${deletedLabel}
-    <div style="font-size:14px;color:var(--muted);margin-bottom:14px;"><strong style="color:var(--text);">${escapeHtml(order.supplierName)}</strong><br>${fmtDate(order.timestamp)}</div>
+    <div style="font-size:14px;color:var(--muted);margin-bottom:14px;"><strong style="color:var(--ink);">${escapeHtml(order.supplierName)}</strong><br>${fmtDate(order.timestamp)}</div>
     <pre id="purchase-order-text" style="white-space:pre-wrap;font-family:inherit;font-size:15px;line-height:1.55;background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:14px;margin:0;">${escapeHtml(text)}</pre>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="copyPurchaseOrder(${safeId})">Скопировать текст</button>
