@@ -4,6 +4,28 @@ import UniformTypeIdentifiers
 import PhotosUI
 import Foundation
 
+final class ProductImageStore: NSObject, WKURLSchemeHandler {
+    private let directory: URL
+    override init() {
+        let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        directory = root.appendingPathComponent("MPosProductImages", isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    }
+    func save(_ data: Data) -> String? { let id=UUID().uuidString.lowercased();do{try data.write(to:url(id),options:.atomic);return id}catch{return nil} }
+    func read(_ id:String)->Data? { guard valid(id) else{return nil};return try? Data(contentsOf:url(id)) }
+    func remove(_ id:String){guard valid(id) else{return};try? FileManager.default.removeItem(at:url(id))}
+    private func valid(_ id:String)->Bool { UUID(uuidString:id) != nil }
+    private func url(_ id:String)->URL { directory.appendingPathComponent(id).appendingPathExtension("jpg") }
+    func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) { guard let id=urlSchemeTask.request.url?.host,let data=read(id) else{urlSchemeTask.didFailWithError(URLError(.fileDoesNotExist));return};urlSchemeTask.didReceive(URLResponse(url:urlSchemeTask.request.url!,mimeType:"image/jpeg",expectedContentLength:data.count,textEncodingName:nil));urlSchemeTask.didReceive(data);urlSchemeTask.didFinish() }
+    func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {}
+}
+
+final class WeakScriptMessageHandler: NSObject, WKScriptMessageHandler {
+    weak var delegate: WKScriptMessageHandler?
+    init(_ delegate: WKScriptMessageHandler) { self.delegate=delegate }
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) { delegate?.userContentController(userContentController,didReceive:message) }
+}
+
 @main
 final class PrilavokPOSApp: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
@@ -23,16 +45,18 @@ final class PrilavokPOSApp: UIResponder, UIApplicationDelegate {
 final class POSViewController: UIViewController, WKScriptMessageHandler, PHPickerViewControllerDelegate {
     private var webView: WKWebView!
     private let networkPrinter = NetworkPrinterManager()
+    private let productImages = ProductImageStore()
 
     override func loadView() {
         let contentController = WKUserContentController()
-        contentController.add(self, name: "printer")
-        contentController.add(self, name: "telegram")
-        contentController.add(self, name: "photoPicker")
+        contentController.add(WeakScriptMessageHandler(self), name: "printer")
+        contentController.add(WeakScriptMessageHandler(self), name: "telegram")
+        contentController.add(WeakScriptMessageHandler(self), name: "photoPicker")
 
         let configuration = WKWebViewConfiguration()
         configuration.userContentController = contentController
         configuration.websiteDataStore = .default()
+        configuration.setURLSchemeHandler(productImages, forURLScheme: "mpos-image")
 
         let web = WKWebView(frame: .zero, configuration: configuration)
         web.scrollView.contentInsetAdjustmentBehavior = .never
@@ -82,6 +106,12 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         if message.name == "photoPicker" {
+            if let body=message.body as? [String:Any],let action=body["action"] as? String,action != "pick" {
+                let id=body["id"] as? String ?? ""
+                if action=="remove" { productImages.remove(id) }
+                if action=="read",let requestId=body["requestId"] as? String,let data=productImages.read(id) { sendProductImageRead(requestId:requestId,data:data) }
+                return
+            }
             presentPhotoPicker()
             return
         }
@@ -140,13 +170,18 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
         guard provider.hasItemConformingToTypeIdentifier(typeIdentifier) else { return }
         provider.loadDataRepresentation(forTypeIdentifier: typeIdentifier) { [weak self] data, _ in
             guard let self = self, let data = data, let image = UIImage(data: data) else { return }
-            guard let prepared = self.prepareProductImage(image) else { return }
+            guard let prepared = self.prepareProductImage(image),let localId=self.productImages.save(prepared) else { return }
             let base64 = prepared.base64EncodedString()
-            let js = "window.handleNativeProductImage && window.handleNativeProductImage('data:image/jpeg;base64,\(base64)');"
+            let js = "window.handleNativeProductImage && window.handleNativeProductImage('data:image/jpeg;base64,\(base64)','\(localId)');"
             DispatchQueue.main.async {
                 self.webView.evaluateJavaScript(js, completionHandler: nil)
             }
         }
+    }
+
+    private func sendProductImageRead(requestId:String,data:Data){
+        let base64=data.base64EncodedString(),js="window.handleNativeProductImageRead && window.handleNativeProductImageRead('\(requestId)','data:image/jpeg;base64,\(base64)');"
+        DispatchQueue.main.async { [weak self] in self?.webView.evaluateJavaScript(js) }
     }
 
     private func prepareProductImage(_ image: UIImage) -> Data? {
@@ -768,5 +803,7 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
 
     deinit {
         webView?.configuration.userContentController.removeScriptMessageHandler(forName: "printer")
+        webView?.configuration.userContentController.removeScriptMessageHandler(forName: "telegram")
+        webView?.configuration.userContentController.removeScriptMessageHandler(forName: "photoPicker")
     }
 }

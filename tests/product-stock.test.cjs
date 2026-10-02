@@ -453,17 +453,25 @@ test('editor draft snapshot notices changes without mutating saved product',()=>
  f.fields['pf-name'].value='Мука новая';assert.equal(f.c.productEditorDirty(),false);f.c._pmOnline=true;assert.equal(f.c.productEditorDirty(),true);
  assert.equal(JSON.stringify(f.state.products),before);assert.equal(f.writes.length,0);
 });
-test('photo failure preserves existing product and does not create a new product',async()=>{
+test('photo failure saves the product locally and retains its local image for retry',async()=>{
  for(const id of ['flour','']){
-  const f=editorFixture(),before=JSON.stringify(f.state.products);f.c._pmImageData='data:image/jpeg;base64,AA';
+  const f=editorFixture(),beforeCount=f.state.products.length;f.c._pmImageData='data:image/jpeg;base64,AA';f.c._pmLocalImageId='11111111-1111-1111-1111-111111111111';
   f.c.networkConfigFromState=()=>({backendUrl:'https://test.invalid',deviceKey:'test'});f.c.fetch=async()=>{throw Error('offline');};
-  assert.equal(await f.c.saveProduct(id),undefined);assert.equal(JSON.stringify(f.state.products),before);assert.equal(f.writes.length,0);assert.match(f.messages.at(-1),/offline/);
+  assert.equal(await f.c.saveProduct(id),true);assert.equal(f.state.products.length,beforeCount+(id?0:1));const saved=id?f.c.getProduct(id):f.state.products.at(-1);assert.equal(saved.name,'Мука новая');assert.equal(saved.localImageId,'11111111-1111-1111-1111-111111111111');assert.equal(saved.imageUploadPending,true);const web=f.c.buildMenuSyncPayload().products.find(x=>x.externalId===saved.id);assert.equal(web.localImageId,undefined);assert.equal(web.imageUploadPending,undefined);assert.ok(f.data.has('prilavok_products'));assert.match(f.messages.at(-1),/сохранён локально.*offline/);
  }
 });
 test('photo upload cannot overwrite a stock change occurring while save awaits network',async()=>{
- const f=editorFixture();f.c._pmImageData='data:image/jpeg;base64,AA';f.c.networkConfigFromState=()=>({backendUrl:'https://test.invalid',deviceKey:'test'});
+ const f=editorFixture();f.c._pmImageData='data:image/jpeg;base64,AA';f.c._pmLocalImageId='11111111-1111-1111-1111-111111111111';f.c.networkConfigFromState=()=>({backendUrl:'https://test.invalid',deviceKey:'test'});
  f.c.fetch=async()=>{f.c.getProduct('flour').stock=9;return {ok:true,json:async()=>({url:'test-image'})};};
- assert.equal(await f.c.saveProduct('flour'),undefined);assert.equal(f.c.getProduct('flour').stock,9);assert.equal(f.c.getProduct('flour').name,'Мука');assert.equal(f.writes.length,0);
+ assert.equal(await f.c.saveProduct('flour'),true);assert.equal(f.c.getProduct('flour').stock,9);assert.equal(f.c.getProduct('flour').name,'Мука новая');assert.equal(f.c.getProduct('flour').imageUrl,'test-image');assert.equal(f.c.getProduct('flour').imageUploadPending,undefined);
+});
+test('pending native photo retries from local sandbox on the next product save',async()=>{
+ const f=editorFixture(),p=f.c.getProduct('flour');p.localImageId='11111111-1111-1111-1111-111111111111';p.imageUploadPending=true;f.c.readNativeProductImage=async id=>{assert.equal(id,p.localImageId);return 'data:image/jpeg;base64,AA'};f.c.networkConfigFromState=()=>({backendUrl:'https://test.invalid',deviceKey:'test'});f.c.fetch=async()=>({ok:true,json:async()=>({url:'uploaded-image'})});
+ assert.equal(await f.c.saveProduct('flour'),true);assert.equal(f.c.getProduct('flour').imageUrl,'uploaded-image');assert.equal(f.c.getProduct('flour').imageUploadPending,undefined);
+});
+test('product storage failure prevents photo upload and leaves state unchanged',async()=>{
+ const f=editorFixture(),before=JSON.stringify(f.state.products),originalSet=f.c.localStorage.setItem;let uploads=0;f.c._pmImageData='data:image/jpeg;base64,AA';f.c._pmLocalImageId='11111111-1111-1111-1111-111111111111';f.c.fetch=async()=>{uploads++;return {ok:true,json:async()=>({url:'uploaded-image'})}};f.c.localStorage.setItem=(key,value)=>{if(key==='prilavok_products')throw Error('storage full');originalSet(key,value)};
+ assert.equal(await f.c.saveProduct('flour'),undefined);assert.equal(JSON.stringify(f.state.products),before);assert.equal(uploads,0);assert.match(f.messages.at(-1),/storage full/);
 });
 test('ordinary product save uses original local key and preserves extra fields',async()=>{
  const f=editorFixture();f.c.getProduct('flour').futureField={keep:true};

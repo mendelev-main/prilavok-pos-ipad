@@ -111,7 +111,7 @@ POS с безопасными значениями в памяти и сохра
 
 ### A003-F07 — загрузка фото блокирует локальное сохранение карточки товара
 
-**Статус**: Code-confirmed.  
+**Статус**: Code-confirmed на baseline `6975821`; исправлено в spec 011.
 **Код**: `PrilavokPOS/pos.html:5617`.
 
 При новом фото `saveProduct()` сначала ожидает `/api/media/upload` без timeout и лишь затем пишет
@@ -119,6 +119,10 @@ POS с безопасными значениями в памяти и сохра
 
 **Закрытие**: сначала атомарно сохранить карточку и локальное фото/очередь, upload выполнять отдельной
 сетевой операцией с timeout и повтором. Это уже соответствует направлению R3 roadmap.
+
+**Решение**: [spec 011](../011-local-first-product-photos/spec.md) сохраняет JPEG в sandbox,
+карточку и pending-маркер — до upload, ограничивает запрос десятью секундами и повторяет его при
+следующем сохранении карточки.
 
 ### A003-F08 — LAN-печать не имеет deadline и изменяет общий словарь из разных очередей
 
@@ -170,7 +174,7 @@ serial queue, добавляет десятисекундный deadline и ед
 
 ### A003-F09 — два native bridge handler остаются зарегистрированными
 
-**Статус**: Code-confirmed.  
+**Статус**: Code-confirmed на baseline `6975821`; исправлено вместе со spec 011.
 **Код**: `PrilavokPOS/PrilavokPOSApp.swift:29`, `PrilavokPOS/PrilavokPOSApp.swift:770`.
 
 Контроллер регистрирует `printer`, `telegram` и `photoPicker`, но в `deinit` снимает только
@@ -178,6 +182,9 @@ serial queue, добавляет десятисекундный deadline и ед
 возможна утечка всего `POSViewController` и WebView.
 
 **Закрытие**: снять все три handler либо использовать weak proxy; подтвердить deinit в Instruments.
+
+**Решение**: handlers регистрируются через weak proxy, а `deinit` снимает `printer`, `telegram` и
+`photoPicker`; освобождение контроллера остаётся в финальной проверке Instruments.
 
 ### A003-F12 — lifecycle создаёт корневой POS-контроллер в двух местах
 

@@ -5301,7 +5301,7 @@ function openProductModal(id){
   const factor=convertProductQty(1,window._pmBaseUnit,window._pmUnit);
   window._pmSimpleDraft={purchaseUnit:editing?.purchaseUnit??window._pmBaseUnit,packSize:editing?.purchasePackSize??'',contentUnit:editing?.purchaseContentUnit??window._pmBaseUnit,cost:editing?.cost==null?'':editing.cost/factor,stock:editing?.stock==null?'':convertProductQty(editing.stock,window._pmBaseUnit,window._pmUnit),minimum:editing?.minStock==null?'':convertProductQty(editing.minStock,window._pmBaseUnit,window._pmUnit),noStock:!!editing?.noStockTracking};
   window._pmType=editing?.type||'simple';window._pmEditingId=editing?.id||null;window._pmRecipeYield=editing?.recipeYield??1;window._pmRecipeUnit=editing?.recipeUnit||'piece';window._pmRecipeYieldManual=editing?.recipeYieldManual===true;
-  window._pmImageData=null;window._pmRemoveImage=false;window._pmOnline=editing?.availableOnline!==false;
+  window._pmImageData=null;window._pmLocalImageId=null;window._pmRemoveImage=false;window._pmOnline=editing?.availableOnline!==false;
   window._pmSaving=false;window._pmSession=(window._pmSession||0)+1;
   renderProductModal(editing,window._pmType,[],state.categoryOrder.slice());
   window._pmInitial=productEditorSnapshot();
@@ -5317,6 +5317,7 @@ function productEditorSnapshot(){
 }
 function productEditorDirty(){return productEditorSnapshot()!==window._pmInitial;}
 function finishProductEditor(nextId=null){
+  if(window._pmLocalImageId)window.webkit?.messageHandlers?.photoPicker?.postMessage({action:'remove',id:window._pmLocalImageId});
   document.getElementById('product-editor-root').innerHTML='';
   document.getElementById('app').inert=false;
   const screen=document.querySelector('.screen.active');if(screen)screen.scrollTop=window._pmReturnScroll||0;
@@ -5394,7 +5395,7 @@ function renderProductModal(editing, type, simpleProducts, catList){
         <div class="field"><label for="pf-note">Внутренняя заметка</label><textarea id="pf-note" maxlength="2000" rows="3" style="width:100%;font:inherit;padding:12px;background:var(--bg);color:var(--ink);border:1px solid var(--border);border-radius:12px;">${escapeHtml(editing?.internalNote||'')}</textarea><p class="pe-note">Для сотрудников. Не выводится в чек или онлайн-меню.</p></div>
         <div class="field"><label>Тип товара</label><div class="radio-row"><button type="button" class="radio-opt product-type-switch ${type==='simple'?'selected':''}" data-type="simple" onclick="switchProductType('simple')">Простой</button><button type="button" class="radio-opt product-type-switch ${type==='composite'?'selected':''}" data-type="composite" onclick="switchProductType('composite')">Составной</button></div><p class="pe-note">Простой товар хранится на складе. Составной расходует ингредиенты по рецептуре.</p></div>
         <div class="field"><label for="pf-price">Цена продажи, ${escapeHtml(state.currency)}</label><input id="pf-price" type="number" min="0" step="0.01" inputmode="decimal" value="${editing?.price??''}" placeholder="0,00"></div>
-        <div class="pe-photo"><div id="pf-image-preview" class="product-image-preview">${editing?.imageUrl?`<img src="${escapeAttr(editing.imageUrl)}" alt="Фото товара">`:'<div class="product-image-empty">Фото товара</div>'}</div><div><h3>Фото товара</h3><p class="pe-note">Изображение для онлайн-меню.</p><button class="btn btn-outline" onclick="pickProductImage()">Выбрать фото</button><button class="btn btn-outline" onclick="removeProductImage();updateProductEditorSummary()">Убрать фото</button></div><input id="pf-image-input" type="file" accept="image/*" hidden onchange="handleProductImage(this)"></div>
+        <div class="pe-photo"><div id="pf-image-preview" class="product-image-preview">${editing?.localImageId?`<img src="mpos-image://${escapeAttr(editing.localImageId)}" alt="Фото товара">`:editing?.imageUrl?`<img src="${escapeAttr(editing.imageUrl)}" alt="Фото товара">`:'<div class="product-image-empty">Фото товара</div>'}</div><div><h3>Фото товара</h3><p class="pe-note">Изображение для онлайн-меню.</p><button class="btn btn-outline" onclick="pickProductImage()">Выбрать фото</button><button class="btn btn-outline" onclick="removeProductImage();updateProductEditorSummary()">Убрать фото</button></div><input id="pf-image-input" type="file" accept="image/*" hidden onchange="handleProductImage(this)"></div>
       </section>
       <section class="pe-card" data-pe-panel="stock" hidden><div class="pe-section-heading"><h2>Состав и остатки</h2></div><div id="pf-type-fields"></div></section>
       <section class="pe-card" data-pe-panel="modifiers" hidden>
@@ -5737,20 +5738,26 @@ async function saveProduct(editingId){
       const purchaseUnit=document.getElementById('pf-purchase-unit'),packSize=document.getElementById('pf-pack-size'),contentUnit=document.getElementById('pf-purchase-content-unit');
       if(purchaseUnit){p.purchaseUnit=purchaseUnit.value;p.purchaseContentUnit=contentUnit?.value||p.stockUnit;const raw=packSize?.value||'';if(raw!==''){if(!Number.isFinite(Number(raw))||Number(raw)<=0)throw new Error('Объём упаковки должен быть больше нуля');p.purchasePackSize=Number(raw);}else delete p.purchasePackSize;}
     }
-    if(window._pmImageData){
-      const n=networkConfigFromState();
-      if(!n.backendUrl || !n.deviceKey) throw new Error('Нет подключения к backend');
-      const r=await fetch(n.backendUrl.replace(/\/+$/,'')+'/api/media/upload',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Key':n.deviceKey},body:JSON.stringify({productId:p.id,dataUrl:window._pmImageData}),cache:'no-store'});
-      const d=await r.json().catch(()=>null);
-      if(!r.ok) throw new Error(r.status===413?'Фото слишком большое для сервера. Выберите фото заново, чтобы уменьшить размер.':(d?.error||('HTTP '+r.status)));
-      p.imageUrl=d.url||'';
-    }
+    const previousLocalImageId=editingId?getProduct(editingId)?.localImageId||'':'',selectedLocalImageId=window._pmLocalImageId||'';
+    if(selectedLocalImageId){p.localImageId=selectedLocalImageId;p.imageUploadPending=true}
+    if(window._pmRemoveImage){delete p.localImageId;delete p.imageUploadPending}
     if(editingId && JSON.stringify(getProduct(editingId))!==originalProduct)throw new Error('Товар изменился во время сохранения. Откройте карточку заново');
-    if(editingId)state.products[state.products.findIndex(x=>x.id===editingId)]=p;
-    else state.products.push(p);
-    saveKey('products', state.products);
-    syncCategoryOrder();
-    closeModal(); render(); flash('Товар сохранён');
+    const nextProducts=storageSnapshot(state.products);if(editingId)nextProducts[nextProducts.findIndex(x=>x.id===editingId)]=p;else nextProducts.push(p);
+    await window.PrilavokCore.Storage.set('products',nextProducts);state.products=nextProducts;window._pmLocalImageId=null;syncCategoryOrder();
+    if(previousLocalImageId && (window._pmRemoveImage || (selectedLocalImageId&&selectedLocalImageId!==previousLocalImageId)))window.webkit?.messageHandlers?.photoPicker?.postMessage({action:'remove',id:previousLocalImageId});
+    let imageData=window._pmImageData;
+    if(!imageData&&p.imageUploadPending&&p.localImageId)imageData=await readNativeProductImage(p.localImageId);
+    let photoError='';
+    if(imageData){
+      try{
+        const n=networkConfigFromState();if(!n.backendUrl || !n.deviceKey)throw new Error('нет подключения к backend');
+        const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),10000);
+        let r;try{r=await fetch(n.backendUrl.replace(/\/+$/,'')+'/api/media/upload',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Key':n.deviceKey},body:JSON.stringify({productId:p.id,dataUrl:imageData}),cache:'no-store',signal:controller.signal})}finally{clearTimeout(timeout)}
+        const d=await r.json().catch(()=>null);if(!r.ok)throw new Error(r.status===413?'фото слишком большое для сервера':(d?.error||('HTTP '+r.status)));
+        const latestProducts=storageSnapshot(state.products),latest=latestProducts.find(x=>x.id===p.id);if(latest&&latest.localImageId===p.localImageId){latest.imageUrl=d.url||'';delete latest.imageUploadPending;await window.PrilavokCore.Storage.set('products',latestProducts);state.products=latestProducts}
+      }catch(e){photoError=e?.name==='AbortError'?'backend не ответил за 10 секунд':(e?.message||'ошибка upload')}
+    }
+    closeModal();render();flash(photoError?'Товар сохранён локально. Фото ожидает повторной загрузки: '+photoError:'Товар сохранён');
     return true;
   }catch(e){
     if(btn){ btn.disabled=false; btn.textContent='Сохранить'; }
@@ -5788,14 +5795,19 @@ function pickProductImage(){
     document.getElementById('pf-image-input')?.click();
   }
 }
-function handleNativeProductImage(dataUrl){
-  if(!dataUrl || window._pmPhotoRequestSession!==window._pmSession || !document.getElementById('pe-save')) return;
+function handleNativeProductImage(dataUrl,localImageId){
+  if(!dataUrl || window._pmPhotoRequestSession!==window._pmSession || !document.getElementById('pe-save')){if(localImageId)window.webkit?.messageHandlers?.photoPicker?.postMessage({action:'remove',id:localImageId});return}
+  if(window._pmLocalImageId&&window._pmLocalImageId!==localImageId)window.webkit?.messageHandlers?.photoPicker?.postMessage({action:'remove',id:window._pmLocalImageId});
   window._pmImageData=dataUrl;
+  window._pmLocalImageId=localImageId||null;
   window._pmRemoveImage=false;
   const el=document.getElementById('pf-image-preview');
   if(el) el.innerHTML=`<img src="${escapeAttr(dataUrl)}" alt="">`;
   updateProductEditorSummary();
 }
+const nativeProductImageReads=new Map();
+function readNativeProductImage(id){if(!id||!window.webkit?.messageHandlers?.photoPicker)return Promise.resolve(null);return new Promise(resolve=>{const requestId=uid();const timeout=setTimeout(()=>{nativeProductImageReads.delete(requestId);resolve(null)},3000);nativeProductImageReads.set(requestId,data=>{clearTimeout(timeout);resolve(data)});window.webkit.messageHandlers.photoPicker.postMessage({action:'read',id,requestId})})}
+function handleNativeProductImageRead(requestId,dataUrl){const done=nativeProductImageReads.get(requestId);if(done){nativeProductImageReads.delete(requestId);done(dataUrl)}}
 
 function handleProductImage(input){
   const file=input?.files?.[0]; if(!file) return;
@@ -5830,7 +5842,8 @@ function handleProductImage(input){
   reader.readAsDataURL(file);
 }
 function removeProductImage(){
-  window._pmImageData=null; window._pmRemoveImage=true;
+  if(window._pmLocalImageId)window.webkit?.messageHandlers?.photoPicker?.postMessage({action:'remove',id:window._pmLocalImageId});
+  window._pmImageData=null;window._pmLocalImageId=null;window._pmRemoveImage=true;
   const el=document.getElementById('pf-image-preview'); if(el) el.innerHTML='<div class="product-image-empty">📷 Фото будет удалено после сохранения</div>';
 }
 
