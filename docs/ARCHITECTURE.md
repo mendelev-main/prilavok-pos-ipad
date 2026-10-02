@@ -15,6 +15,7 @@ Swift/UIKit application
       ├─ Web/js/features/inventory.js: график, черновик, фиксация и завершение инвентаризации
       ├─ Web/js/features/warehouse-reporting.js: read-only складской отчёт и PDF/XLSX payload
       ├─ Web/js/features/analytics.js: локальные KPI продаж и отображение loyalty-аналитики
+      ├─ Web/js/features/product-catalog.js: CSV-импорт, поиск, сортировка и таблица товаров
       ├─ Web/js/features/hall-bookings.js: карта зала, столы и локальные бронирования
       ├─ network-printer.js: JS-граница LAN-печати
       └─ notification-native.js: native notifications
@@ -36,7 +37,8 @@ critical storage journal. `warehouse-reporting.js` только читает л�
 совместимый payload для существующих native PDF/XLSX и Telegram-путей. `hall-bookings.js` сохраняет
 прежний глобальный API карты зала и работает с прежними ключами `hallTables` и `bookings`.
 `analytics.js` рассчитывает показатели из локальных чеков; существующий read центральных loyalty KPI
-остаётся необязательным и при сетевой ошибке не блокирует локальный отчёт.
+остаётся необязательным и при сетевой ошибке не блокирует локальный отчёт. `product-catalog.js`
+сохраняет additive local-first импорт и presentation-only поиск/сортировку прежнего каталога.
 
 ## Данные и offline-first
 

@@ -13,6 +13,7 @@ const webOrdersScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/feature
 const inventoryScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/inventory.js'),'utf8');
 const warehouseReportingScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/warehouse-reporting.js'),'utf8');
 const analyticsScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/analytics.js'),'utf8');
+const productCatalogScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/product-catalog.js'),'utf8');
 const hallBookingsScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/hall-bookings.js'),'utf8');
 const printerScript=fs.readFileSync(path.join(root,'PrilavokPOS/network-printer.js'),'utf8');
 const appSwift=fs.readFileSync(path.join(root,'PrilavokPOS/PrilavokPOSApp.swift'),'utf8');
@@ -23,7 +24,7 @@ function fixture(){
  const data=new Map(),messages=[],writes=[],fields={'pf-prep-station':{value:'kitchen'},'pf-prep-difficulty':{value:'1'},'pf-base-prep-minutes':{value:'5'}},events=[];
  const document={getElementById:id=>fields[id]||null,querySelector:()=>null,addEventListener:()=>{}};
  const c={console:{error:()=>{}},document,crypto:{randomUUID:()=> 'device-test'},setTimeout:()=>0,clearTimeout:()=>{},addEventListener:()=>{},removeEventListener:()=>{},AbortController,localStorage:{getItem:k=>data.has(k)?data.get(k):null,setItem:(k,v)=>{data.set(k,String(v));writes.push(k);},removeItem:k=>data.delete(k)},fetch:()=>{throw Error('Network is prohibited in this test');},setInterval:()=>{throw Error('Timer is prohibited in this test');}};
- c.window=c;vm.createContext(c);vm.runInContext(adapter,c);vm.runInContext(inline.replace(/loadAll\(\);\s*$/,''),c);vm.runInContext(webOrdersScript,c);vm.runInContext(inventoryScript,c);vm.runInContext(warehouseReportingScript,c);vm.runInContext(analyticsScript,c);vm.runInContext(hallBookingsScript,c);
+ c.window=c;vm.createContext(c);vm.runInContext(adapter,c);vm.runInContext(inline.replace(/loadAll\(\);\s*$/,''),c);vm.runInContext(webOrdersScript,c);vm.runInContext(inventoryScript,c);vm.runInContext(warehouseReportingScript,c);vm.runInContext(analyticsScript,c);vm.runInContext(productCatalogScript,c);vm.runInContext(hallBookingsScript,c);
  c.flash=m=>messages.push(m);c.render=()=>{};c.showReceipt=()=>{};c.showPaymentReceipt=()=>{};c.closeModal=()=>{};c.applyTheme=()=>{};
  const state=vm.runInContext('state',c);
  c.__printerSettingsSnapshot=()=>({printers:[],posNotifications:{soundEnabled:true,sound:'default'}});c.__restorePrinterSettings=()=>true;
@@ -33,7 +34,7 @@ function fixture(){
  async function sale(payments){cart();await c.finalizePayment(payments||[{method:'cash',amount:10}]);return state.orders[0];}
  return {c,state,data,messages,writes,fields,events,cart,sale};
 }
-test('all production JavaScript modules parse',()=>{new vm.Script(inline);new vm.Script(adapter);new vm.Script(webOrdersScript);new vm.Script(inventoryScript);new vm.Script(warehouseReportingScript);new vm.Script(analyticsScript);new vm.Script(hallBookingsScript);new vm.Script(printerScript);});
+test('all production JavaScript modules parse',()=>{new vm.Script(inline);new vm.Script(adapter);new vm.Script(webOrdersScript);new vm.Script(inventoryScript);new vm.Script(warehouseReportingScript);new vm.Script(analyticsScript);new vm.Script(productCatalogScript);new vm.Script(hallBookingsScript);new vm.Script(printerScript);});
 test('WEB orders module loads before startup and preserves its public API',()=>{
  const moduleTag='<script src="Web/js/features/web-orders.js"></script>',startupTag='<script>loadAll();</script>';
  assert.ok(html.indexOf(moduleTag)>=0);assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));
@@ -53,6 +54,11 @@ test('analytics module loads before startup and preserves its public API',()=>{
  const moduleTag='<script src="Web/js/features/analytics.js"></script>',startupTag='<script>loadAll();</script>';
  assert.ok(html.indexOf(moduleTag)>=0);assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));
  const f=fixture();for(const name of ['analyticsRange','setAnalyticsDate','setAnalyticsPreset','analyticsOrders','analyticsData','renderAnalyticsBars','inventoryCostValue','loadLoyaltyAnalytics','renderAnalyticsScreen'])assert.equal(typeof f.c[name],'function',name);
+});
+test('product catalog module loads before startup and preserves its public API',()=>{
+ const moduleTag='<script src="Web/js/features/product-catalog.js"></script>',startupTag='<script>loadAll();</script>';
+ assert.ok(html.indexOf(moduleTag)>=0);assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));
+ const f=fixture();for(const name of ['parseProductCSV','planProductImport','confirmProductImport','productMatchesSearch','sortProductsBy','sortedProductRows','renderProductsScreen','filterProductsScreen','clearProductsSearch'])assert.equal(typeof f.c[name],'function',name);
 });
 test('analytics keeps local payment, cost and grouping rules within the selected period',()=>{
  const f=fixture(),inside=new Date(2026,9,1,12).getTime(),outside=new Date(2026,8,30,12).getTime();
