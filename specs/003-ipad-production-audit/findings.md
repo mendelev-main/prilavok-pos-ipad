@@ -361,6 +361,21 @@ ID клиентов и программ, а также название прог
 исполняет созданные actions со специальными символами, проверяя точную передачу исходных значений.
 Customer/loyalty runtime выделен в отдельный модуль; две legacy functions без call sites удалены.
 
+### A003-F24 — product ID мог разорвать действия рецептуры и модификаторов
+
+**Статус**: Code-confirmed на baseline `b11d284`; исправлено в spec 042.
+**Код**: прежний `PrilavokPOS/pos.html` и `Web/js/features/cart-composition.js`, теперь также
+`PrilavokPOS/Web/js/features/product-configuration.js`.
+
+Совместимый backup допускает непустые строковые product ID. Списки ингредиентов и модификаторов
+вставляли ID в одинарную JavaScript-строку внутри HTML-атрибута. После декодирования HTML entities
+кавычка могла изменить действие кнопки в редакторе или при продаже.
+
+**Решение**: [spec 042](../042-product-configuration-module/spec.md) использует JSON serialization и
+attribute escaping для трёх путей выбора. Regression test исполняет декодированные handlers со
+специально сформированным ID и проверяет точную передачу значения без выполнения внедрённого кода.
+Unit/recipe/modifier runtime выделен без изменения product JSON или границы `saveProduct`.
+
 ## Подтверждённо защищённые критические пути
 
 - Оплата cash/card/split, списание вложенных рецептур и создание чека объединены critical journal.
