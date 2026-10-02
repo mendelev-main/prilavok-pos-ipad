@@ -125,3 +125,12 @@ test('WEB events and parked orders use shared presentation classes',()=>{
   assert.match(html,/\.parked-order-main\{/);
   assert.match(html,/\.parked-order-comment\{/);
 });
+
+test('system and network settings contain no inline presentation',()=>{
+  assert.doesNotMatch(html,/style="/);
+  assert.doesNotMatch(html,/☀️|🌙/);
+  assert.match(html,/\.network-card-title\{/);
+  assert.match(html,/\.network-device-key\{/);
+  assert.match(html,/\.telegram-token-row\{/);
+  assert.match(html,/\.appearance-theme-options\{/);
+});

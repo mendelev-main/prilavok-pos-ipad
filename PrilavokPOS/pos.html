@@ -70,6 +70,7 @@
   button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;}
   input,select{font-family:inherit;}
   #app{display:flex;flex-direction:column;height:100vh;height:100dvh;}
+  #print-area{display:none;}
 
   /* ---- Top bar ---- */
   .topbar{
@@ -88,7 +89,7 @@
   .tab:not(.active):hover{color:#fff;}
   .shift-pill{
     display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:100px;
-    background:rgba(255,255,255,.08);font-size:13.5px;font-weight:600;white-space:nowrap;
+    background:rgba(255,255,255,.08);font-size:13.5px;font-weight:600;white-space:nowrap;cursor:pointer;
   }
   .settings-topbar-btn{
     width:44px;height:44px;min-width:44px;padding:0;border-radius:100px;
@@ -651,6 +652,7 @@
   .receipt-line{display:flex;justify-content:space-between;font-size:13.5px;padding:5px 0;}
   .receipt-total{display:flex;justify-content:space-between;font-size:17px;font-weight:800;padding-top:10px;margin-top:8px;border-top:1.5px dashed var(--border);}
   .center-note{text-align:center;color:var(--muted);font-size:13px;padding:30px 0;}
+  .app-loading{margin:auto;}
   .settings-theme-toggle{display:flex;align-items:center;gap:10px;padding:5px 7px;border:1px solid var(--border);border-radius:999px;background:var(--surface);}
   .theme-icon{width:20px;height:20px;display:block;flex:0 0 20px;color:var(--muted);}
   .theme-icon svg{display:block;width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
@@ -691,6 +693,18 @@
   .settings-list-main{flex:1;min-width:0;}
   .settings-inline-button{width:auto;padding:8px 12px;}
   .settings-admin-note{font-size:15px;line-height:1.5;}
+  .network-card-title{margin-bottom:4px;}
+  .settings-leading-field{margin-top:18px;}
+  .network-device-key{font-size:12px;color:var(--muted);max-width:210px;text-align:right;word-break:break-all;}
+  .settings-note-spaced{margin-top:14px;}
+  .network-guide-title{font-weight:800;font-size:14px;margin:18px 0 6px;}
+  .network-guide{line-height:1.6;}
+  .telegram-token-row{display:flex;gap:8px;align-items:center;}
+  .telegram-token-input{flex:1;min-width:0;}
+  .telegram-token-toggle{width:auto;white-space:nowrap;}
+  .appearance-theme-options{display:flex;gap:10px;}
+  .appearance-theme-button{flex:1;min-height:46px;}
+  .delete-confirm-note{padding:0 0 12px;text-align:left;}
   .supplier-section-title{font-weight:800;margin:14px 0 8px;}
   .supplier-products-note,.supplier-search-field{margin-bottom:10px;}
   .supplier-product-list{max-height:360px;overflow:auto;border:1px solid var(--border);border-radius:12px;padding:6px;}
@@ -1060,7 +1074,7 @@
 <div id="receiving-page-root"></div>
 <div id="warehouse-root"></div>
 <div id="modal-root"></div>
-<div id="print-area" style="display:none;"></div>
+<div id="print-area"></div>
 
 
 <script src="Web/js/core/storage.js"></script>
@@ -1559,7 +1573,7 @@ function render(){
   const cartScrollBefore=document.querySelector('.cart-items')?.scrollTop;
   clearCompositeCostCache();
   if(!state.loaded){
-    document.getElementById('app').innerHTML = `<div class="center-note" style="margin:auto;">Загрузка…</div>`;
+    document.getElementById('app').innerHTML = `<div class="center-note app-loading">Загрузка…</div>`;
     return;
   }
   const shift = currentShift();
@@ -1637,7 +1651,7 @@ function renderTopbar(shift){
     </div>
     ${renderInventoryTopbarReminder()}
     <button class="tab events-tab" onclick="openWebEventsModal()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path><path d="M10 21h4"></path></svg><span>События</span>${state.webEvents.length?`<span class="events-count">${state.webEvents.length}</span>`:''}</button>
-    <button class="shift-pill" style="cursor:pointer;" onclick="${shift ? "setTab('shift')" : "openShiftModal()"}">
+    <button class="shift-pill" onclick="${shift ? "setTab('shift')" : "openShiftModal()"}">
       <span class="dot ${shift?'on':'off'}"></span>
       ${shift ? escapeHtml(employeeShortName(shift.employeeName)) : 'Открыть смену'}
     </button>
@@ -2015,12 +2029,12 @@ function renderNetworkScreen(){
   const configured = !!(p.ip || '').trim();
   return `
   <div class="screen content-screen ${state.tab==='network'?'active':''}">
-    <div class="content-head" style="align-items:center;"><div style="display:flex;align-items:center;gap:12px;"><button class="btn btn-secondary" style="width:auto;padding:10px 16px;" onclick="state.settingsAdminPanel=true;setTab('settings')">← Назад</button><div class="content-title">Сетевые конфигурации</div></div></div>
+    <div class="content-head settings-content-head"><div class="settings-head-main"><button class="btn btn-secondary settings-back-button" onclick="state.settingsAdminPanel=true;setTab('settings')">← Назад</button><div class="content-title">Сетевые конфигурации</div></div></div>
     <div class="settings-grid">
       <div class="settings-card">
-        <div style="font-size:16px;font-weight:800;margin-bottom:4px;">Синхронизация меню</div>
+        <div class="settings-card-title network-card-title">Синхронизация меню</div>
         <div class="setting-sub">Передаёт текущее меню с iPad в M POS Backend. Повторная синхронизация обновляет существующие товары без создания дубликатов.</div>
-        <div class="field" style="margin-top:18px;">
+        <div class="field settings-leading-field">
           <label>Адрес backend</label>
           <input id="network-backend-url" value="${escapeAttr((state.network?.backendUrl||'https://project-dubrovno.up.railway.app').replace(/\/$/,''))}" placeholder="https://...railway.app" inputmode="url" autocomplete="off">
         </div>
@@ -2033,21 +2047,21 @@ function renderNetworkScreen(){
             <div class="setting-title">Устройство</div>
             <div class="setting-sub">Уникальный ключ создаётся автоматически на этом iPad.</div>
           </div>
-          <div style="font-size:12px;color:var(--muted);max-width:210px;text-align:right;word-break:break-all;">${escapeHtml(state.network?.deviceKey||'создаётся…')}</div>
+          <div class="network-device-key">${escapeHtml(state.network?.deviceKey||'создаётся…')}</div>
         </div>
-        <div class="settings-note" style="margin-top:14px;">
+        <div class="settings-note settings-note-spaced">
           В синхронизацию входят категории и товары из локальной кассы. Сейчас все синхронизированные товары публикуются в онлайн-меню.
         </div>
         <div class="modal-actions">
           <button class="btn btn-primary" onclick="syncMenuToBackend()">Синхронизировать меню</button>
           <button class="btn btn-secondary" onclick="testBackendConnection()">Проверить связь</button><button class="btn btn-outline" onclick="testWebOrder()">Создать тестовый веб-заказ</button>
         </div>
-        <div id="network-sync-status" class="settings-note" style="margin-top:14px;">${escapeHtml(state.network?.lastSyncStatus||'Синхронизация ещё не выполнялась.')}${state.network?.lastSyncAt ? ' · '+escapeHtml(fmtDate(state.network.lastSyncAt)) : ''}</div>
+        <div id="network-sync-status" class="settings-note settings-note-spaced">${escapeHtml(state.network?.lastSyncStatus||'Синхронизация ещё не выполнялась.')}${state.network?.lastSyncAt ? ' · '+escapeHtml(fmtDate(state.network.lastSyncAt)) : ''}</div>
       </div>
       <div class="settings-card">
-        <div style="font-size:16px;font-weight:800;margin-bottom:4px;">Чековый принтер</div>
+        <div class="settings-card-title network-card-title">Чековый принтер</div>
         <div class="setting-sub">Xprinter XP-N160II · Ethernet / LAN</div>
-        <div class="field" style="margin-top:18px;"><label>IP-адрес принтера</label>
+        <div class="field settings-leading-field"><label>IP-адрес принтера</label>
           <input id="printer-ip" value="${escapeAttr(p.ip||'')}" inputmode="decimal" placeholder="Например: 192.168.1.100">
         </div>
         <div class="grid-2">
@@ -2063,11 +2077,11 @@ function renderNetworkScreen(){
           <label class="switch"><input id="printer-auto" type="checkbox" ${p.autoPrint?'checked':''}><span></span></label>
         </div>
         <div class="printer-status"><span class="dot ${configured && p.enabled?'on':'off'}"></span>${configured && p.enabled ? escapeHtml(p.ip)+':'+(Number(p.port)||9100) : 'Принтер не настроен'}</div>
-        <div class="settings-note" style="margin-top:14px;">
+        <div class="settings-note settings-note-spaced">
           XP-N160II подключается к локальной сети по Wi‑Fi или Ethernet. M POS на iPad печатает напрямую через нативный сетевой модуль приложения: TCP/9100 + ESC/POS. Отдельный компьютер или драйвер для печати чеков не требуется.
         </div>
-        <div style="font-weight:800;font-size:14px;margin-top:18px;margin-bottom:6px;">Как подключить</div>
-        <div class="setting-sub" style="line-height:1.6;">1. Подключите принтер к той же локальной сети, что и iPad (Wi‑Fi или Ethernet).
+        <div class="network-guide-title">Как подключить</div>
+        <div class="setting-sub network-guide">1. Подключите принтер к той же локальной сети, что и iPad (Wi‑Fi или Ethernet).
         <br>2. Узнайте IP принтера через self-test.
         <br>3. Укажите IP и порт 9100 здесь.
         <br>4. Проверьте подключение кнопкой «Проверить».
@@ -2078,13 +2092,13 @@ function renderNetworkScreen(){
         </div>
       </div>
       <div class="settings-card">
-        <div style="font-size:16px;font-weight:800;margin-bottom:4px;">Telegram</div>
+        <div class="settings-card-title network-card-title">Telegram</div>
         <div class="setting-sub">Подключение рабочего Telegram-бота для уведомлений в группу.</div>
-        <div class="field" style="margin-top:18px;">
+        <div class="field settings-leading-field">
           <label>Токен бота</label>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <input id="telegram-token" type="password" value="${escapeAttr(t.botToken||'')}" placeholder="Токен от @BotFather" autocomplete="off" style="flex:1;">
-            <button class="btn btn-secondary" style="width:auto;white-space:nowrap;" onclick="toggleTelegramToken()">Показать</button>
+          <div class="telegram-token-row">
+            <input id="telegram-token" class="telegram-token-input" type="password" value="${escapeAttr(t.botToken||'')}" placeholder="Токен от @BotFather" autocomplete="off">
+            <button class="btn btn-secondary telegram-token-toggle" onclick="toggleTelegramToken()">Показать</button>
           </div>
         </div>
         <div class="grid-2">
@@ -2111,7 +2125,7 @@ function renderNetworkScreen(){
           <button class="btn btn-primary" onclick="saveTelegramSettings()">Сохранить</button>
           <button class="btn btn-secondary" onclick="testTelegramConnection()">Проверить подключение</button>
         </div>
-        <div id="telegram-status" class="settings-note" style="margin-top:14px;">${t.enabled && t.botToken && t.chatId ? 'Telegram настроен. Выполните проверку подключения.' : 'Telegram пока не настроен.'}</div>
+        <div id="telegram-status" class="settings-note settings-note-spaced">${t.enabled && t.botToken && t.chatId ? 'Telegram настроен. Выполните проверку подключения.' : 'Telegram пока не настроен.'}</div>
       </div>
     </div>
   </div>`;
@@ -2200,9 +2214,9 @@ window.onTelegramMonthlyWarehouseResult=function(result){
 
 function openAppearanceModal(){
   showModal(`<div class="modal-title">Внешний вид</div>
-    <div class="field"><label>Тема приложения</label><div style="display:flex;gap:10px;">
-      <button class="btn ${state.theme==='light'?'btn-primary':'btn-secondary'}" style="flex:1;min-height:46px;" onclick="setTheme('light');closeModal()">☀️ Светлая</button>
-      <button class="btn ${state.theme==='dark'?'btn-primary':'btn-secondary'}" style="flex:1;min-height:46px;" onclick="setTheme('dark');closeModal()">🌙 Тёмная</button>
+    <div class="field"><label>Тема приложения</label><div class="appearance-theme-options">
+      <button class="btn appearance-theme-button ${state.theme==='light'?'btn-primary':'btn-secondary'}" aria-pressed="${state.theme==='light'}" onclick="setTheme('light');closeModal()">Светлая</button>
+      <button class="btn appearance-theme-button ${state.theme==='dark'?'btn-primary':'btn-secondary'}" aria-pressed="${state.theme==='dark'}" onclick="setTheme('dark');closeModal()">Тёмная</button>
     </div></div>`);
 }
 
@@ -2296,7 +2310,7 @@ function requestDelete(type, id){
   const label = type==='category' ? id : (getProduct(id)?.name || 'товар');
   showModal(`
     <div class="modal-title">${title}</div>
-    <div class="center-note" style="padding:0 0 12px;text-align:left;">${passwordRequired?'Для удаления «'+escapeHtml(label)+'» введите пароль.':'Удалить товар «'+escapeHtml(label)+'»?'}</div>
+    <div class="center-note delete-confirm-note">${passwordRequired?'Для удаления «'+escapeHtml(label)+'» введите пароль.':'Удалить товар «'+escapeHtml(label)+'»?'}</div>
     ${passwordRequired?'<div class="field"><label>Пароль</label><input type="password" id="delete-password" autocomplete="off" placeholder="Введите пароль"></div>':''}
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal()">Отмена</button>
