@@ -279,6 +279,22 @@ legacy fields, повторно проверяет admin access при удал�
 **Решение**: [spec 036](../036-receiving-drafts/spec.md) защищает first-open, order/standalone save,
 retry и повторные нажатия, сохраняя legacy/V2 shape и существующее проведение прихода.
 
+### A003-F18 — проведение приёмки не занимает общий guard критических операций
+
+**Статус**: Code-confirmed на baseline `3fc0265`; исправлено в spec 037.
+**Код**: прежний `PrilavokPOS/pos.html:3514`, теперь
+`PrilavokPOS/Web/js/features/receiving.js`.
+
+Приёмка использовала recoverable critical journal, но не проверяла и не занимала общий
+`criticalOperationBusy`. Пока первая запись ожидала storage, другая критическая операция могла
+успеть пройти начальную проверку и конкурировать за единственный journal key.
+
+**Закрытие**: занимать общий guard до формирования и записи снимков, освобождать его в `finally`,
+не публиковать runtime state до завершения commit и сохранить idempotent restart recovery.
+
+**Решение**: [spec 037](../037-receiving-completion/spec.md) добавляет общий guard, regression tests
+для занятого и ожидающего commit и выделяет completion boundary без изменения данных или UI.
+
 ## Подтверждённо защищённые критические пути
 
 - Оплата cash/card/split, списание вложенных рецептур и создание чека объединены critical journal.

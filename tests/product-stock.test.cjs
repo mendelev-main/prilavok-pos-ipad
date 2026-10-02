@@ -13,6 +13,7 @@ const shiftsScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/s
 const employeesScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/employees.js'),'utf8');
 const suppliersScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/suppliers.js'),'utf8');
 const receivingDraftsScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/receiving-drafts.js'),'utf8');
+const receivingScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/receiving.js'),'utf8');
 const webOrdersScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/web-orders.js'),'utf8');
 const inventoryScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/inventory.js'),'utf8');
 const warehouseReportingScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/warehouse-reporting.js'),'utf8');
@@ -35,7 +36,7 @@ function fixture(){
  const data=new Map(),messages=[],writes=[],fields={'pf-prep-station':{value:'kitchen'},'pf-prep-difficulty':{value:'1'},'pf-base-prep-minutes':{value:'5'}},events=[];
  const document={getElementById:id=>fields[id]||null,querySelector:()=>null,addEventListener:()=>{}};
  const c={console:{error:()=>{}},document,crypto:{randomUUID:()=> 'device-test'},setTimeout:()=>0,clearTimeout:()=>{},addEventListener:()=>{},removeEventListener:()=>{},AbortController,localStorage:{getItem:k=>data.has(k)?data.get(k):null,setItem:(k,v)=>{data.set(k,String(v));writes.push(k);},removeItem:k=>data.delete(k)},fetch:()=>{throw Error('Network is prohibited in this test');},setInterval:()=>{throw Error('Timer is prohibited in this test');}};
- c.window=c;vm.createContext(c);vm.runInContext(adapter,c);vm.runInContext(inline.replace(/loadAll\(\);\s*$/,''),c);vm.runInContext(shiftsScript,c);vm.runInContext(employeesScript,c);vm.runInContext(suppliersScript,c);vm.runInContext(receivingDraftsScript,c);vm.runInContext(webOrdersScript,c);vm.runInContext(inventoryScript,c);vm.runInContext(warehouseReportingScript,c);vm.runInContext(analyticsScript,c);vm.runInContext(productCatalogScript,c);vm.runInContext(productCategoriesScript,c);vm.runInContext(posNavigationScript,c);vm.runInContext(cartPresentationScript,c);vm.runInContext(cartCompositionScript,c);vm.runInContext(parkedOrdersScript,c);vm.runInContext(paymentScript,c);vm.runInContext(receiptsScript,c);vm.runInContext(hallBookingsScript,c);
+ c.window=c;vm.createContext(c);vm.runInContext(adapter,c);vm.runInContext(inline.replace(/loadAll\(\);\s*$/,''),c);vm.runInContext(shiftsScript,c);vm.runInContext(employeesScript,c);vm.runInContext(suppliersScript,c);vm.runInContext(receivingDraftsScript,c);vm.runInContext(receivingScript,c);vm.runInContext(webOrdersScript,c);vm.runInContext(inventoryScript,c);vm.runInContext(warehouseReportingScript,c);vm.runInContext(analyticsScript,c);vm.runInContext(productCatalogScript,c);vm.runInContext(productCategoriesScript,c);vm.runInContext(posNavigationScript,c);vm.runInContext(cartPresentationScript,c);vm.runInContext(cartCompositionScript,c);vm.runInContext(parkedOrdersScript,c);vm.runInContext(paymentScript,c);vm.runInContext(receiptsScript,c);vm.runInContext(hallBookingsScript,c);
  c.flash=m=>messages.push(m);c.render=()=>{};c.showReceipt=()=>{};c.showPaymentReceipt=()=>{};c.closeModal=()=>{};c.applyTheme=()=>{};
  const state=vm.runInContext('state',c);
  c.__printerSettingsSnapshot=()=>({printers:[],posNotifications:{soundEnabled:true,sound:'default'}});c.__restorePrinterSettings=()=>true;
@@ -45,7 +46,7 @@ function fixture(){
  async function sale(payments){cart();await c.finalizePayment(payments||[{method:'cash',amount:10}]);return state.orders[0];}
  return {c,state,data,messages,writes,fields,events,cart,sale};
 }
-test('all production JavaScript modules parse',()=>{new vm.Script(inline);new vm.Script(adapter);new vm.Script(shiftsScript);new vm.Script(employeesScript);new vm.Script(suppliersScript);new vm.Script(receivingDraftsScript);new vm.Script(webOrdersScript);new vm.Script(inventoryScript);new vm.Script(warehouseReportingScript);new vm.Script(analyticsScript);new vm.Script(productCatalogScript);new vm.Script(productCategoriesScript);new vm.Script(posNavigationScript);new vm.Script(cartPresentationScript);new vm.Script(cartCompositionScript);new vm.Script(parkedOrdersScript);new vm.Script(paymentScript);new vm.Script(receiptsScript);new vm.Script(hallBookingsScript);new vm.Script(printerScript);});
+test('all production JavaScript modules parse',()=>{new vm.Script(inline);new vm.Script(adapter);new vm.Script(shiftsScript);new vm.Script(employeesScript);new vm.Script(suppliersScript);new vm.Script(receivingDraftsScript);new vm.Script(receivingScript);new vm.Script(webOrdersScript);new vm.Script(inventoryScript);new vm.Script(warehouseReportingScript);new vm.Script(analyticsScript);new vm.Script(productCatalogScript);new vm.Script(productCategoriesScript);new vm.Script(posNavigationScript);new vm.Script(cartPresentationScript);new vm.Script(cartCompositionScript);new vm.Script(parkedOrdersScript);new vm.Script(paymentScript);new vm.Script(receiptsScript);new vm.Script(hallBookingsScript);new vm.Script(printerScript);});
 test('shifts module loads before dependent features and preserves its public API',()=>{
  const moduleTag='<script src="Web/js/features/shifts.js"></script>',paymentTag='<script src="Web/js/features/payment.js"></script>',startupTag='<script>loadAll();</script>';
  assert.ok(html.indexOf(moduleTag)>=0);assert.ok(html.indexOf(paymentTag)>html.indexOf(moduleTag));assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));assert.doesNotMatch(inline,/function submitCloseShift\s*\(/);
@@ -65,6 +66,11 @@ test('receiving drafts module loads before startup with its public API',()=>{
  const suppliersTag='<script src="Web/js/features/suppliers.js"></script>',moduleTag='<script src="Web/js/features/receiving-drafts.js"></script>',startupTag='<script>loadAll();</script>';
  assert.ok(html.indexOf(moduleTag)>html.indexOf(suppliersTag));assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));assert.doesNotMatch(inline,/async function openReceivingDocument\s*\(/);assert.doesNotMatch(inline,/async function saveReceivingDraft\s*\(/);
  const f=fixture();for(const name of ['receivingDraftForOrder','openReceivingDocument','saveReceivingDraft'])assert.equal(typeof f.c[name],'function',name);
+});
+test('receiving completion module loads after drafts and before startup with its public API',()=>{
+ const draftsTag='<script src="Web/js/features/receiving-drafts.js"></script>',moduleTag='<script src="Web/js/features/receiving.js"></script>',startupTag='<script>loadAll();</script>';
+ assert.ok(html.indexOf(moduleTag)>html.indexOf(draftsTag));assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));assert.doesNotMatch(inline,/async function applyReceivingDocument\s*\(/);
+ const f=fixture();for(const name of ['invoiceReceivingItems','receivingStockUpdates','receivingDiscrepancy','confirmReceivingDocument','applyReceivingDocument','openPurchaseOrderReceivingModal','finalizePurchaseOrderReceiving','finalizeReceiving'])assert.equal(typeof f.c[name],'function',name);
 });
 test('WEB orders module loads before startup and preserves its public API',()=>{
  const moduleTag='<script src="Web/js/features/web-orders.js"></script>',startupTag='<script>loadAll();</script>';
@@ -941,6 +947,22 @@ test('confirmation applies current weighted cost once and persists TTN history',
  const f=invoiceFixture();Object.assign(f.c.getProduct('flour'),{stock:2,cost:10});
  await f.c.applyReceivingDocument();near(f.c.getProduct('flour').stock,5);near(f.c.getProduct('flour').cost,16);assert.equal(f.state.receivings.length,1);assert.equal(f.state.receivings[0].invoiceNumber,'ТТН-001');assert.equal(f.state.purchaseOrders[0].status,'received');
  await f.c.applyReceivingDocument();assert.equal(f.state.receivings.length,1);near(f.c.getProduct('flour').stock,5);assert.ok(f.data.has('prilavok_receivings'));
+});
+test('receiving refuses to start while another critical operation is saving',async()=>{
+ const f=invoiceFixture(),before=JSON.stringify({products:f.state.products,purchaseOrders:f.state.purchaseOrders,receivings:f.state.receivings});vm.runInContext('criticalOperationBusy=true',f.c);
+ assert.equal(await f.c.applyReceivingDocument(),false);assert.equal(JSON.stringify({products:f.state.products,purchaseOrders:f.state.purchaseOrders,receivings:f.state.receivings}),before);assert.equal(f.data.has('prilavok_criticalStorageJournal'),false);assert.match(f.messages.at(-1),/Сохранение операции ещё не завершено/);
+});
+test('receiving owns the global critical guard until storage commit completes',async()=>{
+ const f=invoiceFixture();Object.assign(f.c.getProduct('flour'),{stock:2,cost:10});let release,writes;f.c.commitCriticalStorage=(_type,nextWrites)=>new Promise(resolve=>{writes=plain(nextWrites);release=resolve});
+ const before=JSON.stringify({products:f.state.products,purchaseOrders:f.state.purchaseOrders,receivings:f.state.receivings}),first=f.c.applyReceivingDocument();assert.equal(vm.runInContext('criticalOperationBusy',f.c),true);assert.equal(JSON.stringify({products:f.state.products,purchaseOrders:f.state.purchaseOrders,receivings:f.state.receivings}),before);assert.equal(await f.c.applyReceivingDocument(),false);assert.equal(writes.receivings.length,1);
+ release();assert.equal(await first,true);assert.equal(vm.runInContext('criticalOperationBusy',f.c),false);assert.equal(f.state.receivings.length,1);near(f.c.getProduct('flour').cost,16);
+});
+test('receiving releases the global guard and keeps runtime unchanged when journal cannot start',async()=>{
+ const f=invoiceFixture(),before=JSON.stringify({products:f.state.products,purchaseOrders:f.state.purchaseOrders,receivings:f.state.receivings});f.c.localStorage.setItem=(key)=>{if(key==='prilavok_criticalStorageJournal')throw Error('journal unavailable')};
+ assert.equal(await f.c.applyReceivingDocument(),false);assert.equal(vm.runInContext('criticalOperationBusy',f.c),false);assert.equal(JSON.stringify({products:f.state.products,purchaseOrders:f.state.purchaseOrders,receivings:f.state.receivings}),before);assert.match(f.messages.at(-1),/Приёмка не выполнена/);
+});
+test('receiving completion preserves unknown product and purchase order fields',async()=>{
+ const f=invoiceFixture();f.c.getProduct('flour').legacyProductField={keep:true};f.state.purchaseOrders[0].legacyOrderField='keep';assert.equal(await f.c.applyReceivingDocument(),true);assert.deepEqual(plain(f.c.getProduct('flour').legacyProductField),{keep:true});assert.equal(f.state.purchaseOrders[0].legacyOrderField,'keep');
 });
 test('receiving journal recovers document, order status and stock together',async()=>{
  const f=invoiceFixture();Object.assign(f.c.getProduct('flour'),{stock:2,cost:10});const originalSet=f.c.localStorage.setItem;let failed=false;

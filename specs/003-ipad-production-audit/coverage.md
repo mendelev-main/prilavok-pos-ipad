@@ -11,7 +11,7 @@
 | Смены/касса | open, movement, close, reports, invalid amount | review + diagnostics | A003-F02, F05 |
 | Товары | editor, cost protection, imports, photos, dependencies | tests + review | A003-F07 |
 | Закупки | supplier order creation/deletion, drafts, status history | review + tests | A003-F11 |
-| Приёмка | draft open/save/retry, validation, weighted cost, critical commit, recovery | Node tests | PASS after spec 036; A003-F17 fixed |
+| Приёмка | draft open/save/retry, validation, weighted cost, global critical guard, commit/recovery | Node tests | PASS after specs 036–037; A003-F17/F18 fixed |
 | Инвентаризация | draft, fix, complete, history/config writes | injected write failure | A003-F03 |
 | Backup | schema validation, version 11, journal recovery, legacy data | Node tests | PASS; printer settings excluded |
 | Сотрудники | create/edit/delete, self-delete, admin delete, storage failure, rights | tests + review | PASS after spec 034; A003-F10 for credential model; A003-F15 fixed |
