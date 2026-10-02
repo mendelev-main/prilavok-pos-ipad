@@ -11,6 +11,7 @@ Swift/UIKit application
   └─ WKWebView
       ├─ PrilavokPOS/pos.html: UI и основная business logic
       ├─ Web/js/core/storage.js: storage adapter
+      ├─ Web/js/features/web-orders.js: входящие WEB-заказы, local-first acceptance и ACK/recovery
       ├─ network-printer.js: JS-граница LAN-печати
       └─ notification-native.js: native notifications
 
@@ -24,7 +25,9 @@ NetworkPrinterManager.swift
   └─ LAN printing через NWConnection
 ```
 
-Большая часть JS пока остаётся в `pos.html`. В `PrilavokPOS/Web` создаются только постепенно подключаемые модули; само наличие файла не означает его runtime-использование.
+Большая часть JS пока остаётся в `pos.html`. Модули в `PrilavokPOS/Web` подключаются постепенно по
+одному домену. Первый feature-модуль `web-orders.js` загружается после основного runtime и до
+`loadAll()`, сохраняя прежний глобальный API для inline-обработчиков.
 
 ## Данные и offline-first
 

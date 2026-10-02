@@ -9,6 +9,7 @@ const root=path.resolve(__dirname,'..');
 const html=fs.readFileSync(path.join(root,'PrilavokPOS/pos.html'),'utf8');
 const inline=[...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].map(m=>m[1]).join('\n');
 const adapter=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/core/storage.js'),'utf8');
+const webOrdersScript=fs.readFileSync(path.join(root,'PrilavokPOS/Web/js/features/web-orders.js'),'utf8');
 const printerScript=fs.readFileSync(path.join(root,'PrilavokPOS/network-printer.js'),'utf8');
 const appSwift=fs.readFileSync(path.join(root,'PrilavokPOS/PrilavokPOSApp.swift'),'utf8');
 const sceneSwift=fs.readFileSync(path.join(root,'PrilavokPOS/SceneDelegate.swift'),'utf8');
@@ -18,7 +19,7 @@ function fixture(){
  const data=new Map(),messages=[],writes=[],fields={'pf-prep-station':{value:'kitchen'},'pf-prep-difficulty':{value:'1'},'pf-base-prep-minutes':{value:'5'}},events=[];
  const document={getElementById:id=>fields[id]||null,querySelector:()=>null,addEventListener:()=>{}};
  const c={console:{error:()=>{}},document,crypto:{randomUUID:()=> 'device-test'},setTimeout:()=>0,clearTimeout:()=>{},addEventListener:()=>{},removeEventListener:()=>{},AbortController,localStorage:{getItem:k=>data.has(k)?data.get(k):null,setItem:(k,v)=>{data.set(k,String(v));writes.push(k);},removeItem:k=>data.delete(k)},fetch:()=>{throw Error('Network is prohibited in this test');},setInterval:()=>{throw Error('Timer is prohibited in this test');}};
- c.window=c;vm.createContext(c);vm.runInContext(adapter,c);vm.runInContext(inline.replace(/loadAll\(\);\s*$/,''),c);
+ c.window=c;vm.createContext(c);vm.runInContext(adapter,c);vm.runInContext(inline.replace(/loadAll\(\);\s*$/,''),c);vm.runInContext(webOrdersScript,c);
  c.flash=m=>messages.push(m);c.render=()=>{};c.showReceipt=()=>{};c.showPaymentReceipt=()=>{};c.closeModal=()=>{};c.applyTheme=()=>{};
  const state=vm.runInContext('state',c);
  c.__printerSettingsSnapshot=()=>({printers:[],posNotifications:{soundEnabled:true,sound:'default'}});c.__restorePrinterSettings=()=>true;
@@ -28,7 +29,12 @@ function fixture(){
  async function sale(payments){cart();await c.finalizePayment(payments||[{method:'cash',amount:10}]);return state.orders[0];}
  return {c,state,data,messages,writes,fields,events,cart,sale};
 }
-test('all inline JavaScript, storage adapter and printer module parse',()=>{new vm.Script(inline);new vm.Script(adapter);new vm.Script(printerScript);});
+test('all production JavaScript modules parse',()=>{new vm.Script(inline);new vm.Script(adapter);new vm.Script(webOrdersScript);new vm.Script(printerScript);});
+test('WEB orders module loads before startup and preserves its public API',()=>{
+ const moduleTag='<script src="Web/js/features/web-orders.js"></script>',startupTag='<script>loadAll();</script>';
+ assert.ok(html.indexOf(moduleTag)>=0);assert.ok(html.indexOf(startupTag)>html.indexOf(moduleTag));
+ const f=fixture();for(const name of ['startWebOrderEvents','openWebEventsModal','openWebOrder','acceptWebOrder','recoverWebAcceptanceJournal','markCurrentWebOrderReady','testWebOrder'])assert.equal(typeof f.c[name],'function',name);
+});
 test('scene delegate is the single owner of the POS window',()=>{
  const appLifecycle=appSwift.slice(appSwift.indexOf('@main'),appSwift.indexOf('final class POSViewController'));
  assert.doesNotMatch(appLifecycle,/UIWindow\s*\(/);assert.doesNotMatch(appLifecycle,/POSViewController\s*\(/);assert.match(sceneSwift,/window\.rootViewController\s*=\s*POSViewController\(\)/);
