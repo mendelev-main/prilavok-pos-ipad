@@ -190,6 +190,50 @@ test('cash, card and split payments create one receipt and retain payment data',
  }
 });
 
+test('accepted split part is journaled before it becomes paid in memory',async()=>{
+ const f=fixture();f.cart();f.c.renderSplitPayment=()=>{};f.state._splitPayments=f.c.buildSplitPayments(2,10);f.state._splitPaymentTotalCents=1000;
+ let storedBeforeLive=false;const originalSet=f.c.localStorage.setItem;
+ f.c.localStorage.setItem=(key,value)=>{if(key==='prilavok_currentOrderSession')storedBeforeLive=f.state._splitPayments[0].paid===false;originalSet(key,value)};
+ assert.equal(await f.c.completeSplitPayment(0),true);assert.equal(storedBeforeLive,true);assert.equal(f.state._splitPayments[0].paid,true);
+ const session=JSON.parse(f.data.get('prilavok_currentOrderSession'));assert.equal(session.paymentDraft.version,1);assert.equal(session.paymentDraft.totalCents,1000);assert.equal(session.paymentDraft.parts[0].paid,true);assert.equal(session.paymentDraft.parts[1].paid,false);
+});
+
+test('split progress storage failure leaves the part unpaid',async()=>{
+ const f=fixture();f.cart();f.c.renderSplitPayment=()=>{};f.state._splitPayments=f.c.buildSplitPayments(2,10);f.state._splitPaymentTotalCents=1000;const originalSet=f.c.localStorage.setItem;
+ f.c.localStorage.setItem=(key,value)=>{if(key==='prilavok_criticalStorageJournal')throw Error('injected journal failure');originalSet(key,value)};
+ assert.equal(await f.c.completeSplitPayment(0),false);assert.equal(f.state._splitPayments[0].paid,false);assert.equal(f.data.has('prilavok_currentOrderSession'),false);assert.match(f.messages.at(-1),/Часть оплаты не сохранена/);
+});
+
+test('interrupted split progress recovers the paid part on restart',async()=>{
+ const f=fixture();f.cart();f.c.renderSplitPayment=()=>{};f.state._splitPayments=f.c.buildSplitPayments(2,10);f.state._splitPaymentTotalCents=1000;const originalSet=f.c.localStorage.setItem;let failed=false;
+ f.c.localStorage.setItem=(key,value)=>{if(key==='prilavok_currentOrderSession'&&!failed){failed=true;throw Error('injected session failure')}originalSet(key,value)};
+ assert.equal(await f.c.completeSplitPayment(0),false);assert.equal(f.state._splitPayments[0].paid,false);assert.ok(JSON.parse(f.data.get('prilavok_criticalStorageJournal')));
+ const restarted=fixture();for(const [key,value] of f.data)restarted.data.set(key,value);await restarted.c.loadAll();assert.equal(restarted.state._splitPayments[0].paid,true);assert.equal(JSON.parse(restarted.data.get('prilavok_criticalStorageJournal')),null);
+});
+
+test('restart restores a compatible paid split draft from current session',async()=>{
+ const f=fixture();f.cart();f.c.renderSplitPayment=()=>{};f.state._splitPayments=f.c.buildSplitPayments(2,10);f.state._splitPaymentTotalCents=1000;await f.c.completeSplitPayment(0);
+ const restarted=fixture();for(const [key,value] of f.data)restarted.data.set(key,value);await restarted.c.loadAll();
+ assert.equal(restarted.state.cart.length,1);assert.equal(restarted.state._splitPayments.length,2);assert.equal(restarted.state._splitPayments[0].paid,true);assert.equal(restarted.state._splitPaymentTotalCents,1000);
+});
+
+test('split draft restores loyalty inputs that define the paid receipt total',async()=>{
+ const f=fixture();f.cart('pizza',2);f.state.loyaltyPrograms=[{id:'reward',loyalty_reward_products:[{product_id:'pizza'}]}];f.state.loyaltyRedemptions={reward:1};assert.equal(f.c.cartTotal(),10);f.c.renderSplitPayment=()=>{};f.state._splitPayments=f.c.buildSplitPayments(2,10);f.state._splitPaymentTotalCents=1000;await f.c.completeSplitPayment(0);
+ const restarted=fixture();for(const [key,value] of f.data)restarted.data.set(key,value);await restarted.c.loadAll();assert.equal(restarted.c.cartTotal(),10);assert.equal(restarted.state.loyaltyRedemptions.reward,1);assert.equal(restarted.state._splitPayments[0].paid,true);
+});
+
+test('paid split draft cannot be silently discarded and clears with final receipt',async()=>{
+ const f=fixture();f.cart();f.c.renderSplitPayment=()=>{};f.state._splitPayments=[{method:'cash',amount:4,paid:true,cashGiven:5,change:1},{method:'card',amount:6,paid:false,cashGiven:null,change:null}];f.state._splitPaymentTotalCents=1000;
+ assert.equal(f.c.closePaymentPage(),false);assert.equal(f.c.returnFromSplitPayment(),false);assert.equal(f.state._splitPayments.length,2);
+ await f.c.completeSplitPayment(1);await f.c.finalizePayment(f.state._splitPayments);assert.equal(f.state.orders.length,1);assert.equal(f.state.orders[0].payments.length,2);assert.equal(JSON.parse(f.data.get('prilavok_currentOrderSession')).paymentDraft,undefined);
+});
+
+test('payment finalization rejects malformed methods and negative offsets',async()=>{
+ for(const payments of [[{method:'voucher',amount:10}],[{method:'cash',amount:-5},{method:'card',amount:15}]]){
+  const f=fixture();f.cart();await f.c.finalizePayment(payments);assert.equal(f.state.orders.length,0);assert.equal(f.state.cart.length,1);assert.match(f.messages.at(-1),/Оплата не завершена/);
+ }
+});
+
 test('critical payment journal recovers every related key after an interrupted write',async()=>{
  const f=fixture();f.cart();const originalSet=f.c.localStorage.setItem;let failed=false;
  f.c.localStorage.setItem=(key,value)=>{if(key==='prilavok_orders'&&!failed){failed=true;throw Error('injected write failure')}originalSet(key,value)};

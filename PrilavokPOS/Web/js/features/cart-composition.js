@@ -84,6 +84,9 @@ function resetCurrentOrderState(){
   state.currentWebOrderStatus='';
   window.__currentOrderKitchenPrinted=false;
   window.__currentOrderPrintedItems=[];
+  state._splitPayments=[];
+  state._splitCount=0;
+  state._splitPaymentTotalCents=null;
 }
 function removeFromCart(id){
   state.cart = state.cart.filter(i=>cartItemKey(i)!==id);

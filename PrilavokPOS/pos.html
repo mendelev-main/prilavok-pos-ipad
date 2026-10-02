@@ -1024,6 +1024,9 @@ let state = {
   deliveryRates: [],
   deliveryFee: 0,
   deliveryTariffSelected: false,
+  _splitPayments: [],
+  _splitCount: 0,
+  _splitPaymentTotalCents: null,
   analyticsFrom: '',
   analyticsTo: '',
   analyticsSensitiveUnlocked: false,
@@ -1242,6 +1245,20 @@ async function loadAll(){
     state.currentWebOrderStatus = safeCurrentOrder.webOrderStatus || '';
     window.__currentOrderKitchenPrinted = !!safeCurrentOrder.kitchenPrinted;
     window.__currentOrderPrintedItems = Array.isArray(safeCurrentOrder.printedItems) ? JSON.parse(JSON.stringify(safeCurrentOrder.printedItems)) : [];
+    const previousLoyaltyPrograms=state.loyaltyPrograms,previousLoyaltyRedemptions=state.loyaltyRedemptions;
+    if(safeCurrentOrder.paymentDraft!=null){
+      state.loyaltyPrograms=Array.isArray(safeCurrentOrder.loyaltyPrograms)?storageSnapshot(safeCurrentOrder.loyaltyPrograms):[];
+      state.loyaltyRedemptions=safeCurrentOrder.loyaltyRedemptions&&typeof safeCurrentOrder.loyaltyRedemptions==='object'&&!Array.isArray(safeCurrentOrder.loyaltyRedemptions)?storageSnapshot(safeCurrentOrder.loyaltyRedemptions):{};
+    }
+    const restoredPaymentDraft=validateSplitPaymentDraft(safeCurrentOrder.paymentDraft,cartTotal());
+    if(restoredPaymentDraft){
+      state._splitPayments=restoredPaymentDraft.parts;
+      state._splitCount=restoredPaymentDraft.parts.length;
+      state._splitPaymentTotalCents=restoredPaymentDraft.totalCents;
+    }else if(safeCurrentOrder.paymentDraft!=null){
+      state.loyaltyPrograms=previousLoyaltyPrograms;state.loyaltyRedemptions=previousLoyaltyRedemptions;
+      markStorageBroken('Некорректный черновик раздельной оплаты');
+    }
   }
   state.deliveryFee = Number(state.deliveryFee || 0);
   state.theme = theme === 'dark' ? 'dark' : 'light';
@@ -1274,6 +1291,7 @@ async function loadAll(){
 
   state.loaded = true;
   render();
+  if(hasPaidSplitPayment())setTimeout(()=>openPaymentModal(),0);
   startWebOrderEvents();
   startAvailabilitySchedule();
   queueOperationalSnapshot();
@@ -1413,7 +1431,7 @@ function stockQtyText(value){
   const rounded=roundStockQty(value);
   return Number.isFinite(rounded)?String(rounded):'0';
 }
-function saveCurrentOrderSession(){
+function currentOrderSessionSnapshot(paymentDraft){
   const session = {
     items: JSON.parse(JSON.stringify(state.cart || [])),
     orderLabel: state.orderLabel || '',
@@ -1429,6 +1447,16 @@ function saveCurrentOrderSession(){
     printedItems: JSON.parse(JSON.stringify(window.__currentOrderPrintedItems || [])),
     updatedAt: Date.now()
   };
+  const draft=arguments.length ? paymentDraft : splitPaymentDraftSnapshot(state._splitPayments);
+  if(draft){
+    session.paymentDraft=storageSnapshot(draft);
+    session.loyaltyPrograms=storageSnapshot(state.loyaltyPrograms||[]);
+    session.loyaltyRedemptions=storageSnapshot(state.loyaltyRedemptions||{});
+  }
+  return session;
+}
+function saveCurrentOrderSession(){
+  const session=currentOrderSessionSnapshot();
   // Сохраняем даже пустую корзину: это гарантирует, что после завершённой оплаты
   // старый заказ не воскреснет из предыдущего состояния.
   saveKey('currentOrderSession', session);
@@ -2496,6 +2524,7 @@ function openPaymentModal(){
   if(!currentShift()){flash('Смена не открыта');return;}
   if(!canFulfillCart()) return;
   state.paymentPage='main'; renderPaymentScreen();
+  if(hasPaidSplitPayment())setTimeout(()=>renderSplitPayment(),0);
 }
 function renderPaymentScreen(){
   state.paymentPage='main';
@@ -2535,7 +2564,10 @@ function renderPaymentScreen(){
   state._paymentCashGiven=Number(total)||0;
   setTimeout(()=>renderPaymentAmount(total),0);
 }
-function closePaymentPage(){state.paymentPage='';state._splitPayments=[];state._splitCount=0;document.getElementById('payment-page-root')?.remove();closeModal();}
+function closePaymentPage(){
+  if(hasPaidSplitPayment()){flash('Сначала завершите раздельную оплату');return false;}
+  state.paymentPage='';state._splitPayments=[];state._splitCount=0;state._splitPaymentTotalCents=null;document.getElementById('payment-page-root')?.remove();closeModal();return true;
+}
 function paymentGivenValue(){return Number(String(state._paymentCashGiven??'').replace(',','.'))||0;}
 function renderPaymentAmount(total){
   const el=document.getElementById('paymentCashGiven');
@@ -2573,10 +2605,55 @@ function openSplitPayment(){
   if(!Array.isArray(state._splitPayments)||!state._splitPayments.length){
     state._splitPayments=buildSplitPayments(2,total);
     state._splitCount=2;
+    state._splitPaymentTotalCents=Math.round(total*100);
   }else{
     normalizeSplitPayments(total);
   }
   renderSplitPayment();
+}
+function normalizePaymentParts(payments){
+  if(!Array.isArray(payments)||!payments.length)throw new Error('Платежи не указаны');
+  return payments.map(part=>{
+    const method=String(part?.method||'');
+    if(method!=='cash'&&method!=='card')throw new Error('Неизвестный способ оплаты');
+    const rawAmount=Number(part?.amount);
+    if(!Number.isFinite(rawAmount)||rawAmount<0)throw new Error('Некорректная сумма оплаты');
+    const amount=Math.round(rawAmount*100)/100;
+    let cashGiven=part?.cashGiven==null?null:Number(part.cashGiven);
+    let change=part?.change==null?null:Number(part.change);
+    if(cashGiven!==null&&(!Number.isFinite(cashGiven)||cashGiven<0))throw new Error('Некорректная внесённая сумма');
+    if(change!==null&&(!Number.isFinite(change)||change<0))throw new Error('Некорректная сдача');
+    if(method==='cash'&&cashGiven!==null&&cashGiven+0.0001<amount)throw new Error('Недостаточно внесённой суммы');
+    if(method==='card'&&(cashGiven!==null||change!==null))throw new Error('Некорректные данные оплаты картой');
+    cashGiven=cashGiven===null?null:Math.round(cashGiven*100)/100;
+    change=change===null?null:Math.round(change*100)/100;
+    if(method==='cash'&&cashGiven!==null&&change!==null&&Math.abs(change-(cashGiven-amount))>0.001)throw new Error('Некорректная сдача');
+    return {method,amount,paid:part?.paid===true,cashGiven,change};
+  });
+}
+function validateSplitPaymentDraft(draft,expectedTotal){
+  if(draft==null)return null;
+  try{
+    if(!draft||typeof draft!=='object'||Array.isArray(draft)||draft.version!==1)throw new Error('Некорректная версия');
+    if(!Number.isInteger(draft.totalCents)||draft.totalCents<0)throw new Error('Некорректная сумма');
+    const parts=normalizePaymentParts(draft.parts);
+    if(parts.length<2||parts.length>10||!parts.some(part=>part.paid))throw new Error('Некорректные части');
+    const partsCents=parts.reduce((sum,part)=>sum+Math.round(part.amount*100),0);
+    if(partsCents!==draft.totalCents||draft.totalCents!==Math.round(Number(expectedTotal)*100))throw new Error('Сумма заказа изменилась');
+    return {version:1,totalCents:draft.totalCents,parts,updatedAt:Number(draft.updatedAt)||Date.now()};
+  }catch(_e){return null}
+}
+function hasPaidSplitPayment(payments=state._splitPayments){return Array.isArray(payments)&&payments.some(part=>part?.paid===true)}
+function splitPaymentDraftSnapshot(payments=state._splitPayments){
+  if(!hasPaidSplitPayment(payments))return null;
+  const parts=normalizePaymentParts(payments);
+  const totalCents=Number.isInteger(state._splitPaymentTotalCents)?state._splitPaymentTotalCents:Math.round(cartTotal()*100);
+  if(parts.reduce((sum,part)=>sum+Math.round(part.amount*100),0)!==totalCents)throw new Error('Сумма частей оплаты не совпадает с чеком');
+  return {version:1,totalCents,parts,updatedAt:Date.now()};
+}
+function returnFromSplitPayment(){
+  if(hasPaidSplitPayment()){flash('Сначала завершите раздельную оплату');return false;}
+  state._splitPayments=[];state._splitCount=0;state._splitPaymentTotalCents=null;renderPaymentScreen();return true;
 }
 function buildSplitPayments(count,total){
   count=Math.max(2,Math.min(10,count));
@@ -2751,14 +2828,15 @@ function renderSplitPayment(){
   workspace.innerHTML=`
     <div class="payment-split-head">
       <div style="display:flex;align-items:center;gap:10px;">
-        <button class="btn btn-secondary" style="flex:none;" onclick="renderPaymentScreen()">← Назад</button>
+        <button class="btn btn-secondary" style="flex:none;" onclick="returnFromSplitPayment()">← Назад</button>
         <span style="font-size:18px;font-weight:850;">Разделить оплату</span>
       </div>
       <div class="split-count"><button onclick="adjustSplitCount(-1)">−</button><span>${ps.length}</span><button onclick="adjustSplitCount(1)">+</button></div>
     </div>
     <div style="flex:1;min-height:0;overflow:auto;padding-right:3px;">${rows}</div>
     <div class="split-summary"><span>Оплачено</span><span class="split-summary-value">${fullMoney(paidTotal)}</span></div>
-    <div class="split-summary" style="border-top:none;padding-top:0;margin-top:0;"><span>Осталось</span><span class="split-summary-value">${fullMoney(remaining)}</span></div>`;
+    <div class="split-summary" style="border-top:none;padding-top:0;margin-top:0;"><span>Осталось</span><span class="split-summary-value">${fullMoney(remaining)}</span></div>
+    ${ps.length&&ps.every(p=>p.paid)?`<button class="btn btn-primary" style="width:100%;margin-top:10px;" onclick="finalizePayment(state._splitPayments)">Завершить оплату</button>`:''}`;
 }
 function setSplitMethod(index,method){
   const p=state._splitPayments?.[index];
@@ -2838,11 +2916,20 @@ function confirmSplitCashPayment(index,total){
   closeModal();
   completeSplitPayment(index);
 }
-function completeSplitPayment(index){
-  const p=state._splitPayments?.[index]; if(!p||p.paid)return;
-  p.paid=true;
+async function completeSplitPayment(index){
+  const p=state._splitPayments?.[index]; if(!p||p.paid)return false;
+  if(criticalOperationBusy){flash('Сохранение операции ещё не завершено');return false;}
+  const nextPayments=storageSnapshot(state._splitPayments);nextPayments[index].paid=true;
+  let draft;
+  try{draft=splitPaymentDraftSnapshot(nextPayments)}catch(e){flash(e?.message||'Некорректные данные оплаты');return false}
+  criticalOperationBusy=true;
+  try{await commitCriticalStorage('split-payment-progress',{currentOrderSession:currentOrderSessionSnapshot(draft)})}
+  catch(e){flash('Часть оплаты не сохранена: '+(e?.message||e));return false}
+  finally{criticalOperationBusy=false}
+  state._splitPayments=nextPayments;state._splitCount=nextPayments.length;state._splitPaymentTotalCents=draft.totalCents;
   renderSplitPayment();
-  if(state._splitPayments.every(x=>x.paid)) setTimeout(()=>finalizePayment(state._splitPayments),80);
+  if(nextPayments.every(x=>x.paid)) setTimeout(()=>finalizePayment(nextPayments),80);
+  return true;
 }
 function openCardPartConfirmation(amount,onSuccess){
   showModal(`<div class="modal-title">Оплата картой</div>
@@ -2885,7 +2972,9 @@ async function finalizePayment(payments){
   if(!requireDeliveryTariff())return;
   const shift=currentShift(); if(!shift){flash('Смена не открыта');return;}
   const total=cartTotal();
-  const clean=payments.map(p=>({method:p.method,amount:Math.round(Number(p.amount||0)*100)/100,cashGiven:p.cashGiven!=null?Number(p.cashGiven):null,change:p.change!=null?Number(p.change):null}));
+  let clean;
+  try{clean=normalizePaymentParts(payments).map(({method,amount,cashGiven,change})=>({method,amount,cashGiven,change}))}
+  catch(e){flash('Оплата не завершена: '+(e?.message||e));return}
   const paidTotal=Math.round(clean.reduce((s,p)=>s+p.amount,0)*100)/100;
   if(Math.abs(paidTotal-total)>0.001){flash('Сумма платежей не совпадает с суммой чека');return;}
   const cashAmount=clean.filter(p=>p.method==='cash').reduce((s,p)=>s+p.amount,0);
@@ -2920,7 +3009,7 @@ async function finalizePayment(payments){
   catch(e){flash('Оплата не завершена: '+(e?.message||e));return}
   finally{criticalOperationBusy=false}
   state.products=nextProducts;state.orders=nextOrders;state.shifts=nextShifts;
-  resetCurrentOrderState();state.paymentPage='receipt';state._splitPayments=[];state._splitCount=0;
+  resetCurrentOrderState();state.paymentPage='receipt';state._splitPayments=[];state._splitCount=0;state._splitPaymentTotalCents=null;
   closeModal();showPaymentReceipt(order);void publishPaidOrderLoyalty(order);setTimeout(()=>{if(typeof window.printCompletedOrder==='function')window.printCompletedOrder(order);else if(state.printer?.autoPrint)sendOrderToPrint(order);window.__currentOrderKitchenPrinted=false},250);
 }
 function openCashModal(){openPaymentModal();}
@@ -4849,7 +4938,7 @@ function closeModal(){ window._posFolderModal=null;document.getElementById('moda
 
 /* ============================= BACKUP ============================= */
 function exportBackup(){
-  const data={version:12,exportedAt:Date.now(),printerSettings:window.__printerSettingsSnapshot?.()||{printers:storageSnapshot(state.printers||[]),posNotifications:storageSnapshot(state.posNotifications||{soundEnabled:true,sound:'default'})},posNavigation:state.posNavigation,company:state.company,deliveryRates:state.deliveryRates,products:state.products,employees:state.employees,shifts:state.shifts,orders:state.orders,parked:state.parked,receivings:state.receivings,suppliers:state.suppliers,purchaseOrders:state.purchaseOrders,discounts:state.discounts,hallTables:state.hallTables,bookings:state.bookings,inventoryConfig:state.inventoryConfig,inventoryHistory:state.inventoryHistory,inventoryDraft:state.inventoryDraft,currentOrderSession:{items:storageSnapshot(state.cart||[]),orderLabel:state.orderLabel||'',orderType:state.orderType||'На месте',customer:storageSnapshot(state.customer||{}),deliveryFee:Number(state.deliveryFee||0),deliveryTariffSelected:!!state.deliveryTariffSelected,orderComment:state.orderComment||'',source:state.currentOrderSource||'',webOrderId:state.currentWebOrderId||'',webOrderStatus:state.currentWebOrderStatus||'',kitchenPrinted:!!window.__currentOrderKitchenPrinted,printedItems:storageSnapshot(window.__currentOrderPrintedItems||[]),updatedAt:Date.now()},layout:{categoryOrder:state.categoryOrder,categoryColors:state.categoryColors,categorySymbols:state.categorySymbols,categoryOnline:state.categoryOnline,tiles:state.layoutTiles}};
+  const data={version:12,exportedAt:Date.now(),printerSettings:window.__printerSettingsSnapshot?.()||{printers:storageSnapshot(state.printers||[]),posNotifications:storageSnapshot(state.posNotifications||{soundEnabled:true,sound:'default'})},posNavigation:state.posNavigation,company:state.company,deliveryRates:state.deliveryRates,products:state.products,employees:state.employees,shifts:state.shifts,orders:state.orders,parked:state.parked,receivings:state.receivings,suppliers:state.suppliers,purchaseOrders:state.purchaseOrders,discounts:state.discounts,hallTables:state.hallTables,bookings:state.bookings,inventoryConfig:state.inventoryConfig,inventoryHistory:state.inventoryHistory,inventoryDraft:state.inventoryDraft,currentOrderSession:currentOrderSessionSnapshot(),layout:{categoryOrder:state.categoryOrder,categoryColors:state.categoryColors,categorySymbols:state.categorySymbols,categoryOnline:state.categoryOnline,tiles:state.layoutTiles}};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='prilavok-backup-'+new Date().toISOString().slice(0,10)+'.json'; a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),1000);
@@ -4881,8 +4970,9 @@ async function applyBackupData(data){
   await commitCriticalStorage('backup-import',storageData);
   if(next.printerSettings)window.__restorePrinterSettings(next.printerSettings);
   state.products=next.products;state.employees=next.employees;state.shifts=next.shifts;state.orders=next.orders;state.parked=next.parked;state.receivings=next.receivings;state.suppliers=next.suppliers;state.purchaseOrders=next.purchaseOrders;state.discounts=next.discounts;state.hallTables=next.hallTables;state.bookings=next.bookings;state.inventoryConfig=next.inventoryConfig;state.inventoryHistory=next.inventoryHistory;state.inventoryDraft=next.inventoryDraft;state.company=next.company;state.deliveryRates=next.deliveryRates;state.posNavigation=next.posNavigation;state.posFolder='';state.posPath=null;state.categoryOrder=next.layout.categoryOrder;state.categoryColors=next.layout.categoryColors;state.categorySymbols=next.layout.categorySymbols;state.categoryOnline=next.layout.categoryOnline;state.layoutTiles=next.layout.tiles;
-  const session=next.currentOrderSession;state.cart=Array.isArray(session.items)?session.items:[];state.orderLabel=session.orderLabel||'';state.orderType=session.orderType||'На месте';state.customer=Object.assign({name:'',phone:'',address:''},session.customer||{});state.deliveryFee=Number(session.deliveryFee||0);state.deliveryTariffSelected=session.deliveryTariffSelected===true;state.orderComment=session.orderComment||'';state.currentOrderSource=session.source||'';state.currentWebOrderId=session.webOrderId||'';state.currentWebOrderStatus=session.webOrderStatus||'';window.__currentOrderKitchenPrinted=!!session.kitchenPrinted;window.__currentOrderPrintedItems=Array.isArray(session.printedItems)?session.printedItems:[];
-  render();flash('Данные восстановлены');
+  const session=next.currentOrderSession;state.cart=Array.isArray(session.items)?session.items:[];state.orderLabel=session.orderLabel||'';state.orderType=session.orderType||'На месте';state.customer=Object.assign({name:'',phone:'',address:''},session.customer||{});state.deliveryFee=Number(session.deliveryFee||0);state.deliveryTariffSelected=session.deliveryTariffSelected===true;state.orderComment=session.orderComment||'';state.currentOrderSource=session.source||'';state.currentWebOrderId=session.webOrderId||'';state.currentWebOrderStatus=session.webOrderStatus||'';window.__currentOrderKitchenPrinted=!!session.kitchenPrinted;window.__currentOrderPrintedItems=Array.isArray(session.printedItems)?session.printedItems:[];state.loyaltyPrograms=session.paymentDraft&&Array.isArray(session.loyaltyPrograms)?storageSnapshot(session.loyaltyPrograms):[];state.loyaltyRedemptions=session.paymentDraft&&session.loyaltyRedemptions&&typeof session.loyaltyRedemptions==='object'?storageSnapshot(session.loyaltyRedemptions):{};
+  const restoredPaymentDraft=validateSplitPaymentDraft(session.paymentDraft,cartTotal());state._splitPayments=restoredPaymentDraft?.parts||[];state._splitCount=state._splitPayments.length;state._splitPaymentTotalCents=restoredPaymentDraft?.totalCents??null;
+  render();flash('Данные восстановлены');if(hasPaidSplitPayment())setTimeout(()=>openPaymentModal(),0);
 }
 function importBackup(){
   const input=document.createElement('input'); input.type='file'; input.accept='.json,application/json';
