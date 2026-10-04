@@ -1275,7 +1275,7 @@ let state = {
   bookingDuration: 120,
   selectedHallTableId: null,
   hallEditMode: false,
-  telegram: {enabled:false, botToken:'', chatId:'', threadId:'', deviceChatId:'', notifyOnlineOrders:false, notifyShiftOpened:true, notifyShiftClosed:true, notifyMonthlyWarehouse:false, lastMonthlyWarehouseSent:''},
+  telegram: {enabled:false, botToken:'', chatId:'', threadId:'', deviceChatId:'', ownerChatId:'', notifyOnlineOrders:false, notifyShiftOpened:true, notifyShiftClosed:true, notifyMonthlyWarehouse:false, lastMonthlyWarehouseSent:''},
   network: {backendUrl:'https://project-dubrovno.up.railway.app', deviceKey:'', deviceName:'M POS iPad', lastSyncAt:null, lastSyncStatus:''}
 };
 
@@ -1400,7 +1400,7 @@ async function loadAll(){
     loadKey('theme', 'light'),
     loadKey('company', {establishmentName:'', legalName:'', address:'', deliveryAddress:''}),
     loadKey('deliveryRates', []),
-    loadKey('telegram', {enabled:false, botToken:'', chatId:'', threadId:'', deviceChatId:'', notifyOnlineOrders:false, notifyShiftOpened:true, notifyShiftClosed:true, notifyMonthlyWarehouse:false, lastMonthlyWarehouseSent:''}),
+    loadKey('telegram', {enabled:false, botToken:'', chatId:'', threadId:'', deviceChatId:'', ownerChatId:'', notifyOnlineOrders:false, notifyShiftOpened:true, notifyShiftClosed:true, notifyMonthlyWarehouse:false, lastMonthlyWarehouseSent:''}),
     loadKey('network', {backendUrl:'https://project-dubrovno.up.railway.app', deviceKey:'', deviceName:'M POS iPad', lastSyncAt:null, lastSyncStatus:''}),
     loadKey('currentOrderSession', null),
     loadKey('hallTables', []),
@@ -1451,7 +1451,7 @@ async function loadAll(){
   state.printer = Object.assign({enabled:false, autoPrint:false, ip:'', port:9100 }, storageRecord(printer,'printer',{}));
   state.company = Object.assign({establishmentName:'', legalName:'', address:'', deliveryAddress:''}, storageRecord(company,'company',{}));
   state.deliveryRates = storageRecordArray(deliveryRates,'deliveryRates');
-  state.telegram = Object.assign({enabled:false, botToken:'', chatId:'', threadId:'', deviceChatId:'', notifyOnlineOrders:false, notifyShiftOpened:true, notifyShiftClosed:true, notifyMonthlyWarehouse:false, lastMonthlyWarehouseSent:''}, storageRecord(telegram,'telegram',{}));
+  state.telegram = Object.assign({enabled:false, botToken:'', chatId:'', threadId:'', deviceChatId:'', ownerChatId:'', notifyOnlineOrders:false, notifyShiftOpened:true, notifyShiftClosed:true, notifyMonthlyWarehouse:false, lastMonthlyWarehouseSent:''}, storageRecord(telegram,'telegram',{}));
   const networkShapeValid=!!network&&typeof network==='object'&&!Array.isArray(network);
   state.network = Object.assign({backendUrl:'https://project-dubrovno.up.railway.app', deviceKey:'', deviceName:'M POS iPad', lastSyncAt:null, lastSyncStatus:''}, storageRecord(network,'network',{}));
   if(!state.network.deviceKey){
@@ -2228,7 +2228,7 @@ function openBackendSettings(){
 }
 function openTelegramSettings(){
   const t=state.telegram||{};
-  showModal(`<div class="modal-title">Telegram</div><p class="setting-sub network-modal-intro">Рабочий бот отправляет отчёты в группу и уведомления о заказах на рабочее устройство.</p><div class="network-modal-fields"><div class="field"><label>Токен бота</label><div class="telegram-token-row"><input id="telegram-token" class="telegram-token-input" type="password" value="${escapeAttr(t.botToken||'')}" placeholder="Токен от @BotFather" autocomplete="off"><button class="btn btn-secondary telegram-token-toggle" onclick="toggleTelegramToken()">Показать</button></div></div><div class="grid-2"><div class="field"><label>ID рабочей группы</label><input id="telegram-chat-id" value="${escapeAttr(t.chatId||'')}" placeholder="Например: -1001234567890" inputmode="text"></div><div class="field"><label>ID темы · необязательно</label><input id="telegram-thread-id" value="${escapeAttr(t.threadId||'')}" placeholder="Например: 123" inputmode="numeric"></div></div><div class="field"><label>ID рабочего устройства</label><input id="telegram-device-chat-id" value="${escapeAttr(t.deviceChatId||'')}" placeholder="Telegram ID рабочего устройства" inputmode="numeric"><div class="setting-sub">Telegram-аккаунт рабочего устройства должен предварительно открыть бота и нажать Start.</div></div></div><div class="network-modal-switches"><div class="setting-row"><div><div class="setting-title">Включить Telegram</div><div class="setting-sub">Разрешить отправку выбранных уведомлений.</div></div><label class="switch"><input id="telegram-enabled" type="checkbox" ${t.enabled?'checked':''}><span></span></label></div><div class="setting-row"><div><div class="setting-title">Получать уведомления об онлайн заказе</div><div class="setting-sub">Сообщение на рабочее устройство сразу после подтверждения телефона и создания заказа.</div></div><label class="switch"><input id="telegram-online-orders" type="checkbox" ${t.notifyOnlineOrders===true?'checked':''}><span></span></label></div><div class="setting-row"><div><div class="setting-title">Смена открыта</div><div class="setting-sub">Сообщение после открытия смены.</div></div><label class="switch"><input id="telegram-shift-opened" type="checkbox" ${t.notifyShiftOpened!==false?'checked':''}><span></span></label></div><div class="setting-row"><div><div class="setting-title">Смена закрыта</div><div class="setting-sub">Чек-отчёт после закрытия смены.</div></div><label class="switch"><input id="telegram-shift-closed" type="checkbox" ${t.notifyShiftClosed!==false?'checked':''}><span></span></label></div><div class="setting-row"><div><div class="setting-title">Ежемесячный складской отчёт</div><div class="setting-sub">PDF за предыдущий календарный месяц.</div></div><label class="switch"><input id="telegram-monthly-warehouse" type="checkbox" ${t.notifyMonthlyWarehouse===true?'checked':''}><span></span></label></div></div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Закрыть</button><button class="btn btn-outline" onclick="testTelegramConnection()">Проверить</button><button class="btn btn-primary" onclick="saveTelegramSettings(true)">Сохранить</button></div>`,true);
+  showModal(`<div class="modal-title">Telegram</div><p class="setting-sub network-modal-intro">Рабочий бот отправляет отчёты в группу и уведомления о заказах на рабочее устройство.</p><div class="network-modal-fields"><div class="field"><label>Токен бота</label><div class="telegram-token-row"><input id="telegram-token" class="telegram-token-input" type="password" value="${escapeAttr(t.botToken||'')}" placeholder="Токен от @BotFather" autocomplete="off"><button class="btn btn-secondary telegram-token-toggle" onclick="toggleTelegramToken()">Показать</button></div></div><div class="grid-2"><div class="field"><label>ID рабочей группы</label><input id="telegram-chat-id" value="${escapeAttr(t.chatId||'')}" placeholder="Например: -1001234567890" inputmode="text"></div><div class="field"><label>ID темы · необязательно</label><input id="telegram-thread-id" value="${escapeAttr(t.threadId||'')}" placeholder="Например: 123" inputmode="numeric"></div></div><div class="field"><label>ID рабочего устройства</label><input id="telegram-device-chat-id" value="${escapeAttr(t.deviceChatId||'')}" placeholder="Telegram ID рабочего устройства" inputmode="numeric"><div class="setting-sub">Telegram-аккаунт рабочего устройства должен предварительно открыть бота и нажать Start.</div></div><div class="field"><label>ID владельца</label><input id="telegram-owner-chat-id" value="${escapeAttr(t.ownerChatId||'')}" placeholder="Telegram ID владельца" inputmode="numeric"><div class="setting-sub">Только этот Telegram-аккаунт сможет запрашивать текущую статистику работающего POS.</div></div></div><div class="network-modal-switches"><div class="setting-row"><div><div class="setting-title">Включить Telegram</div><div class="setting-sub">Разрешить отправку выбранных уведомлений.</div></div><label class="switch"><input id="telegram-enabled" type="checkbox" ${t.enabled?'checked':''}><span></span></label></div><div class="setting-row"><div><div class="setting-title">Получать уведомления об онлайн заказе</div><div class="setting-sub">Сообщение на рабочее устройство сразу после подтверждения телефона и создания заказа.</div></div><label class="switch"><input id="telegram-online-orders" type="checkbox" ${t.notifyOnlineOrders===true?'checked':''}><span></span></label></div><div class="setting-row"><div><div class="setting-title">Смена открыта</div><div class="setting-sub">Сообщение после открытия смены.</div></div><label class="switch"><input id="telegram-shift-opened" type="checkbox" ${t.notifyShiftOpened!==false?'checked':''}><span></span></label></div><div class="setting-row"><div><div class="setting-title">Смена закрыта</div><div class="setting-sub">Чек-отчёт после закрытия смены.</div></div><label class="switch"><input id="telegram-shift-closed" type="checkbox" ${t.notifyShiftClosed!==false?'checked':''}><span></span></label></div><div class="setting-row"><div><div class="setting-title">Ежемесячный складской отчёт</div><div class="setting-sub">PDF за предыдущий календарный месяц.</div></div><label class="switch"><input id="telegram-monthly-warehouse" type="checkbox" ${t.notifyMonthlyWarehouse===true?'checked':''}><span></span></label></div></div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Закрыть</button><button class="btn btn-outline" onclick="testTelegramConnection()">Проверить</button><button class="btn btn-primary" onclick="saveTelegramSettings(true)">Сохранить</button></div>`,true);
   document.querySelector('#modal-root .modal')?.classList.add('network-config-modal');
 }
 function toggleTelegramToken(){
@@ -2245,6 +2245,7 @@ async function saveTelegramSettings(closeAfter=false){
     chatId:(document.getElementById('telegram-chat-id')?.value||'').trim(),
     threadId:(document.getElementById('telegram-thread-id')?.value||'').trim(),
     deviceChatId:(document.getElementById('telegram-device-chat-id')?.value||'').trim(),
+    ownerChatId:(document.getElementById('telegram-owner-chat-id')?.value||'').trim(),
     notifyOnlineOrders:!!document.getElementById('telegram-online-orders')?.checked,
     notifyShiftOpened:!!document.getElementById('telegram-shift-opened')?.checked,
     notifyShiftClosed:!!document.getElementById('telegram-shift-closed')?.checked,
@@ -2252,15 +2253,16 @@ async function saveTelegramSettings(closeAfter=false){
     lastMonthlyWarehouseSent:state.telegram?.lastMonthlyWarehouseSent||''
   };
   if(next.enabled&&next.notifyOnlineOrders&&!/^\d{1,20}$/.test(next.deviceChatId)){flash('Укажите корректный ID рабочего устройства');return false}
+  if(next.ownerChatId&&!/^\d{1,20}$/.test(next.ownerChatId)){flash('Укажите корректный ID владельца');return false}
   try{await window.PrilavokCore.Storage.set('telegram',next)}catch(e){markStorageBroken(e);flash('Не удалось сохранить настройки Telegram');return false}
   state.telegram=next;if(closeAfter)closeModal();render();
-  const synced=await syncTelegramOnlineOrderSettings(next);
-  flash(synced?'Настройки Telegram сохранены':'Настройки сохранены на iPad, но серверные уведомления не обновлены');
+  const synced=await syncTelegramBackendSettings(next);
+  flash(synced?'Настройки Telegram сохранены':'Настройки сохранены на iPad, но серверные настройки Telegram не обновлены');
   return synced;
 }
 function telegramConfigFromState(){
   const t=state.telegram||{};
-  return {enabled:!!t.enabled,botToken:String(t.botToken||''),chatId:String(t.chatId||''),threadId:String(t.threadId||''),deviceChatId:String(t.deviceChatId||''),notifyOnlineOrders:t.notifyOnlineOrders===true,notifyShiftOpened:t.notifyShiftOpened!==false,notifyShiftClosed:t.notifyShiftClosed!==false,notifyMonthlyWarehouse:t.notifyMonthlyWarehouse===true,lastMonthlyWarehouseSent:String(t.lastMonthlyWarehouseSent||'')};
+  return {enabled:!!t.enabled,botToken:String(t.botToken||''),chatId:String(t.chatId||''),threadId:String(t.threadId||''),deviceChatId:String(t.deviceChatId||''),ownerChatId:String(t.ownerChatId||''),notifyOnlineOrders:t.notifyOnlineOrders===true,notifyShiftOpened:t.notifyShiftOpened!==false,notifyShiftClosed:t.notifyShiftClosed!==false,notifyMonthlyWarehouse:t.notifyMonthlyWarehouse===true,lastMonthlyWarehouseSent:String(t.lastMonthlyWarehouseSent||'')};
 }
 function telegramNativeRequest(action, extra={}){
   const cfg=telegramConfigFromState();
@@ -2271,12 +2273,12 @@ function telegramNativeRequest(action, extra={}){
   }
   return false;
 }
-async function syncTelegramOnlineOrderSettings(config){
+async function syncTelegramBackendSettings(config){
   const network=networkConfigFromState();
   if(!network.backendUrl||!network.deviceKey)return false;
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),5000);
   try{
-    const response=await fetch(network.backendUrl.replace(/\/+$/,'')+'/api/device/telegram-order-notifications',{method:'PUT',headers:{'Content-Type':'application/json','X-Device-Key':network.deviceKey},body:JSON.stringify({chatId:config.deviceChatId||'',enabled:config.enabled===true&&config.notifyOnlineOrders===true}),cache:'no-store',signal:controller.signal});
+    const response=await fetch(network.backendUrl.replace(/\/+$/,'')+'/api/device/telegram-settings',{method:'PUT',headers:{'Content-Type':'application/json','X-Device-Key':network.deviceKey},body:JSON.stringify({chatId:config.deviceChatId||'',ownerChatId:config.ownerChatId||'',enabled:config.enabled===true&&config.notifyOnlineOrders===true}),cache:'no-store',signal:controller.signal});
     return response.ok;
   }catch(e){return false}finally{clearTimeout(timeout)}
 }
