@@ -14,6 +14,7 @@ final class ProductImageStore: NSObject, WKURLSchemeHandler {
     func save(_ data: Data) -> String? { let id=UUID().uuidString.lowercased();do{try data.write(to:url(id),options:.atomic);return id}catch{return nil} }
     func read(_ id:String)->Data? { guard valid(id) else{return nil};return try? Data(contentsOf:url(id)) }
     func remove(_ id:String){guard valid(id) else{return};try? FileManager.default.removeItem(at:url(id))}
+    func prune(keeping ids:Set<String>){guard let files=try? FileManager.default.contentsOfDirectory(at:directory,includingPropertiesForKeys:nil)else{return};for file in files where file.pathExtension.lowercased()=="jpg" && !ids.contains(file.deletingPathExtension().lastPathComponent){try? FileManager.default.removeItem(at:file)}}
     private func valid(_ id:String)->Bool { UUID(uuidString:id) != nil }
     private func url(_ id:String)->URL { directory.appendingPathComponent(id).appendingPathExtension("jpg") }
     func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) { guard let id=urlSchemeTask.request.url?.host,let data=read(id) else{urlSchemeTask.didFailWithError(URLError(.fileDoesNotExist));return};urlSchemeTask.didReceive(URLResponse(url:urlSchemeTask.request.url!,mimeType:"image/jpeg",expectedContentLength:data.count,textEncodingName:nil));urlSchemeTask.didReceive(data);urlSchemeTask.didFinish() }
@@ -36,7 +37,7 @@ final class PrilavokPOSApp: UIResponder, UIApplicationDelegate {
     }
 }
 
-final class POSViewController: UIViewController, WKScriptMessageHandler, PHPickerViewControllerDelegate {
+final class POSViewController: UIViewController, WKScriptMessageHandler, PHPickerViewControllerDelegate, UIDocumentPickerDelegate {
     private var webView: WKWebView!
     private let networkPrinter = NetworkPrinterManager()
     private let productImages = ProductImageStore()
@@ -46,6 +47,7 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
         contentController.add(WeakScriptMessageHandler(self), name: "printer")
         contentController.add(WeakScriptMessageHandler(self), name: "telegram")
         contentController.add(WeakScriptMessageHandler(self), name: "photoPicker")
+        contentController.add(WeakScriptMessageHandler(self), name: "backup")
 
         let configuration = WKWebViewConfiguration()
         configuration.userContentController = contentController
@@ -99,6 +101,16 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        if message.name == "backup", let body=message.body as? [String:Any], let action=body["action"] as? String {
+            switch action {
+            case "export": exportBackup(body)
+            case "chooseImport": chooseBackupImport()
+            case "cancelImport": (body["imageIds"] as? [String] ?? []).forEach(productImages.remove)
+            case "finishImport": productImages.prune(keeping:Set(body["activeImageIds"] as? [String] ?? []))
+            default: break
+            }
+            return
+        }
         if message.name == "photoPicker" {
             if let body=message.body as? [String:Any],let action=body["action"] as? String,action != "pick" {
                 let id=body["id"] as? String ?? ""
@@ -144,6 +156,62 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
         default:
             break
         }
+    }
+
+    private func backupResult(ok:Bool,message:String){
+        guard let data=try? JSONSerialization.data(withJSONObject:["ok":ok,"message":message]),let json=String(data:data,encoding:.utf8)else{return}
+        DispatchQueue.main.async{[weak self] in self?.webView.evaluateJavaScript("window.handleNativeBackupResult&&window.handleNativeBackupResult(\(json));")}
+    }
+
+    private func exportBackup(_ body:[String:Any]){
+        guard var document=body["data"] as? [String:Any] else{backupResult(ok:false,message:"Не удалось подготовить резервную копию");return}
+        var images:[String:String]=[:]
+        for product in document["products"] as? [[String:Any]] ?? [] {
+            guard let id=product["localImageId"] as? String,!id.isEmpty,images[id]==nil,let data=productImages.read(id) else{continue}
+            images[id]=data.base64EncodedString()
+        }
+        document["productImages"]=images
+        document["imageCount"]=images.count
+        guard JSONSerialization.isValidJSONObject(document),let data=try? JSONSerialization.data(withJSONObject:document,options:[.prettyPrinted,.sortedKeys]) else{backupResult(ok:false,message:"Не удалось собрать файл резервной копии");return}
+        let requested=(body["fileName"] as? String ?? "M-POS-backup.mposbackup").replacingOccurrences(of:"/",with:"-")
+        let name=requested.hasSuffix(".mposbackup") ? requested : requested+".mposbackup"
+        let url=FileManager.default.temporaryDirectory.appendingPathComponent(name)
+        do{try data.write(to:url,options:.atomic)}catch{backupResult(ok:false,message:"Не удалось записать файл резервной копии");return}
+        let controller=UIActivityViewController(activityItems:[url],applicationActivities:nil)
+        controller.popoverPresentationController?.sourceView=view
+        controller.popoverPresentationController?.sourceRect=CGRect(x:view.bounds.midX,y:view.bounds.midY,width:1,height:1)
+        controller.completionWithItemsHandler={[weak self] _,completed,_,_ in try? FileManager.default.removeItem(at:url);if completed{self?.backupResult(ok:true,message:"Резервная копия сохранена")}}
+        present(controller,animated:true)
+    }
+
+    private func chooseBackupImport(){
+        let picker=UIDocumentPickerViewController(forOpeningContentTypes:[.json,.data],asCopy:true)
+        picker.delegate=self
+        picker.allowsMultipleSelection=false
+        present(picker,animated:true)
+    }
+
+    func documentPicker(_ controller:UIDocumentPickerViewController,didPickDocumentsAt urls:[URL]){
+        guard let url=urls.first else{return}
+        var imported:[String]=[]
+        do{
+            let values=try url.resourceValues(forKeys:[.fileSizeKey]);if (values.fileSize ?? 0)>500_000_000{throw NSError(domain:"MPosBackup",code:1,userInfo:[NSLocalizedDescriptionKey:"Файл резервной копии больше 500 МБ"])}
+            let raw=try Data(contentsOf:url),object=try JSONSerialization.jsonObject(with:raw)
+            guard var document=object as? [String:Any],let products=document["products"] as? [[String:Any]] else{throw NSError(domain:"MPosBackup",code:2,userInfo:[NSLocalizedDescriptionKey:"Некорректный файл резервной копии"])}
+            let encoded=document.removeValue(forKey:"productImages") as? [String:String] ?? [:]
+            var nextProducts:[[String:Any]]=[]
+            for var product in products {
+                if let old=product["localImageId"] as? String,let base64=encoded[old] {
+                    guard let image=Data(base64Encoded:base64),image.count<=2_000_000,UIImage(data:image) != nil,let fresh=productImages.save(image)else{throw NSError(domain:"MPosBackup",code:4,userInfo:[NSLocalizedDescriptionKey:"Повреждена фотография товара в резервной копии"])}
+                    imported.append(fresh);product["localImageId"]=fresh
+                } else{product.removeValue(forKey:"localImageId");product.removeValue(forKey:"imageUploadPending")}
+                nextProducts.append(product)
+            }
+            document["products"]=nextProducts
+            document["imageCount"]=imported.count
+            guard let clean=try? JSONSerialization.data(withJSONObject:document),let json=String(data:clean,encoding:.utf8),let idsData=try? JSONSerialization.data(withJSONObject:imported),let ids=String(data:idsData,encoding:.utf8)else{imported.forEach(productImages.remove);throw NSError(domain:"MPosBackup",code:3,userInfo:[NSLocalizedDescriptionKey:"Не удалось подготовить данные к восстановлению"])}
+            webView.evaluateJavaScript("window.handleNativeBackupImport&&window.handleNativeBackupImport(\(json),\(ids));"){[weak self] _,error in if let error{imported.forEach{self?.productImages.remove($0)};self?.backupResult(ok:false,message:error.localizedDescription)}}
+        }catch{imported.forEach(productImages.remove);backupResult(ok:false,message:error.localizedDescription)}
     }
 
 
@@ -799,5 +867,6 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
         webView?.configuration.userContentController.removeScriptMessageHandler(forName: "printer")
         webView?.configuration.userContentController.removeScriptMessageHandler(forName: "telegram")
         webView?.configuration.userContentController.removeScriptMessageHandler(forName: "photoPicker")
+        webView?.configuration.userContentController.removeScriptMessageHandler(forName: "backup")
     }
 }

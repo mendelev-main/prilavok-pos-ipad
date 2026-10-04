@@ -826,7 +826,7 @@ test('existing backup export/import retains new snapshot and old receipt without
  const f=fixture(),order=await f.sale();const legacy={id:'old',items:[],total:0};f.state.orders.push(legacy);let backup;
  f.c.Blob=class{constructor(parts){this.parts=parts;}};
  f.c.URL={createObjectURL:b=>{backup=JSON.parse(b.parts.join(''));return 'blob:test';},revokeObjectURL:()=>{}};
- f.c.document.createElement=()=>({click(){}});f.c.exportBackup();
+ f.c.document.createElement=()=>({click(){}});await f.c.exportBackup();
  assert.deepEqual(backup.orders[0].stockConsumption,plain(order.stockConsumption));assert.equal('stockConsumption' in backup.orders[1],false);
  const restored=fixture();restored.c.FileReader=class{readAsText(file){this.result=file.text;this.onload();}};
  await restored.c.applyBackupData(backup);assert.deepEqual(plain(restored.state.orders),backup.orders);
@@ -849,15 +849,29 @@ test('backup import is journaled and recovers all promised data after a write fa
  await assert.rejects(f.c.applyBackupData(backup));assert.equal(f.state.orders.length,1);assert.ok(JSON.parse(f.data.get('prilavok_criticalStorageJournal')));
  const restarted=fixture();for(const [key,value] of f.data)restarted.data.set(key,value);await restarted.c.loadAll();assert.equal(restarted.state.orders.length,0);assert.equal(JSON.parse(restarted.data.get('prilavok_criticalStorageJournal')),null);
 });
-test('backup version 12 includes inventory and unfinished current order',()=>{
+test('backup version 13 includes inventory and unfinished current order',async()=>{
  const f=fixture();f.cart();f.state.inventoryHistory=[{id:'inventory'}];f.state.inventoryDraft={id:'draft'};let backup;
- f.c.Blob=class{constructor(parts){this.parts=parts}};f.c.URL={createObjectURL:value=>{backup=JSON.parse(value.parts[0]);return 'blob:test'},revokeObjectURL:()=>{}};f.c.document.createElement=()=>({click(){}});f.c.exportBackup();
- assert.equal(backup.version,12);assert.equal(backup.inventoryHistory[0].id,'inventory');assert.equal(backup.inventoryDraft.id,'draft');assert.equal(backup.currentOrderSession.items[0].productId,'pizza');
+ f.c.Blob=class{constructor(parts){this.parts=parts}};f.c.URL={createObjectURL:value=>{backup=JSON.parse(value.parts[0]);return 'blob:test'},revokeObjectURL:()=>{}};f.c.document.createElement=()=>({click(){}});await f.c.exportBackup();
+ assert.equal(backup.version,13);assert.equal(backup.inventoryHistory[0].id,'inventory');assert.equal(backup.inventoryDraft.id,'draft');assert.equal(backup.currentOrderSession.items[0].productId,'pizza');
 });
-test('backup version 12 round-trips legacy printer and notification settings',async()=>{
+test('backup version 13 round-trips legacy printer and notification settings',async()=>{
  const f=fixture(),settings={printers:[{id:'printer-1',name:'Кухня',ip:'192.168.1.10',printOrders:true}],posNotifications:{soundEnabled:false,sound:'bell'}};let backup,restoredSettings;
- f.c.__printerSettingsSnapshot=()=>plain(settings);f.c.Blob=class{constructor(parts){this.parts=parts}};f.c.URL={createObjectURL:value=>{backup=JSON.parse(value.parts[0]);return 'blob:test'},revokeObjectURL:()=>{}};f.c.document.createElement=()=>({click(){}});f.c.exportBackup();assert.deepEqual(backup.printerSettings,settings);
+ f.c.__printerSettingsSnapshot=()=>plain(settings);f.c.Blob=class{constructor(parts){this.parts=parts}};f.c.URL={createObjectURL:value=>{backup=JSON.parse(value.parts[0]);return 'blob:test'},revokeObjectURL:()=>{}};f.c.document.createElement=()=>({click(){}});await f.c.exportBackup();assert.deepEqual(backup.printerSettings,settings);
  const restored=fixture();restored.c.__restorePrinterSettings=value=>{restoredSettings=plain(value);return true};await restored.c.applyBackupData(backup);assert.deepEqual(restoredSettings,settings);
+});
+test('backup version 13 round-trips network Telegram and local runtime settings',async()=>{
+ const f=fixture();Object.assign(f.state,{network:{backendUrl:'https://backend.test',deviceKey:'secret-device-key',deviceName:'Main iPad'},telegram:{enabled:true,botToken:'secret-bot-token',chatId:'-1001',ownerChatId:'745965268'},printer:{enabled:true,ip:'192.168.1.20',port:9100},theme:'dark',demandOverload:true,operationalOutbox:[{id:'outbox'}],operationalRevision:42,webEvents:[{id:'event'}]});f.data.set('prilavok_receivingDraft',JSON.stringify({id:'receiving-draft'}));f.data.set('prilavok_webOrderAcceptances',JSON.stringify({web1:{stage:'local'}}));let backup;
+ f.c.Blob=class{constructor(parts){this.parts=parts}};f.c.URL={createObjectURL:value=>{backup=JSON.parse(value.parts[0]);return 'blob:test'},revokeObjectURL:()=>{}};f.c.document.createElement=()=>({click(){}});await f.c.exportBackup();
+ assert.equal(backup.version,13);assert.equal(backup.network.deviceKey,'secret-device-key');assert.equal(backup.telegram.botToken,'secret-bot-token');
+ assert.equal(backup.receivingDraft.id,'receiving-draft');assert.equal(backup.webOrderAcceptances.web1.stage,'local');
+ const restored=fixture();await restored.c.applyBackupData(backup);assert.deepEqual(plain(restored.state.network),backup.network);assert.deepEqual(plain(restored.state.telegram),backup.telegram);assert.equal(restored.state.theme,'dark');assert.equal(restored.state.operationalRevision,42);assert.equal(restored.state.webEvents[0].id,'event');assert.equal(JSON.parse(restored.data.get('prilavok_receivingDraft')).id,'receiving-draft');assert.equal(JSON.parse(restored.data.get('prilavok_webOrderAcceptances')).web1.stage,'local');
+});
+test('backup version 13 rejects a missing full-data section before any write',async()=>{
+ const f=fixture(),backup=await f.c.completeBackupData(),writesBefore=f.writes.length;delete backup.webOrderAcceptances;
+ await assert.rejects(f.c.applyBackupData(backup),/webOrderAcceptances/);assert.equal(f.writes.length,writesBefore);
+});
+test('native backup bridge packages product images and uses system export and import',()=>{
+ assert.match(appSwift,/name: "backup"/);assert.match(appSwift,/document\["productImages"\]=images/);assert.match(appSwift,/UIActivityViewController/);assert.match(appSwift,/UIDocumentPickerViewController/);assert.match(appSwift,/productImages\.prune/);assert.match(backupScript,/handleNativeBackupImport/);
 });
 test('printer backup adapter preserves exact legacy keys and rolls back a partial restore',()=>{
  const data=new Map([['printers','[{"id":"old"}]'],['posNotificationSettings','{"sound":"soft"}']]),errors=[],messages=[];let failNotify=false;
@@ -866,9 +880,9 @@ test('printer backup adapter preserves exact legacy keys and rolls back a partia
  failNotify=true;assert.throws(()=>c.__restorePrinterSettings({printers:[{id:'new'}],posNotifications:{soundEnabled:false,sound:'bell'}}),/Не удалось восстановить/);assert.equal(data.get('printers'),'[{"id":"old"}]');assert.equal(data.get('posNotificationSettings'),'{"sound":"soft"}');assert.equal(errors.length,1);assert.match(messages.at(-1),/Не удалось восстановить/);
 });
 test('backup rejects invalid printer settings and old backups preserve current printer setup',async()=>{
- const f=fixture(),backup={version:12,products:plain(f.state.products),employees:[],shifts:plain(f.state.shifts),orders:[],printerSettings:{printers:{},posNotifications:{}}},before=JSON.stringify(f.state);
+ const f=fixture(),backup={version:12,products:plain(f.state.products),employees:[],shifts:plain(f.state.shifts),orders:[],printerSettings:{printers:{},posNotifications:{}}},before=JSON.stringify(f.state);f.data.set('prilavok_receivingDraft',JSON.stringify({id:'keep-draft'}));f.data.set('prilavok_webOrderAcceptances',JSON.stringify({keep:{stage:'local'}}));
  await assert.rejects(f.c.applyBackupData(backup),/printerSettings/);assert.equal(JSON.stringify(f.state),before);
- let restored=false;backup.version=11;delete backup.printerSettings;f.c.__restorePrinterSettings=()=>{restored=true;return true};await f.c.applyBackupData(backup);assert.equal(restored,false);
+ let restored=false;backup.version=11;delete backup.printerSettings;f.c.__restorePrinterSettings=()=>{restored=true;return true};await f.c.applyBackupData(backup);assert.equal(restored,false);assert.equal(JSON.parse(f.data.get('prilavok_receivingDraft')).id,'keep-draft');assert.equal(JSON.parse(f.data.get('prilavok_webOrderAcceptances')).keep.stage,'local');
 });
 test('valid nested recipe edit retains product ID and existing component shape',async()=>{
  const f=fixture();Object.assign(f.fields,{'pf-name':{value:'Пицца обновлённая'},'pf-category':{value:'Пицца'},'pf-price':{value:'10'}});
@@ -1157,7 +1171,7 @@ test('legacy receiving draft opens with unchanged amounts and no stock mutation'
  await f.c.openReceivingDocument('purchase');assert.equal(f.c._receivingDraft.lines[0].qtyInput,2);assert.equal(f.c._receivingDraft.lines[0].totalInput,'14');assert.equal(JSON.stringify(f.state.products),before);
 });
 test('backup export preserves TTN invoice and original normalized amounts',async()=>{
- const f=invoiceFixture();await f.c.applyReceivingDocument();let backup;f.c.Blob=class{constructor(parts){this.parts=parts;}};f.c.URL={createObjectURL:b=>{backup=JSON.parse(b.parts.join(''));return 'blob:test';},revokeObjectURL:()=>{}};f.c.document.createElement=()=>({click(){}});f.c.exportBackup();
+ const f=invoiceFixture();await f.c.applyReceivingDocument();let backup;f.c.Blob=class{constructor(parts){this.parts=parts;}};f.c.URL={createObjectURL:b=>{backup=JSON.parse(b.parts.join(''));return 'blob:test';},revokeObjectURL:()=>{}};f.c.document.createElement=()=>({click(){}});await f.c.exportBackup();
  assert.equal(backup.receivings[0].invoiceNumber,'ТТН-001');near(backup.receivings[0].items[0].qty,3);near(backup.receivings[0].items[0].totalCost,60);
 });
 test('receiving history treats imported quantity as text',()=>{
@@ -1459,7 +1473,7 @@ test('category drag drop delegates correct target and cancelled drag does not sa
  call=null;f.c.dragTest=make();vm.runInContext('layoutDragState=dragTest',f.c);f.c.onLayoutPointerUp({pointerId:1,type:'pointercancel',preventDefault:()=>{}});assert.equal(call,null);assert.equal(f.writes.length,0);
 });
 test('backup export includes versioned navigation and legacy backups normalize to empty folders',async()=>{
- const f=navigationFixture();await f.c.savePosFolder();let saved;f.c.Blob=class{constructor(parts){saved=JSON.parse(parts[0]);}};f.c.URL={createObjectURL:()=>'',revokeObjectURL:()=>{}};f.c.document.createElement=()=>({click:()=>{}});f.c.exportBackup();assert.equal(saved.version,12);assert.equal(saved.posNavigation.version,1);assert.ok(saved.posNavigation.categories[0].items.some(i=>i.type==='folder'));assert.equal(f.c.normalizePosNavigation(undefined).categories.length,0);
+ const f=navigationFixture();await f.c.savePosFolder();let saved;f.c.Blob=class{constructor(parts){saved=JSON.parse(parts[0]);}};f.c.URL={createObjectURL:()=>'',revokeObjectURL:()=>{}};f.c.document.createElement=()=>({click:()=>{}});await f.c.exportBackup();assert.equal(saved.version,13);assert.equal(saved.posNavigation.version,1);assert.ok(saved.posNavigation.categories[0].items.some(i=>i.type==='folder'));assert.equal(f.c.normalizePosNavigation(undefined).categories.length,0);
 });
 
 test('folder modal leaves category visible and renders six products without folder icon or counter',async()=>{
