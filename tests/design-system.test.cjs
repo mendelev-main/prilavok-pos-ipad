@@ -39,6 +39,7 @@ test('primary controls use semantic colors and standard touch sizes',()=>{
   assert.match(html,/\.icon-btn\{width:44px;height:44px/);
   assert.match(html,/\.settings-plus-btn\{width:44px;height:44px;min-width:44px/);
   assert.match(html,/\.cart-customer-button\{width:44px;height:44px/);
+  assert.match(html,/\.btn\.pos-create-folder\{flex:0 0 auto;width:auto;align-self:flex-start;min-height:44px/);
 });
 
 test('switches and common fields share canonical geometry tokens',()=>{
