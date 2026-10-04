@@ -139,6 +139,8 @@ test('system and network settings contain no inline presentation',()=>{
   assert.match(networkScreen,/openBackendSettings\(\)[\s\S]+openPrintersManager\(\)[\s\S]+openNotificationSettings\(\)[\s\S]+openTelegramSettings\(\)/);
   assert.match(html,/\.network-device-key\{/);
   assert.match(html,/\.telegram-token-row\{/);
+  assert.match(networkScreen,/ID рабочего устройства/);
+  assert.match(networkScreen,/Получать уведомления об онлайн заказе/);
   assert.match(html,/\.appearance-theme-options\{/);
 });
 

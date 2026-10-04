@@ -51,3 +51,8 @@ test('printer module does not rewrite the network settings DOM',()=>{
 test('Swift bridge retains printer routing, validation, timeout and receipt document contracts',()=>{
   assert.match(swiftBridge,/case "print":[\s\S]*networkPrinter\.print\(order: order\)/);assert.match(swiftPrinter,/connectionTimeout:\s*TimeInterval\s*=\s*10/);assert.match(swiftPrinter,/validIPv4\(ip\)/);assert.match(swiftPrinter,/documentType=="kitchen"/);assert.match(swiftPrinter,/documentType=="shift-close"/);assert.match(swiftPrinter,/printPaymentComments/);assert.match(swiftPrinter,/receiptRandomPhrases/);assert.match(swiftPrinter,/discountName/);assert.match(swiftPrinter,/loyaltyProgramsApplied/);assert.match(swiftPrinter,/Скидки на товары/);
 });
+
+test('Swift Telegram bridge sends online-order alerts to the personal device ID',()=>{
+  assert.match(swiftBridge,/case "sendOnlineOrderNotification":\s*telegramSendOnlineOrderNotification\(body: body\)/);
+  assert.match(swiftBridge,/body\["deviceChatId"\][\s\S]*chatId: deviceChatId, threadId: "", text: "Получен онлайн заказ проверьте POS"/);
+});

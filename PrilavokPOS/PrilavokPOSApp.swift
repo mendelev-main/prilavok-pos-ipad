@@ -119,6 +119,8 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
             telegramTest(body: body)
         case "send":
             telegramSend(body: body)
+        case "sendOnlineOrderNotification":
+            telegramSendOnlineOrderNotification(body: body)
         case "sendShiftCloseReport":
             telegramSendShiftCloseReport(body: body)
         case "sendMonthlyWarehouseReport":
@@ -225,6 +227,13 @@ final class POSViewController: UIViewController, WKScriptMessageHandler, PHPicke
         let text = body["text"] as? String ?? ""
         guard !token.isEmpty, !chatId.isEmpty, !text.isEmpty else { return }
         telegramRequest(token: token, chatId: chatId, threadId: threadId, text: text, completion: nil)
+    }
+
+    private func telegramSendOnlineOrderNotification(body: [String: Any]) {
+        let token = body["botToken"] as? String ?? ""
+        let deviceChatId = body["deviceChatId"] as? String ?? ""
+        guard !token.isEmpty, !deviceChatId.isEmpty else { return }
+        telegramRequest(token: token, chatId: deviceChatId, threadId: "", text: "Получен онлайн заказ проверьте POS", completion: nil)
     }
 
     private func telegramSendShiftCloseReport(body: [String: Any]) {

@@ -161,7 +161,7 @@ journal. Отсутствующие optional collections старых верси
 
 - Основное направление: POS → Backend → Web / Mini App.
 - Полная публикация меню — только явной кнопкой в сетевых настройках.
-- Согласованные узкие каналы: событийная доступность остатков после local commit, operational snapshot/heartbeat/outbox, входящие WEB-события и ACK/retry, loyalty retry, Telegram-отчёты.
+- Согласованные узкие каналы: событийная доступность остатков после local commit, operational snapshot/heartbeat/outbox, входящие WEB-события и ACK/retry, loyalty retry, Telegram-отчёты и включаемое личное Telegram-уведомление после локального сохранения нового WEB-заказа.
 - Ни один сетевой канал не должен блокировать локальную продажу.
 - Backend URL по умолчанию — `https://project-dubrovno.up.railway.app`; сохранённая на iPad конфигурация имеет приоритет.
 
