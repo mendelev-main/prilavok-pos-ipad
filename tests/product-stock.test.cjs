@@ -1539,23 +1539,23 @@ test('incoming WEB EventSource persists orders without invoking catalog or avail
  f.c.startWebOrderEvents();assert.equal(sources[0].url,'https://test/api/orders/events?deviceKey=secret%20key');await sources[0].onmessage({data:JSON.stringify({type:'orders',orders:[{id:'web-2',external_id:'WEB-2',status:'new',total:12,order_items:[]}]})});assert.equal(fetches,0);assert.equal(f.state.webEvents[0].id,'web-2');assert.equal(JSON.parse(f.data.get('prilavok_webEvents'))[0].id,'web-2');
  f.c.startWebOrderEvents();assert.equal(sources[0].closed,true);assert.equal(sources.length,2);
 });
-test('Telegram settings persist the personal device ID and online-order opt-in compatibly',async()=>{
- const f=fixture();f.c.currentShiftEmployeeIsAdmin=()=>true;Object.assign(f.fields,{
+test('Telegram settings persist locally before registering the backend personal alert',async()=>{
+ const f=fixture();f.c.currentShiftEmployeeIsAdmin=()=>true;f.state.network={backendUrl:'https://backend.test/',deviceKey:'device-key'};let request;f.c.fetch=async(url,options)=>{const stored=JSON.parse(f.data.get('prilavok_telegram'));assert.equal(stored.deviceChatId,'745965268');request={url,options};return{ok:true}};Object.assign(f.fields,{
   'telegram-enabled':{checked:true},'telegram-token':{value:'token'},'telegram-chat-id':{value:'-1001'},'telegram-thread-id':{value:'12'},'telegram-device-chat-id':{value:'745965268'},'telegram-online-orders':{checked:true},'telegram-shift-opened':{checked:true},'telegram-shift-closed':{checked:true},'telegram-monthly-warehouse':{checked:false}
  });
- f.c.saveTelegramSettings(false);await Promise.resolve();await Promise.resolve();const stored=JSON.parse(f.data.get('prilavok_telegram'));
+ assert.equal(await f.c.saveTelegramSettings(false),true);const stored=JSON.parse(f.data.get('prilavok_telegram'));
  assert.equal(stored.chatId,'-1001');assert.equal(stored.threadId,'12');assert.equal(stored.deviceChatId,'745965268');assert.equal(stored.notifyOnlineOrders,true);
+ assert.equal(request.url,'https://backend.test/api/device/telegram-order-notifications');assert.equal(request.options.headers['X-Device-Key'],'device-key');assert.deepEqual(JSON.parse(request.options.body),{chatId:'745965268',enabled:true});
 });
-test('new WEB order sends one personal Telegram notification only after durable storage',async()=>{
- const f=fixture(),sources=[],posts=[];f.state.network={backendUrl:'https://test',deviceKey:'key'};f.state.telegram={enabled:true,botToken:'token',deviceChatId:'745965268',notifyOnlineOrders:true};
- f.c.webkit={messageHandlers:{telegram:{postMessage:value=>{assert.equal(JSON.parse(f.data.get('prilavok_webEvents'))[0].id,'web-2');posts.push(plain(value));}}}};f.c.EventSource=class{constructor(){sources.push(this)}close(){}};f.c.startWebOrderEvents();
- const message={data:JSON.stringify({type:'orders',orders:[{id:'web-2',status:'new',total:12,order_items:[]}]})};await sources[0].onmessage(message);await sources[0].onmessage(message);
- assert.deepEqual(posts,[{action:'sendOnlineOrderNotification',botToken:'token',deviceChatId:'745965268'}]);
+test('Telegram backend registration failure keeps the local opt-in available for retry',async()=>{
+ const f=fixture();f.c.currentShiftEmployeeIsAdmin=()=>true;f.state.network={backendUrl:'https://backend.test',deviceKey:'device-key'};f.c.fetch=async()=>{throw Error('offline')};Object.assign(f.fields,{
+  'telegram-enabled':{checked:true},'telegram-token':{value:'token'},'telegram-chat-id':{value:''},'telegram-thread-id':{value:''},'telegram-device-chat-id':{value:'745965268'},'telegram-online-orders':{checked:true},'telegram-shift-opened':{checked:true},'telegram-shift-closed':{checked:true},'telegram-monthly-warehouse':{checked:false}
+ });
+ assert.equal(await f.c.saveTelegramSettings(false),false);assert.equal(JSON.parse(f.data.get('prilavok_telegram')).notifyOnlineOrders,true);assert.match(f.messages.at(-1),/серверные уведомления не обновлены/);
 });
-test('WEB order storage failure suppresses personal Telegram notification and keeps prior runtime state',async()=>{
- const f=fixture(),sources=[],posts=[];f.state.network={backendUrl:'https://test',deviceKey:'key'};f.state.telegram={enabled:true,botToken:'token',deviceChatId:'745965268',notifyOnlineOrders:true};f.state.webEvents=[{id:'old',status:'new'}];
- f.c.webkit={messageHandlers:{telegram:{postMessage:value=>posts.push(value)}}};f.c.EventSource=class{constructor(){sources.push(this)}close(){}};f.c.localStorage.setItem=()=>{throw Error('disk full')};f.c.startWebOrderEvents();await sources[0].onmessage({data:JSON.stringify({type:'orders',orders:[{id:'web-2',status:'new',order_items:[]}]})});
- assert.equal(posts.length,0);assert.deepEqual(plain(f.state.webEvents),[{id:'old',status:'new'}]);
+test('WEB order storage failure keeps prior runtime state',async()=>{
+ const f=fixture(),sources=[];f.state.network={backendUrl:'https://test',deviceKey:'key'};f.state.webEvents=[{id:'old',status:'new'}];f.c.EventSource=class{constructor(){sources.push(this)}close(){}};f.c.localStorage.setItem=()=>{throw Error('disk full')};f.c.startWebOrderEvents();await sources[0].onmessage({data:JSON.stringify({type:'orders',orders:[{id:'web-2',status:'new',order_items:[]}]})});
+ assert.deepEqual(plain(f.state.webEvents),[{id:'old',status:'new'}]);
 });
 test('catalog endpoint is called only by explicit manual menu synchronization',async()=>{
  const f=fixture();Object.assign(f.fields,{'network-backend-url':{value:'https://backend.test/'},'network-device-name':{value:'Касса'}});f.c.currentShiftEmployeeIsAdmin=()=>true;let request,availability=0;f.c.publishAvailability=async()=>{availability++;return true};f.c.fetch=async(url,options)=>{request={url,options};return {ok:true,json:async()=>({categories:2,products:4})}};
