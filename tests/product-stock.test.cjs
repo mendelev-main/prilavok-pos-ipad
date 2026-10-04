@@ -1539,17 +1539,23 @@ test('incoming WEB EventSource persists orders without invoking catalog or avail
  f.c.startWebOrderEvents();assert.equal(sources[0].url,'https://test/api/orders/events?deviceKey=secret%20key');await sources[0].onmessage({data:JSON.stringify({type:'orders',orders:[{id:'web-2',external_id:'WEB-2',status:'new',total:12,order_items:[]}]})});assert.equal(fetches,0);assert.equal(f.state.webEvents[0].id,'web-2');assert.equal(JSON.parse(f.data.get('prilavok_webEvents'))[0].id,'web-2');
  f.c.startWebOrderEvents();assert.equal(sources[0].closed,true);assert.equal(sources.length,2);
 });
-test('Telegram settings persist locally before registering the backend personal alert',async()=>{
- const f=fixture();f.c.currentShiftEmployeeIsAdmin=()=>true;f.state.network={backendUrl:'https://backend.test/',deviceKey:'device-key'};let request;f.c.fetch=async(url,options)=>{const stored=JSON.parse(f.data.get('prilavok_telegram'));assert.equal(stored.deviceChatId,'745965268');request={url,options};return{ok:true}};Object.assign(f.fields,{
-  'telegram-enabled':{checked:true},'telegram-token':{value:'token'},'telegram-chat-id':{value:'-1001'},'telegram-thread-id':{value:'12'},'telegram-device-chat-id':{value:'745965268'},'telegram-online-orders':{checked:true},'telegram-shift-opened':{checked:true},'telegram-shift-closed':{checked:true},'telegram-monthly-warehouse':{checked:false}
+test('Telegram settings persist locally before registering the backend work-device alert',async()=>{
+ const f=fixture();f.c.currentShiftEmployeeIsAdmin=()=>true;f.state.network={backendUrl:'https://backend.test/',deviceKey:'device-key'};let request;f.c.fetch=async(url,options)=>{const stored=JSON.parse(f.data.get('prilavok_telegram'));assert.equal(stored.deviceChatId,'900000001');request={url,options};return{ok:true}};Object.assign(f.fields,{
+  'telegram-enabled':{checked:true},'telegram-token':{value:'token'},'telegram-chat-id':{value:'-1001'},'telegram-thread-id':{value:'12'},'telegram-device-chat-id':{value:'900000001'},'telegram-online-orders':{checked:true},'telegram-shift-opened':{checked:true},'telegram-shift-closed':{checked:true},'telegram-monthly-warehouse':{checked:false}
  });
  assert.equal(await f.c.saveTelegramSettings(false),true);const stored=JSON.parse(f.data.get('prilavok_telegram'));
- assert.equal(stored.chatId,'-1001');assert.equal(stored.threadId,'12');assert.equal(stored.deviceChatId,'745965268');assert.equal(stored.notifyOnlineOrders,true);
- assert.equal(request.url,'https://backend.test/api/device/telegram-order-notifications');assert.equal(request.options.headers['X-Device-Key'],'device-key');assert.deepEqual(JSON.parse(request.options.body),{chatId:'745965268',enabled:true});
+ assert.equal(stored.chatId,'-1001');assert.equal(stored.threadId,'12');assert.equal(stored.deviceChatId,'900000001');assert.equal(stored.notifyOnlineOrders,true);
+ assert.equal(request.url,'https://backend.test/api/device/telegram-order-notifications');assert.equal(request.options.headers['X-Device-Key'],'device-key');assert.deepEqual(JSON.parse(request.options.body),{chatId:'900000001',enabled:true});
+});
+test('Telegram settings reject an invalid work-device ID before local or backend persistence',async()=>{
+ const f=fixture();f.c.currentShiftEmployeeIsAdmin=()=>true;f.state.network={backendUrl:'https://backend.test',deviceKey:'device-key'};let fetches=0;f.c.fetch=async()=>{fetches++;return{ok:true}};const before=f.data.get('prilavok_telegram');Object.assign(f.fields,{
+  'telegram-enabled':{checked:true},'telegram-token':{value:'token'},'telegram-chat-id':{value:''},'telegram-thread-id':{value:''},'telegram-device-chat-id':{value:'owner'},'telegram-online-orders':{checked:true},'telegram-shift-opened':{checked:true},'telegram-shift-closed':{checked:true},'telegram-monthly-warehouse':{checked:false}
+ });
+ assert.equal(await f.c.saveTelegramSettings(false),false);assert.equal(f.data.get('prilavok_telegram'),before);assert.equal(fetches,0);assert.match(f.messages.at(-1),/ID рабочего устройства/);
 });
 test('Telegram backend registration failure keeps the local opt-in available for retry',async()=>{
  const f=fixture();f.c.currentShiftEmployeeIsAdmin=()=>true;f.state.network={backendUrl:'https://backend.test',deviceKey:'device-key'};f.c.fetch=async()=>{throw Error('offline')};Object.assign(f.fields,{
-  'telegram-enabled':{checked:true},'telegram-token':{value:'token'},'telegram-chat-id':{value:''},'telegram-thread-id':{value:''},'telegram-device-chat-id':{value:'745965268'},'telegram-online-orders':{checked:true},'telegram-shift-opened':{checked:true},'telegram-shift-closed':{checked:true},'telegram-monthly-warehouse':{checked:false}
+  'telegram-enabled':{checked:true},'telegram-token':{value:'token'},'telegram-chat-id':{value:''},'telegram-thread-id':{value:''},'telegram-device-chat-id':{value:'900000001'},'telegram-online-orders':{checked:true},'telegram-shift-opened':{checked:true},'telegram-shift-closed':{checked:true},'telegram-monthly-warehouse':{checked:false}
  });
  assert.equal(await f.c.saveTelegramSettings(false),false);assert.equal(JSON.parse(f.data.get('prilavok_telegram')).notifyOnlineOrders,true);assert.match(f.messages.at(-1),/серверные уведомления не обновлены/);
 });
