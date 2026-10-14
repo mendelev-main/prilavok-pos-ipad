@@ -79,6 +79,25 @@ async function retryDeliveryTariffs(){
 }
 async function initializeDeliveryTariffs(){
   if(!state.network?.deliveryTariffSync){try{await saveDeliveryTariffList(rates=>rates)}catch{return}}
+  const initial=state.network?.deliveryTariffSync;
+  if(initial&&!initial.pending&&initial.target===deliveryTariffTarget()){
+    // An acknowledged version in a restored backup is not proof of current sync.
+    try{
+      const server=await deliveryTariffRequest('GET');
+      await serializeDeliveryTariffWrite(async()=>{
+        const next=storageSnapshot(state.network),current=next.deliveryTariffSync;
+        if(current.pending||current.version!==initial.version||current.target!==initial.target)return;
+        if(server.version!==current.version||!Array.isArray(server.tariffs)||server.tariffs.length!==state.deliveryRates.length||server.tariffs.some((rate,index)=>{const local=deliveryTariffList()[index];return rate.id!==local.id||rate.name!==local.name||Number(rate.amount)!==Number(local.amount)})){
+          current.pending={publicationId:uid(),baseVersion:current.version,tariffs:deliveryTariffList()};current.conflict=true;current.status='Версия на сервере отличается. Проверьте тарифы и подтвердите публикацию';
+        }else current.status='Синхронизировано';
+        await persistDeliveryTariffNetwork(next);
+      });
+    }catch{
+      await serializeDeliveryTariffWrite(async()=>{
+        const next=storageSnapshot(state.network);if(!next.deliveryTariffSync.pending){next.deliveryTariffSync.status='Проверка синхронизации недоступна. Повторите после восстановления связи';await persistDeliveryTariffNetwork(next)}
+      }).catch(()=>{});
+    }
+  }
   // A restored backup may contain an older revision. Never rebase it silently.
   void flushDeliveryTariffs();
 }

@@ -34,3 +34,9 @@ test('offline retains the queued publication and retries exactly that ID',async(
  assert.equal(f.state.network.deliveryTariffSync.pending.publicationId,id);
  f.context.fetch=fetch;await f.context.flushDeliveryTariffs();assert.equal(f.state.network.deliveryTariffSync.pending,null);
 });
+test('restored acknowledged backup is checked against server without overwriting it',async()=>{
+ const f=fixture();f.state.network.deliveryTariffSync={target:'https://backend.test|test-key',version:1,status:'Синхронизировано',pending:null};f.setVersion(2);
+ await f.context.initializeDeliveryTariffs();
+ assert.equal(f.state.network.deliveryTariffSync.conflict,true);
+ assert.equal(f.calls.filter(call=>call.options.method==='PUT').length,0);
+});
