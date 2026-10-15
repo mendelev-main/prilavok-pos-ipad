@@ -1537,7 +1537,8 @@ async function loadAll(){
   }
 
   state.loaded = true;
-  void initializeDeliveryTariffs();
+  // Start background publication after startup recovery and its writes finish.
+  setTimeout(()=>{void initializeDeliveryTariffs()},0);
   render();
   if(hasPaidSplitPayment())setTimeout(()=>openPaymentModal(),0);
   startWebOrderEvents();
