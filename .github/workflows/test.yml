@@ -12,4 +12,24 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: node --test tests/*.test.cjs
+      - name: POS regression tests
+        run: |
+          set +e
+          node --test tests/*.test.cjs > "$RUNNER_TEMP/pos-tests.log" 2>&1
+          test_status=$?
+          set -e
+          if [ "$test_status" -ne 0 ]; then
+            python3 - <<'PYTEST'
+          import os,re
+          from pathlib import Path
+          lines=Path(os.environ['RUNNER_TEMP'],'pos-tests.log').read_text().splitlines()
+          for i,line in enumerate(lines):
+              if re.match(r'not ok \d+',line):
+                  details=[line]
+                  details += [x.strip() for x in lines[i+1:i+22] if 'error:' in x or 'at TestContext.' in x][:2]
+                  message=' '.join(details).replace('%','%25').replace('\r','%0D').replace('\n','%0A')
+                  print('::error title=POS regression failure::'+message)
+          PYTEST
+          fi
+          tail -n 12 "$RUNNER_TEMP/pos-tests.log"
+          exit "$test_status"
