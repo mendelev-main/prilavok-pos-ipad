@@ -139,10 +139,10 @@ test('availability module loads before stock mutation features and owns its publ
  const f=fixture();for(const name of ['buildAvailabilityItems','publishAvailability','onAvailabilityAppState'])assert.equal(typeof f.c[name],'function',name);assert.equal(typeof f.c.startAvailabilitySchedule,'undefined');
 });
 test('catalog row actions preserve compatible product IDs as inert arguments',()=>{
- const f=fixture(),decode=value=>value.replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&'),id="catalog\"');injected();//";let injected=0,opened,toggled,stopped=0,prevented=0;
- f.state.products=[{id,name:'Особый товар',category:'Сырьё',type:'simple',stock:1,cost:1,price:1,availableOnline:true}];f.state.categoryOrder=['Сырьё'];f.c.injected=()=>injected++;f.c.openProductModal=value=>{opened=value};f.c.toggleProductOnline=value=>{toggled=value};f.c.event={key:'Enter',stopPropagation:()=>stopped++,preventDefault:()=>prevented++};
+ const f=fixture(),decode=value=>value.replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&'),id="catalog\"');injected();//";let injected=0,opened,prevented=0;
+ f.state.products=[{id,name:'Особый товар',category:'Сырьё',type:'simple',stock:1,cost:1,price:1,availableOnline:true}];f.state.categoryOrder=['Сырьё'];f.c.injected=()=>injected++;f.c.openProductModal=value=>{opened=value};f.c.event={key:'Enter',preventDefault:()=>prevented++};
  const markup=f.c.renderProductsScreen(),clicks=[...markup.matchAll(/onclick="([^"]*)"/g)].map(match=>decode(match[1])).filter(action=>action.includes('catalog')),keys=[...markup.matchAll(/onkeydown="([^"]*)"/g)].map(match=>decode(match[1])).filter(action=>action.includes('catalog'));
- assert.equal(clicks.length,2);for(const action of clicks)vm.runInContext(action,f.c);assert.equal(opened,id);assert.equal(toggled,id);assert.equal(stopped,1);
+ assert.equal(clicks.length,1);vm.runInContext(clicks[0],f.c);assert.equal(opened,id);
  assert.equal(keys.length,1);vm.runInContext(keys[0],f.c);assert.equal(opened,id);assert.equal(prevented,1);assert.equal(injected,0);
 });
 test('suppliers module loads after access helpers and before startup with its public API',()=>{
@@ -613,8 +613,16 @@ test('loyalty job is durable, and overlapping programs cannot reuse one item',as
  assert.equal(f.c.loyaltyRewardDiscount(),10);assert.equal(f.c.cartTotal(),0);
  await f.c.finalizePayment([{method:'cash',amount:0}]);assert.equal(f.state.orders.length,0);assert.match(f.messages.at(-1),/Недостаточно/);
  f.state.loyaltyRedemptions={a:1};
- let release;f.c.loyaltyApi=()=>new Promise(resolve=>{release=resolve});await f.c.finalizePayment([{method:'cash',amount:0}]);
- const stored=JSON.parse(f.data.get('prilavok_orders'))[0];assert.equal(stored.loyaltySync.status,'pending');
+ const persisted=[];const originalWrite=f.c.localStorage.setItem;
+ f.c.localStorage.setItem=(key,value)=>{originalWrite(key,value);if(key==='prilavok_orders')persisted.push(JSON.parse(value));};
+ let release;f.c.loyaltyApi=()=>{
+   assert.equal(persisted.find(rows=>rows.length===1)[0].loyaltySync.status,'pending');
+   assert.equal(JSON.parse(f.data.get('prilavok_orders'))[0].loyaltySync.status,'sending');
+   return new Promise(resolve=>{release=resolve});
+ };
+ await f.c.finalizePayment([{method:'cash',amount:0}]);
+ const stored=persisted.find(rows=>rows.length===1)[0];assert.equal(stored.loyaltySync.status,'pending');
+ assert.equal(typeof release,'function');
  assert.deepEqual(stored.loyaltyRewardAllocations,{a:[{productId:'pizza',quantity:1}]});
  assert.equal(stored.loyaltyDiscount,10);assert.equal(stored.loyaltyProgramsApplied[0].name,'Программа a');assert.equal(stored.loyaltyProgramsApplied[0].discount,10);
  release({events:[]});
@@ -1362,15 +1370,15 @@ test('product search matches names and categories with Unicode and case normaliz
  const f=fixture();assert.ok(f.c.productMatchesSearch({name:'Айс-латте',category:'Горячие напитки'},f.c.productSearchText('АЙС')));assert.ok(f.c.productMatchesSearch({name:'Вода',category:'Сырьё'},f.c.productSearchText('  сырье  ')));assert.equal(f.c.productMatchesSearch({name:'Вода',category:'Напитки',price:123,sku:'secret'},'secret'),false);
 });
 test('live product search updates rows, counts and empty state then restores all rows without rerender',()=>{
- const f=fixture();const rows=[{dataset:{productSearch:'маргарита пицца'},style:{}},{dataset:{productSearch:'чай горячие напитки'},style:{}}],badge={},clear={style:{}},table={style:{}},empty={style:{}};
- const card={querySelectorAll:selector=>{assert.equal(selector,'.products-table-row');return rows;},querySelector:selector=>selector.includes('badge')?badge:clear};
+ const f=fixture();const rows=[{dataset:{productSearch:'маргарита пицца',productCategory:'Пицца'},style:{}},{dataset:{productSearch:'чай горячие напитки',productCategory:'Горячие напитки'},style:{}}],clear={style:{}},table={style:{}},empty={style:{}};
+ const card={querySelectorAll:selector=>{assert.equal(selector,'.products-table-row');return rows;},querySelector:()=>clear};
  f.fields['products-search']={value:'пицца',closest:()=>card,focus:()=>{}};f.fields['products-search-table']=table;f.fields['products-search-empty']=empty;f.c.render=()=>{throw Error('must preserve input focus');};
- f.c.filterProductsScreen();assert.equal(rows[0].hidden,false);assert.equal(rows[1].hidden,true);assert.equal(badge.textContent,'1 / 4');
+ f.c.filterProductsScreen();assert.equal(rows[0].hidden,false);assert.equal(rows[1].hidden,true);
  f.fields['products-search'].value='ничего';f.c.filterProductsScreen();assert.equal(empty.hidden,false);assert.equal(table.hidden,true);
  f.c.clearProductsSearch();assert.ok(rows.every(r=>r.hidden===false));assert.equal(empty.hidden,true);assert.equal(table.hidden,false);assert.equal(clear.hidden,true);
 });
 test('rendered filtered product screen retains hidden rows for subsequent broader searches',()=>{
- const f=fixture();f.state.productsSearch='мука';const html=f.c.renderProductsScreen();assert.equal((html.match(/data-product-search=/g)||[]).length,4);assert.match(html,/id="products-search-empty"/);assert.match(html,/Название или категория/);
+ const f=fixture();f.state.productsSearch='мука';const html=f.c.renderProductsScreen();assert.equal((html.match(/data-product-search=/g)||[]).length,4);assert.match(html,/id="products-search-empty"/);assert.match(html,/placeholder="Поиск товаров"/);assert.match(html,/products-search-icon/);assert.match(html,/products-title-separator[^>]*>·<\/span>/);assert.match(html,/products-total-count[^>]*>4<\/span>/);assert.doesNotMatch(html,/openProductImport/);assert.match(html,/>Добавить товар</);
 });
 
 test('product sorting uses numbers, toggles direction and never changes stored product order',()=>{
@@ -1378,10 +1386,10 @@ test('product sorting uses numbers, toggles direction and never changes stored p
  f.c.sortProductsBy('price');assert.deepEqual(plain(f.c.sortedProductRows().map(p=>p.id)),['b','c','a']);f.c.sortProductsBy('price');assert.deepEqual(plain(f.c.sortedProductRows().map(p=>p.id)),['a','c','b']);
  f.c.sortProductsBy('stock');assert.deepEqual(plain(f.c.sortedProductRows().map(p=>p.id)),['b','a','c']);f.c.sortProductsBy('stock');assert.deepEqual(plain(f.c.sortedProductRows().map(p=>p.id)),['a','b','c']);assert.equal(JSON.stringify(f.state.products),before);assert.equal(f.state.productsSearch,'категория');assert.equal(f.writes.length,0);
 });
-test('product sorting supports category, type and WEB and renders all header buttons',()=>{
+test('product sorting helpers remain compatible while table headers are static labels',()=>{
  const f=fixture();f.state.products=[{id:'a',name:'А',type:'composite',category:'Я',availableOnline:true,components:[]},{id:'b',name:'Б',type:'simple',category:'Б',availableOnline:false,stock:0}];
  for(const key of ['category','type','web']){f.c.sortProductsBy(key);assert.deepEqual(plain(f.c.sortedProductRows().map(p=>p.id)),['b','a']);}
- const h=f.c.renderProductsScreen();assert.equal((h.match(/class="products-sort-header/g)||[]).length,7);assert.match(h,/sortProductsBy\('stock'\)/);
+ const h=f.c.renderProductsScreen();assert.equal((h.match(/class="products-table-label/g)||[]).length,6);assert.doesNotMatch(h,/products-sort-header|product-sort-mark|sortProductsBy\('/);assert.doesNotMatch(h,/products-table-sub/);
 });
 
 function adminDeletionFixture(){const f=fixture();f.state.employees=[{id:'admin',name:'Админ',role:'admin'},{id:'other',name:'Другой',role:'employee'}];f.state.shifts[0].employeeId='admin';return f;}
@@ -1525,10 +1533,14 @@ test('availability distinguishes untracked, zero and broken recipes',()=>{
  const f=fixture();f.state.products.push({id:'untracked',type:'simple',noStockTracking:true},{id:'broken',type:'composite',components:[{productId:'missing',qty:1}]});f.c.getProduct('flour').stock=-1;
  const items=f.c.buildAvailabilityItems(f.state.products);assert.equal(items.find(i=>i.externalId==='untracked').quantity,null);assert.equal(items.find(i=>i.externalId==='flour').quantity,0);assert.equal(items.find(i=>i.externalId==='broken').quantity,0);
 });
-test('availability has no launch, foreground, visibility or network trigger',async()=>{
- const f=fixture();f.state.loaded=true;await f.c.saveKey('products',f.state.products);await f.c.saveKey('network',{backendUrl:'https://test',deviceKey:'test'});let calls=0;f.c.fetch=async()=>{calls++;return {ok:true}};
- f.c.onAvailabilityAppState(false);f.c.onAvailabilityAppState(true);assert.equal(calls,0);
- assert.doesNotMatch(inline,/startAvailabilitySchedule|AVAILABILITY_INTERVAL/);assert.doesNotMatch(availabilityScript,/addEventListener\s*\(\s*['"](?:online|visibilitychange)/);
+test('reviewed availability refreshes after foreground using persisted stock without catalogue sync',async()=>{
+ const f=fixture();f.state.loaded=true;await f.c.saveKey('products',f.state.products);await f.c.saveKey('network',{backendUrl:'https://test',deviceKey:'test'});
+ const urls=[];f.c.fetch=async url=>{urls.push(url);return {ok:true}};
+ f.c.onAvailabilityAppState(false);assert.equal(urls.length,0);
+ f.c.onAvailabilityAppState(true);await f.c.publishAvailability();
+ assert.ok(urls.length>0);assert.ok(urls.every(url=>url==='https://test/api/availability/snapshot'));
+ assert.match(availabilityScript,/addEventListener\('online'/);assert.match(availabilityScript,/addEventListener\('visibilitychange'/);
+ assert.doesNotMatch(inline,/startAvailabilitySchedule|AVAILABILITY_INTERVAL/);
 });
 test('availability coalesces an overlapping mutation and sends the newest persisted stock',async()=>{
  const f=fixture();f.state.loaded=true;await f.c.saveKey('products',f.state.products);await f.c.saveKey('network',{backendUrl:'https://test',deviceKey:'test'});
