@@ -1759,7 +1759,9 @@ test('inventory category and search filters intersect without clearing selected 
  f.c.document.getElementById=id=>({'inventory-product-search':search,'inventory-filter-empty':empty}[id]);
  f.c.document.querySelectorAll=()=>rows;
  f.c.filterInventoryProducts();assert.deepEqual(rows.map(x=>x.hidden),[false,true,true]);assert.equal(rows[2].checked,true);assert.equal(empty.hidden,true);
- f.c._inventoryCategory='Магазин';f.c.filterInventoryProducts();assert.deepEqual(rows.map(x=>x.hidden),[true,true,false]);
+ const buttons=['','Сырьё','Магазин'].map(category=>({dataset:{inventoryCategory:category},classList:{toggle(name,value){this.selected=value}},setAttribute(name,value){this[name]=value}}));
+ f.c.document.querySelectorAll=selector=>selector==='[data-inventory-category]'?buttons:rows;
+ f.c.setInventoryCategoryFilter('Магазин');assert.deepEqual(rows.map(x=>x.hidden),[true,true,false]);assert.equal(buttons[2]['aria-pressed'],'true');assert.equal(buttons[1].classList.selected,false);assert.equal(search.value,' МУКА ');
  search.value='нет совпадений';f.c.filterInventoryProducts();assert.equal(empty.hidden,false);
  search.value='';f.c._inventoryCategory='';f.c.filterInventoryProducts();assert.deepEqual(rows.map(x=>x.hidden),[false,false,false]);assert.equal(empty.hidden,true);
 });
