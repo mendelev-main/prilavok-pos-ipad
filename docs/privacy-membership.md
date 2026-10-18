@@ -9,3 +9,5 @@ POS captures `loyaltyConsentVersion` and purchase timestamp in the paid receipt 
 Runtime module: `Web/js/features/privacy.js`. Routine sync every 30 seconds while visible and on reconnect; financial completion of web orders is persisted in the paid order and retried. A device advertises protocol readiness after applying server instructions. Device acceptance and any periods offline remain operational responsibilities.
 
 Validation: shared and Android tests run in Actions only. Physical acceptance must check opt-in, ordinary order without opt-in, withdrawal, reward disappearance, reconnect and backup restoration on the actual tablet. No local Android JS/JVM test, lint or APK assembly was run.
+
+A backup with already accepted split-payment money and a selected gift is rejected for automatic import rather than silently changing its total. Such a payment requires separate recovery/reconciliation. A returned sale whose acknowledgement was lost before withdrawal still sends an idempotent reversal.
