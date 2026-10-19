@@ -166,7 +166,7 @@ private enum ReceiptEncoder {
             separator(10)
             pair("Итого",String(format:"%.2f BYN",number(order["total"])),medium,12)
             let payments=(order["payments"] as? [[String:Any]]) ?? []
-            if payments.count > 1 {
+            if documentType == "bill" {add("СЧЁТ · НЕ ОПЛАЧЕН",medium,.center,10)} else if payments.count > 1 {
                 add("Платежи",small,.left,4)
                 for (index,payment) in payments.enumerated() {
                     let method=(payment["method"] as? String) ?? ""

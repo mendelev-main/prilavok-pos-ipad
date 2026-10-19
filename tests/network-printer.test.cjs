@@ -51,3 +51,8 @@ test('printer module does not rewrite the network settings DOM',()=>{
 test('Swift bridge retains printer routing, validation, timeout and receipt document contracts',()=>{
   assert.match(swiftBridge,/case "print":[\s\S]*networkPrinter\.print\(order: order\)/);assert.match(swiftPrinter,/connectionTimeout:\s*TimeInterval\s*=\s*10/);assert.match(swiftPrinter,/validIPv4\(ip\)/);assert.match(swiftPrinter,/documentType=="kitchen"/);assert.match(swiftPrinter,/documentType=="shift-close"/);assert.match(swiftPrinter,/printPaymentComments/);assert.match(swiftPrinter,/receiptRandomPhrases/);assert.match(swiftPrinter,/discountName/);assert.match(swiftPrinter,/loyaltyProgramsApplied/);assert.match(swiftPrinter,/Скидки на товары/);
 });
+
+test('manual unpaid bill uses receipt printers without cash drawer events',()=>{
+ const f=fixture([receipt('r',{autoPrintReceipt:false,cashDrawerEnabled:true}),kitchen('k')]);
+ f.c.sendBillToPrint(order);assert.equal(f.posts.length,1);assert.equal(f.posts[0].order.__printDocumentType,'bill');assert.equal(f.posts[0].action,'print');
+});
