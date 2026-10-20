@@ -1979,3 +1979,15 @@ test('negative stock remains physical warehouse availability rather than unlimit
  const f=fixture(),p=f.c.getProduct('flour');p.allowNegativeStock=true;p.stock=-5;
  assert.equal(f.c.buildAvailabilityItems(f.state.products).find(p=>p.externalId==='flour').quantity,0);assert.equal(f.c.availableStock(p),-5);assert.equal(f.c.saleAvailableStock(p),Infinity);
 });
+
+test('POS recipe display preserves negative quantities while warehouse/web availability stays capped',()=>{
+ const f=fixture(),flour=f.c.getProduct('flour'),pizza=f.c.getProduct('pizza');flour.stock=-.4;flour.allowNegativeStock=true;
+ assert.equal(f.c.posDisplayStock(pizza),-2);assert.equal(f.c.availableStock(pizza),0);assert.equal(f.c.buildAvailabilityItems(f.state.products).find(p=>p.externalId==='pizza').quantity,0);
+ flour.stock=-.1;assert.equal(f.c.posDisplayStock(pizza),-1);flour.stock=-Number.EPSILON/10;assert.equal(f.c.posDisplayStock(pizza),0);
+ flour.noStockTracking=true;assert.equal(f.c.posDisplayStock(pizza),100);f.c.getProduct('water').noStockTracking=true;assert.equal(f.c.posDisplayStock(pizza),Infinity);
+});
+test('POS recipe display reflects each paid sale and historical return from zero',async()=>{
+ const f=fixture(),flour=f.c.getProduct('flour');flour.stock=0;flour.allowNegativeStock=true;
+ await f.sale();assert.equal(f.c.posDisplayStock(f.c.getProduct('pizza')),-1);await f.sale();assert.equal(f.c.posDisplayStock(f.c.getProduct('pizza')),-2);
+ f.c.restoreOrderStock(f.state.orders[1]);assert.equal(f.c.posDisplayStock(f.c.getProduct('pizza')),-1);assert.equal(f.c.availableStock(f.c.getProduct('pizza')),0);
+});
