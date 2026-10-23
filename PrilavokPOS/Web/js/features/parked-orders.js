@@ -46,7 +46,7 @@ async function saveReceiptLabelTemplate(id=''){
  if(id){const template=next.find(t=>t.id===id);if(!template){flash('Шаблон больше не существует');return false;}template.name=name;}
  else next.push({id:uid(),name});
  criticalOperationBusy=true;
- try{await commitCriticalStorage('receipt-label-template-save',{receiptLabelTemplates:next});state.receiptLabelTemplates=next;closeModal();render();return true;}
+ try{await commitCriticalStorage('receipt-label-template-save',{receiptLabelTemplates:next});state.receiptLabelTemplates=next;criticalOperationBusy=false;closeModal();render();return true;}
  catch(error){flash('Не удалось сохранить шаблон: '+(error?.message||error));return false;}
  finally{criticalOperationBusy=false;}
 }
@@ -54,7 +54,7 @@ async function deleteReceiptLabelTemplate(id){
  if(!requireAdministration()||criticalOperationBusy)return false;
  const next=normalizeReceiptLabelTemplates(state.receiptLabelTemplates).filter(t=>t.id!==id);
  criticalOperationBusy=true;
- try{await commitCriticalStorage('receipt-label-template-delete',{receiptLabelTemplates:next});state.receiptLabelTemplates=next;render();return true;}
+ try{await commitCriticalStorage('receipt-label-template-delete',{receiptLabelTemplates:next});state.receiptLabelTemplates=next;criticalOperationBusy=false;render();return true;}
  catch(error){flash('Не удалось удалить шаблон: '+(error?.message||error));return false;}
  finally{criticalOperationBusy=false;}
 }
