@@ -74,6 +74,7 @@ async function applyReceivingDocument(){
     const writes={products:nextProducts,purchaseOrders:nextPurchaseOrders,receivings:nextReceivings};if(!order)writes.receivingDraft=null;
     await commitCriticalStorage('receiving',writes);
     state.products=nextProducts;state.purchaseOrders=nextPurchaseOrders;state.receivings=nextReceivings;
+    criticalOperationBusy=false;
     void publishAvailability();
     if(!order)state.receivingCart=[];
     window._receivingPending=null;window._receivingDraft=null;window._receivingExpanded=false;finishReceivingPage();closeModal();render();flash('Приёмка подтверждена, себестоимость обновлена');
