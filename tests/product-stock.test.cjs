@@ -2281,3 +2281,17 @@ test('repeated negative banners replace each other and render product names as p
  f.c.flash('<img src=x> — отрицательный остаток','negative-stock');f.c.flash('Другой соус — отрицательный остаток','negative-stock');
  assert.equal(children.length,1);assert.equal(children[0].textContent,'Другой соус — отрицательный остаток');assert.equal(children[0].innerHTML,undefined);
 });
+
+test('storage diagnostics expose failure category and sizes without stored content or writes',()=>{
+ const f=fixture();f.data.set('prilavok_orders',JSON.stringify([{privateCustomer:'DO-NOT-DISPLAY',token:'SECRET-VALUE'}]));f.data.set('prilavok_network','SECRET-NETWORK');
+ const error=new Error('SENSITIVE-ERROR-CONTENT');error.name='QuotaExceededError';f.c.markStorageBroken(error,'orders','write');
+ const before=[...f.data],d=f.c.storageDiagnosticData();assert.equal(d.failure.name,'QuotaExceededError');assert.equal(d.failure.key,'orders');assert.equal(d.failure.operation,'write');
+ assert.equal(d.characters,[...f.data.values()].reduce((n,v)=>n+v.length,0));assert.doesNotMatch(JSON.stringify(d),/DO-NOT-DISPLAY|SECRET|SENSITIVE/);
+ assert.deepEqual([...f.data],before);assert.equal(f.writes.length,0);
+ let markup='';f.c.showModal=html=>{markup=html};f.c.openStorageDiagnostics();assert.match(markup,/QuotaExceededError/);assert.doesNotMatch(markup,/DO-NOT-DISPLAY|SECRET|SENSITIVE/);
+ f.c.markStorageBroken(new Error('later failure'));assert.equal(f.c.storageDiagnosticData().failure.name,'QuotaExceededError');
+});
+test('storage read failure retains the affected key without disclosing invalid JSON',async()=>{
+ const f=fixture();f.data.set('prilavok_orders','secret invalid JSON');assert.deepEqual(plain(await f.c.loadKey('orders',[])),[]);
+ const d=f.c.storageDiagnosticData();assert.equal(d.failure.name,'SyntaxError');assert.equal(d.failure.key,'orders');assert.equal(d.failure.operation,'read');assert.doesNotMatch(JSON.stringify(d),/secret invalid/);
+});
