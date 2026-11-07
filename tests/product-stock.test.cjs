@@ -2295,3 +2295,12 @@ test('storage read failure retains the affected key without disclosing invalid J
  const f=fixture();f.data.set('prilavok_orders','secret invalid JSON');assert.deepEqual(plain(await f.c.loadKey('orders',[])),[]);
  const d=f.c.storageDiagnosticData();assert.equal(d.failure.name,'SyntaxError');assert.equal(d.failure.key,'orders');assert.equal(d.failure.operation,'read');assert.doesNotMatch(JSON.stringify(d),/secret invalid/);
 });
+
+test('Android administration requires protected native verification and ignores legacy password fallback',()=>{
+ const f=fixture(false);f.c.__MPOS_PLATFORM__='android';f.fields['administration-password']={value:'test-administration'};
+ assert.equal(f.c.confirmAdministrationSession(),false);assert.equal(f.c.adminSessionIsActive(),false);
+ f.c.__mposVerifyAdministrationPassword=value=>value==='fixture-native-password';f.c.__MPOS_PLATFORM__='not-android';
+ f.fields['administration-password'].value='test-administration';assert.equal(f.c.confirmAdministrationSession(),false);
+ f.fields['administration-password'].value='fixture-native-password';assert.equal(f.c.confirmAdministrationSession(),true);assert.equal(f.c.adminSessionIsActive(),true);assert.equal(f.writes.length,0);
+ const credentials=vm.runInContext('administrationSession.credentials()',f.c);assert.equal(credentials.adminCredentialVersion,'android-admin-2026-11');
+});
